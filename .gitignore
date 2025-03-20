@@ -14,8 +14,9 @@ venv/
 logs/
 *.sqlite3
 *.db
-backend/app/database/alembic.ini  # Sensitive database config
-backend/app/database/migrations/versions/  # Generated migration files
+*.ini
+backend/app/database/alembic.ini
+backend/app/database/migrations/versions/
 
 # Frontend (React/Next.js)
 node_modules/

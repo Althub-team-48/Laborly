@@ -1,7 +1,12 @@
-from database.config import get_db
-from fastapi import Depends
-from sqlalchemy.orm import Session
+from ..database.config import SessionLocal
 
-# Dependency to inject the database session into routes
-def get_db_session(db: Session = Depends(get_db)):
-    return db
+def get_db_session():
+    """
+    Dependency to provide a database session.
+    Yields a session and ensures it is closed after use.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

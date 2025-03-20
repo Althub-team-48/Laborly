@@ -143,3 +143,21 @@
 2025-03-20 01:24:41,672 - LaborlyBackend - INFO - System action logged: Create by user_id 10
 2025-03-20 01:24:41,673 - LaborlyBackend - INFO - Job created: Clean the house #20 by client_id 8
 2025-03-20 01:24:41,675 - LaborlyBackend - INFO - System action logged: Create by user_id 8
+2025-03-20 02:08:18,355 - LaborlyBackend - INFO - Request: GET / from 127.0.0.1
+2025-03-20 02:08:18,355 - LaborlyBackend - INFO - Response: GET / - Status 200
+2025-03-20 02:08:18,395 - LaborlyBackend - INFO - System action logged: Create by user_id None
+2025-03-20 02:08:19,425 - LaborlyBackend - INFO - Request: GET /favicon.ico from 127.0.0.1
+2025-03-20 02:08:19,425 - LaborlyBackend - INFO - Response: GET /favicon.ico - Status 404
+2025-03-20 02:08:19,428 - LaborlyBackend - INFO - System action logged: Create by user_id None
+2025-03-20 02:08:44,655 - LaborlyBackend - INFO - Request: GET /docs/ from 127.0.0.1
+2025-03-20 02:08:44,656 - LaborlyBackend - INFO - Response: GET /docs/ - Status 307
+2025-03-20 02:08:44,660 - LaborlyBackend - INFO - System action logged: Create by user_id None
+2025-03-20 02:08:44,667 - LaborlyBackend - INFO - Request: GET /docs from 127.0.0.1
+2025-03-20 02:08:44,667 - LaborlyBackend - INFO - Response: GET /docs - Status 200
+2025-03-20 02:08:44,670 - LaborlyBackend - INFO - System action logged: Create by user_id None
+2025-03-20 02:08:45,831 - LaborlyBackend - INFO - Request: GET /openapi.json from 127.0.0.1
+2025-03-20 02:08:45,831 - LaborlyBackend - INFO - Response: GET /openapi.json - Status 200
+2025-03-20 02:08:45,833 - LaborlyBackend - INFO - System action logged: Create by user_id None
+2025-03-20 02:09:02,382 - LaborlyBackend - INFO - Request: GET / from 127.0.0.1
+2025-03-20 02:09:02,383 - LaborlyBackend - INFO - Response: GET / - Status 200
+2025-03-20 02:09:02,386 - LaborlyBackend - INFO - System action logged: Create by user_id None

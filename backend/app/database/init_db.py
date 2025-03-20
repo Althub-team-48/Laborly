@@ -1,4 +1,4 @@
-from database.config import Base, engine
+from app.database.config import Base, engine
 
 def init_db():
     # Create all tables defined in the models

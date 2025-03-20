@@ -1,0 +1,244 @@
+### **Laborly Project Documentation**
+
+#### **Phase 1: Planning & Requirements Gathering - Documentation**
+
+##### 1. Backend Architecture Overview
+
+- **Monolithic Structure:**  
+  The project uses a monolithic approach to simplify initial development and deployment while retaining modularity within the codebase. The backend is built with FastAPI.
+
+- **Technology Stack:**  
+  - **Framework:** FastAPI  
+  - **Database:** PostgreSQL  
+  - **ORM:** SQLAlchemy  
+  - **Migrations:** Alembic  
+  - **Authentication:** JWT-based authentication (to be implemented in Phase 3)  
+  - **Other Tools:** Configuration management via `python-dotenv`, logging setup, and standard API error handling
+
+- **Module Organization:**  
+  The codebase follows the folder structure below:  
+  ```
+  Laborly/
+  │── backend/                     # Backend (FastAPI)
+  │   │── app/                     # Main backend app
+  │   │   │── database/            # Database connection and migrations
+  │   │   │   ├── __init__.py      # Package initialization
+  │   │   │   ├── config.py        # DB connection settings
+  │   │   │   ├── models.py        # Database models
+  │   │   │   ├── seed.py          # Database seeding script
+  │   │   │   ├── purge.py         # Database purge script
+  │   │   │   ├── alembic.ini      # Alembic configuration
+  │   │   │   ├── migrate.bat      # Migration automation script
+  │   │   │   ├── migrations/      # Alembic migrations
+  │   │   │       ├── __init__.py  # Package initialization
+  │   │   │       ├── env.py       # Alembic environment setup
+  │   │   │       ├── versions/    # Migration versions
+  │   │   │── jobs/                # Job module
+  │   │   │   ├── __init__.py      # Package initialization
+  │   │   │   ├── routes.py        # API endpoints for jobs
+  │   │   │   ├── schemas.py       # Pydantic schemas
+  │   │   │   ├── service.py       # Business logic
+  │   │   │── reviews/             # Review module
+  │   │   │   ├── __init__.py      # Package initialization
+  │   │   │   ├── routes.py        # API endpoints for reviews
+  │   │   │   ├── schemas.py       # Pydantic schemas
+  │   │   │   ├── service.py       # Business logic
+  │   │   │── users/               # User module
+  │   │   │   ├── __init__.py      # Package initialization
+  │   │   │   ├── routes.py        # API endpoints for users
+  │   │   │   ├── schemas.py       # Pydantic schemas
+  │   │   │   ├── service.py       # Business logic
+  │   │   │── core/                # Core app configurations
+  │   │   │   ├── __init__.py      # Package initialization
+  │   │   │   ├── config.py        # Global settings
+  │   │   │   ├── dependencies.py  # Dependency injection for DB, auth, etc.
+  │   │   │   ├── security.py      # Authentication/security methods
+  │   │   │── utils/               # Utility functions
+  │   │   │   ├── __init__.py      # Package initialization
+  │   │   │   ├── email.py         # Email sending utilities
+  │   │   │   ├── hash.py          # Password hashing utilities
+  │   │   │   ├── logger.py        # Logging setup
+  │   │   │── main.py              # FastAPI entry point
+  │   │   │── run.sh               # Backend startup script
+  │   │── logs/                    # Log files
+  │   │   │── laborly.log          # Application logs
+  │   │── tests/                   # Unit and integration tests
+  │   │   ├── __init__.py          # Package initialization
+  │   │   ├── test_admin.py        # Admin-related tests
+  │   │   ├── test_jobs.py         # Job-related tests
+  │   │   ├── test_reviews.py      # Review-related tests
+  │   │   ├── test_users.py        # User-related tests
+  │   │── .env                     # Environment variables
+  ```
+
+##### 2. Database Schema Documentation
+
+- **Core Tables:**  
+  - **Users:** Manages client, worker, and admin profiles with fields for `id`, `first_name`, `last_name`, `email`, `phone_number`, `password_hash`, `role` (enum: Admin, Client, Worker), `is_verified`, `last_active`, `created_at`, and `updated_at`.  
+  - **Jobs:** Stores job postings with fields `id`, `client_id` (foreign key to `users.id`), `title`, `description`, `category`, `location`, `status` (enum: Pending, In Progress, Completed, Canceled), `created_at`, and `updated_at`.  
+  - **Job Applications:** Captures applications with fields `id`, `job_id` (foreign key to `jobs.id`), `worker_id` (foreign key to `users.id`), `status` (enum: Pending, Accepted, Rejected), `applied_at`, and `updated_at`.  
+  - **Job Assignments:** Manages assignments with fields `id`, `job_id` (foreign key to `jobs.id`), `worker_id` (foreign key to `users.id`), `assigned_at`, and `updated_at`.  
+  - **Reviews:** Stores reviews with fields `id`, `job_id` (foreign key to `jobs.id`), `reviewer_id` (foreign key to `users.id`), `reviewee_id` (foreign key to `users.id`), `rating`, `comment`, and `created_at`.  
+  - **Worker Availability:** Tracks worker availability with fields `id`, `worker_id` (foreign key to `users.id`), `available_from`, `available_to`, `created_at`, and `updated_at`.  
+  - **System Logs:** Logs system actions with fields `id`, `user_id` (foreign key to `users.id`, nullable), `action_type` (enum: Create, Update, Delete, Login, Logout), `details`, and `created_at`.  
+  - **Admin Logs:** Records administrative actions with fields `id`, `admin_id` (foreign key to `users.id`), `action_type` (enum: Create, Update, Delete, Login, Logout), `details`, and `created_at`.
+
+- **Relationships:**  
+  - `Jobs.client` relates to `Users` via `client_id`.
+  - `JobApplications.job` and `JobApplications.worker` relate to `Jobs` and `Users` via `job_id` and `worker_id`.
+  - `JobAssignments.job` and `JobAssignments.worker` relate to `Jobs` and `Users` via `job_id` and `worker_id`.
+  - `Reviews.job`, `Reviews.reviewer`, and `Reviews.reviewee` relate to `Jobs` and `Users` via `job_id`, `reviewer_id`, and `reviewee_id`.
+  - `WorkerAvailability.worker` relates to `Users` via `worker_id`.
+  - `SystemLogs.user` relates to `Users` via `user_id` (nullable).
+  - `AdminLogs.admin` relates to `Users` via `admin_id`.
+
+##### 3. API Specifications Outline
+
+- **Endpoint Categories:**  
+  - **User Management:**  
+    - **Endpoints:** Registration, login, profile updates, and user verification.  
+  - **Job Management:**  
+    - **Endpoints:** Create, retrieve, update, and delete job postings; manage job status transitions; search and filter jobs.  
+  - **Job Applications & Assignments:**  
+    - **Endpoints:** Apply for a job, approve or reject applications, track assignment statuses.  
+  - **Reviews & Ratings:**  
+    - **Endpoints:** Submit reviews/ratings and fetch reviews for a particular job or user.
+
+- **Documentation Format:**  
+  The API will be documented interactively using OpenAPI/Swagger UI, ensuring clear and consistent response formats and error handling.
+
+##### 4. Version Control & Branching Strategy
+
+- **Adoption of GitFlow:**  
+  - **Main Branch:** `main` holds production-ready code.  
+  - **Development Branch:** `dev` integrates all new features and fixes before release.  
+  - **Personal Branches:** `dev-*` are used for individual features or tasks.
+
+---
+
+#### **Phase 2: Database Setup, Models, Migrations, Logging, and Seeding**
+
+##### 1. Database Setup
+
+- **PostgreSQL Configuration:**  
+  - Installed PostgreSQL and created a database named `laborly`.
+  - Configured the database connection in a `.env` file with the `DATABASE_URL` (e.g., `postgresql://postgres:ayokunle@localhost:5432/laborly`).
+
+- **SQLAlchemy Setup:**  
+  - Created `config.py` in `backend/app/database/` to centralize database configuration:
+    - Defined `Base` using `declarative_base()` for ORM models.
+    - Set up `engine` using `create_engine(DATABASE_URL)`.
+    - Created `SessionLocal` using `sessionmaker` for database sessions.
+
+##### 2. Models
+
+- **Defined Models in `models.py`:**  
+  - Implemented models as described in the database schema section, using SQLAlchemy ORM.
+  - Added enums (`UserRole`, `JobStatus`, `ApplicationStatus`, `ActionType`) for type-safe field values.
+  - Used `extend_existing=True` in `__table_args__` for all models to resolve `InvalidRequestError: Table is already defined` issues during Alembic migrations.
+
+- **File: `backend/app/database/models.py`:**  
+  - Models include `User`, `Job`, `SystemLog`, `AdminLog`, `WorkerAvailability`, `JobApplication`, `JobAssignment`, and `Review`.
+  - Each model includes appropriate fields, relationships, and timestamps with default values using `datetime.now(timezone.utc)`.
+
+##### 3. Migrations
+
+- **Alembic Setup:**  
+  - Initialized Alembic in `backend/app/database/` with the `migrations/` directory.
+  - Moved `alembic.ini` to `backend/app/database/` and updated `script_location = migrations`.
+  - Customized `migrations/env.py` to:
+    - Load the `DATABASE_URL` from the `.env` file using `python-dotenv`.
+    - Import models explicitly (`User`, `Job`, `SystemLog`, `AdminLog`, `WorkerAvailability`, `JobApplication`, `JobAssignment`, `Review`) for autogeneration.
+    - Set `target_metadata = Base.metadata`.
+
+- **Migration Script:**  
+  - Created `migrate.bat` in `backend/app/database/` to automate migration generation and application:
+    ```bat
+    @echo off
+    if "%~1"=="" (
+        echo Usage: migrate.bat "migration message"
+        exit /b 1
+    )
+    rmdir /S /Q migrations\versions
+    mkdir migrations\versions
+    alembic -c alembic.ini revision --autogenerate -m "%~1"
+    alembic -c alembic.ini upgrade head
+    echo Migration applied successfully.
+    ```
+  - The script clears the `versions/` directory before generating a new migration to ensure a clean migration history.
+
+- **Migration Execution:**  
+  - Successfully ran migrations to create all tables in the `laborly` database.
+  - Verified table creation using pgAdmin 4 with `\dt`.
+
+##### 4. Logging System
+
+- **File-Based Logging:**  
+  - Implemented in `logger.py` in `backend/app/utils/`:
+    - Configured a `RotatingFileHandler` to log to `logs/laborly.log` with a max size of 1MB and 5 backup files.
+    - Log format: `%(asctime)s - %(name)s - %(levelname)s - %(message)s`.
+
+- **Database Logging:**  
+  - Added `log_system_action` and `log_admin_action` functions to log actions to the `system_logs` and `admin_logs` tables.
+  - Updated to use the `ActionType` enum for the `action_type` parameter.
+  - Logs are written both to the file and the database for all major actions (e.g., user creation, job creation).
+
+- **File: `backend/app/utils/logger.py`:**  
+  - Ensures proper error handling and logging of failures if database logging fails.
+
+##### 5. Database Seeding
+
+- **Seeder Script:**  
+  - Created `seed.py` in `backend/app/database/` to populate the database with test data:
+    - **Admin User:** 1 admin user (`admin@laborly.com`).
+    - **Client Users:** 10 clients with random names, emails (`client1@laborly.com` to `client10@laborly.com`), and phone numbers.
+    - **Worker Users:** 5 workers with random names, emails (`worker1@laborly.com` to `worker5@laborly.com`), and phone numbers.
+    - **Worker Availability:** Each worker has 1-3 availability slots with random future dates.
+    - **Jobs:** 20 jobs with random titles, descriptions, categories, locations, and statuses, assigned to random clients.
+    - **Job Applications:** 10 applications for random jobs by random workers.
+    - **Job Assignments:** 5 assignments for jobs in "Completed" or "In Progress" status.
+    - **Reviews:** Reviews for all completed jobs with random ratings and comments.
+
+- **Logging Integration:**  
+  - Integrated logging into the seeder script to log user creation, job creation, and other actions to both the file and database.
+
+- **Execution:**  
+  - Fixed module import issues by ensuring the `database` package is correctly structured with an `__init__.py` file.
+  - Ran the seeder script from `backend/app/` with `python -m database.seed`.
+  - Verified data in pgAdmin 4 across all tables.
+
+##### 6. Database Purge Script
+
+- **Purge Script:**  
+  - Created `purge.py` in `backend/app/database/` to clear all data from the database for testing purposes.
+  - Includes a confirmation prompt to prevent accidental data loss.
+  - Drops all tables and recreates them using `Base.metadata.drop_all()` and `Base.metadata.create_all()`.
+
+##### 7. Troubleshooting and Fixes
+
+- **Alembic Issues:**  
+  - Resolved `No config file 'alembic.ini' found` by adding `-c alembic.ini` to migration commands.
+  - Fixed `Path doesn't exist: migrations` by correcting the `script_location` in `alembic.ini` and removing inline comments.
+  - Addressed `Table 'admin_logs' is already defined` errors by adding `extend_existing=True` to all models.
+
+- **ModuleNotFoundError:**  
+  - Fixed `ModuleNotFoundError: No module named 'database'` by running scripts from the correct directory (`backend/app/`) and ensuring the `database` package is properly structured.
+
+##### 8. Verification
+
+- **Database Verification:**  
+  - Used pgAdmin 4 to verify all tables and seeded data:
+    - `SELECT * FROM users;`
+    - `SELECT * FROM jobs;`
+    - `SELECT * FROM job_applications;`
+    - `SELECT * FROM job_assignments;`
+    - `SELECT * FROM reviews;`
+    - `SELECT * FROM worker_availability;`
+    - `SELECT * FROM admin_logs;`
+    - `SELECT * FROM system_logs;`
+
+- **Log Verification:**  
+  - Checked `logs/laborly.log` for file-based logs of all actions.
+  - Verified database logs in `admin_logs` and `system_logs` tables.
+
+---

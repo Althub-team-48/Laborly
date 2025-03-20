@@ -1,0 +1,87 @@
+Laborly/
+│── backend/                     # Backend (FastAPI)
+│   │── app/                     # Main backend app
+│   │   │── database/            # Database connection and migrations
+│   │   │   ├── __init__.py      # Package initialization
+│   │   │   ├── config.py        # DB connection settings
+│   │   │   ├── models.py        # Database models
+│   │   │   ├── seed.py          # Database seeding script
+│   │   │   ├── purge.py         # Database purge script
+│   │   │   ├── alembic.ini      # Alembic configuration
+│   │   │   ├── migrate.bat      # Migration automation script
+│   │   │   ├── migrations/      # Alembic migrations
+│   │   │       ├── __init__.py  # Package initialization
+│   │   │       ├── env.py       # Alembic environment setup
+│   │   │       ├── versions/    # Migration versions
+│   │   │── jobs/                # Job module
+│   │   │   ├── __init__.py      # Package initialization
+│   │   │   ├── routes.py        # API endpoints for jobs
+│   │   │   ├── schemas.py       # Pydantic schemas
+│   │   │   ├── service.py       # Business logic
+│   │   │── reviews/             # Review module
+│   │   │   ├── __init__.py      # Package initialization
+│   │   │   ├── routes.py        # API endpoints for reviews
+│   │   │   ├── schemas.py       # Pydantic schemas
+│   │   │   ├── service.py       # Business logic
+│   │   │── users/               # User module
+│   │   │   ├── __init__.py      # Package initialization
+│   │   │   ├── routes.py        # API endpoints for users
+│   │   │   ├── schemas.py       # Pydantic schemas
+│   │   │   ├── service.py       # Business logic
+│   │   │── core/                # Core app configurations
+│   │   │   ├── __init__.py      # Package initialization
+│   │   │   ├── config.py        # Global settings
+│   │   │   ├── dependencies.py  # Dependency injection for DB, auth, etc.
+│   │   │   ├── security.py      # Authentication/security methods
+│   │   │── utils/               # Utility functions
+│   │   │   ├── __init__.py      # Package initialization
+│   │   │   ├── email.py         # Email sending utilities
+│   │   │   ├── hash.py          # Password hashing utilities
+│   │   │   ├── logger.py        # Logging setup
+│   │   │── main.py              # FastAPI entry point
+│   │   │── run.sh               # Backend startup script
+│   │── logs/                    # Log files
+│   │   │── laborly.log          # Application logs
+│   │── tests/                   # Unit and integration tests
+│   │   ├── __init__.py          # Package initialization
+│   │   ├── test_admin.py        # Admin-related tests
+│   │   ├── test_jobs.py         # Job-related tests
+│   │   ├── test_reviews.py      # Review-related tests
+│   │   ├── test_users.py        # User-related tests
+│   │── .env                     # Environment variables
+│── frontend/                    # Frontend (React, Next.js)
+│   │── public/                  # Static assets
+│   │── src/                     # Source code
+│   │   │── components/          # Reusable UI components
+│   │   │   ├── Button.js        # Generic button component
+│   │   │   ├── Navbar.js        # Navbar
+│   │   │── pages/               # Page views
+│   │   │   ├── index.js         # Home page
+│   │   │   ├── login.js         # Login page
+│   │   │   ├── dashboard.js     # User dashboard
+│   │   │── services/            # API service calls
+│   │   │   ├── api.js           # Axios setup
+│   │   │   ├── auth.js          # Auth API service
+│   │   │   ├── jobs.js          # Job API service
+│   │   │── hooks/               # Custom React hooks
+│   │   │── contexts/            # Context providers
+│   │   │── styles/              # CSS & styling
+│   │   │   ├── globals.css      # Global styles
+│   │── package.json             # Frontend dependencies
+│   │── next.config.js           # Next.js config
+│── infrastructure/              # Infrastructure & DevOps
+│   │── docker/                  # Docker-related files
+│   │   ├── Dockerfile.backend   # Backend Dockerfile
+│   │   ├── Dockerfile.frontend  # Frontend Dockerfile
+│   │── terraform/               # Terraform configurations
+│   │   ├── main.tf              # AWS infrastructure setup
+│   │── ci-cd/                   # CI/CD pipelines
+│   │   ├── jenkinsfile          # Jenkins pipeline script
+│   │   ├── github-actions/      # GitHub Actions workflows
+│── docs/                        # Documentation
+│   │── README.md                # Project overview
+│   │── api-docs.md              # API documentation
+│   │── setup.md                 # Setup & installation guide
+│── .gitignore                   # Git ignore file
+│── .env                         # Sample environment variables
+│── docker-compose.yml           # Docker Compose for local dev

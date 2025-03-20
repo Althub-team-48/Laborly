@@ -1,0 +1,74 @@
+# Python and FastAPI Backend
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.env
+.env
+.env.*
+!.env.example
+*.log
+logs/
+*.sqlite3
+*.db
+backend/app/database/alembic.ini  # Sensitive database config
+backend/app/database/migrations/versions/  # Generated migration files
+
+# Frontend (React/Next.js)
+node_modules/
+.next/
+dist/
+build/
+*.log
+npm-debug.log
+yarn-error.log
+frontend/public/build/
+
+# Docker and Infrastructure
+docker-compose.override.yml
+*.dockerignore
+Dockerfile.local
+*.tfstate
+*.tfstate.backup
+terraform.tfvars
+*.terraform/
+*.terraform.lock.hcl
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Testing and Coverage
+coverage/
+*.lcov
+*.coverage
+.pytest_cache/
+htmlcov/
+
+# Miscellaneous
+*.swp
+*.swo
+*.bak
+*.tmp
+*.temp
+*~
+.#*
+#*
+
+# Documentation (if any generated files)
+docs/_build/
+docs/.doctrees/

@@ -161,3 +161,13 @@
 2025-03-20 02:09:02,382 - LaborlyBackend - INFO - Request: GET / from 127.0.0.1
 2025-03-20 02:09:02,383 - LaborlyBackend - INFO - Response: GET / - Status 200
 2025-03-20 02:09:02,386 - LaborlyBackend - INFO - System action logged: Create by user_id None
+2025-03-20 02:10:53,342 - LaborlyBackend - INFO - Starting up Laborly Backend...
+2025-03-20 02:10:55,377 - LaborlyBackend - INFO - Request: GET /docs from 127.0.0.1
+2025-03-20 02:10:55,377 - LaborlyBackend - INFO - Response: GET /docs - Status 200
+2025-03-20 02:10:55,409 - LaborlyBackend - INFO - System action logged: Create by user_id None
+2025-03-20 02:10:55,927 - LaborlyBackend - INFO - Request: GET /openapi.json from 127.0.0.1
+2025-03-20 02:10:55,927 - LaborlyBackend - INFO - Response: GET /openapi.json - Status 200
+2025-03-20 02:10:55,937 - LaborlyBackend - INFO - System action logged: Create by user_id None
+2025-03-20 02:10:58,239 - LaborlyBackend - INFO - Request: GET / from 127.0.0.1
+2025-03-20 02:10:58,239 - LaborlyBackend - INFO - Response: GET / - Status 200
+2025-03-20 02:10:58,242 - LaborlyBackend - INFO - System action logged: Create by user_id None

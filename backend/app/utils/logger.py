@@ -1,33 +1,46 @@
 import logging
-import sys
+import os
+from logging.handlers import RotatingFileHandler
+from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+from ..database.models import SystemLog, AdminLog, ActionType  
 
-def setup_logging():
-    """
-    Set up logging for the application.
-    Configures both console and file handlers.
-    """
-    # Create a logger
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+# Configure file-based logging
+if not os.path.exists("logs"):
+    os.makedirs("logs")
 
-    # Define a formatter for log messages
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+logger = logging.getLogger("LaborlyBackend")
+logger.setLevel(logging.INFO)
 
-    # Console handler configuration
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+handler = RotatingFileHandler("logs/laborly.log", maxBytes=1000000, backupCount=5)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
-    # File handler configuration (logs to 'app.log')
-    file_handler = logging.FileHandler("app.log")
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+def log_system_action(db: Session, action_type: ActionType, details: dict, user_id: int = None):  # Updated action_type to ActionType enum
+    try:
+        system_log = SystemLog(
+            user_id=user_id,
+            action_type=action_type,
+            details=str(details),
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(system_log)
+        db.commit()
+        logger.info(f"System action logged: {action_type.value} by user_id {user_id}")  # Used action_type.value
+    except Exception as e:
+        logger.error(f"Failed to log system action to database: {str(e)}")  # Improved error message
 
-    logger.info("Logging is configured.")
-
-# Optionally, you can expose the logger for other modules:
-logger = logging.getLogger(__name__)
+def log_admin_action(db: Session, admin_id: int, action_type: ActionType, details: dict):  # Updated action_type to ActionType enum
+    try:
+        admin_log = AdminLog(
+            admin_id=admin_id,
+            action_type=action_type,
+            details=str(details),
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(admin_log)
+        db.commit()
+        logger.info(f"Admin action logged: {action_type.value} by admin_id {admin_id}")  # Used action_type.value
+    except Exception as e:
+        logger.error(f"Failed to log admin action to database: {str(e)}")  # Improved error message

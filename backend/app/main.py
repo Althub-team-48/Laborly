@@ -1,22 +1,25 @@
-from fastapi import FastAPI
-from app.utils.logger import setup_logging
+from fastapi import FastAPI, Request, Response, Depends
+from fastapi.responses import JSONResponse
+from database.init_db import init_db
+from utils.logger import log_request_response
+from core.dependencies import get_db_session
+from sqlalchemy.orm import Session
 
-# Initialize logging
-setup_logging()
+app = FastAPI()
 
-# Create FastAPI instance
-app = FastAPI(
-    title="Laborly API",
-    description="API for the Laborly platform",
-    version="0.1.0"
-)
+# Middleware to log all requests and responses
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    db = next(get_db_session())  # Get the database session
+    response = await call_next(request)
+    await log_request_response(request, response, db)
+    return response
 
-# Basic route to test the API
+# Initialize the database on startup
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Laborly API"}
-
-# Run the server using Uvicorn when executed directly
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    return {"message": "Laborly Backend is running!"}

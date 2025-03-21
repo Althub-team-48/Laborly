@@ -7,7 +7,7 @@ Service layer for job-related business logic:
 - Access control for clients, workers, and admins
 """
 
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from database.models import (
     JobStatus,
     ApplicationStatus,
     UserRole,
+    WorkerAvailability,
 )
 from jobs.schemas import (
     JobCreate,
@@ -73,22 +74,48 @@ class JobService:
         return [JobOut.model_validate(job) for job in jobs]
 
     @staticmethod
-    def get_jobs_by_user(db: Session, user_id: int, role: UserRole) -> List[JobOut]:
+    def get_jobs_by_user(
+        db: Session, 
+        user_id: int, 
+        role: UserRole, 
+        status: Optional[str] = None, 
+        title: Optional[str] = None
+    ) -> List[JobOut]:
         """
-        Returns jobs relevant to the user's role.
-        - Clients see their own jobs
-        - Workers see jobs assigned to them
-        - Admins see all jobs
+        Returns jobs relevant to the user's role with optional filtering.
+        - Clients see their own jobs.
+        - Workers see jobs assigned to them.
+        - Admins see all jobs.
+        - Applies filters if provided.
         """
-        if role == UserRole.CLIENT:
-            jobs = db.query(Job).filter(Job.client_id == user_id).all()
-        elif role == UserRole.WORKER:
-            jobs = db.query(Job).filter(Job.worker_id == user_id).all()
-        else:  # Admin
-            jobs = db.query(Job).all()
+        try:
+            # Base query based on role
+            if role == UserRole.CLIENT:
+                query = db.query(Job).filter(Job.client_id == user_id)
+            elif role == UserRole.WORKER:
+                query = db.query(Job).filter(Job.worker_id == user_id)
+            else:  # Admin
+                query = db.query(Job)
 
-        return [JobOut.model_validate(job) for job in jobs]
+            # Apply filters if provided
+            if status:
+                normalized_status = status.upper()
+                if normalized_status not in JobStatus.__members__:
+                    raise ValueError(f"Invalid status: {status}")
+                query = query.filter(Job.status == JobStatus[normalized_status])
+            if title:
+                query = query.filter(Job.title.ilike(f"%{title}%"))  # Case-insensitive partial match
 
+            jobs = query.all()
+            logger.info(f"Retrieved {len(jobs)} jobs for user {user_id} with role {role}")
+            return [JobOut.model_validate(job) for job in jobs]
+        except ValueError as e:
+            logger.warning(f"Invalid filter applied: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Error retrieving jobs for user {user_id}: {str(e)}")
+            raise    
+    
     @staticmethod
     def update_job(db: Session, job_id: int, job_update: JobUpdate, user_id: int, role: UserRole) -> JobOut:
         """
@@ -130,27 +157,51 @@ class JobService:
     def apply_for_job(db: Session, application: JobApplicationCreate, worker_id: int) -> JobApplicationOut:
         """
         Worker applies for a job.
-        - Must not already be assigned
-        - Worker must not have applied previously
+        - Must not already be assigned.
+        - Worker must not have applied previously.
+        - Worker must be available during job's start_time and end_time (if set).
         """
-        job = db.query(Job).filter(Job.id == application.job_id).first()
-        if not job:
-            raise ValueError(f"Job with ID {application.job_id} not found")
-        if job.worker_id:
-            raise ValueError("This job is already assigned to a worker")
-        if db.query(JobApplication).filter_by(job_id=application.job_id, worker_id=worker_id).first():
-            raise ValueError("You have already applied for this job")
+        try:
+            # Fetch the job
+            job = db.query(Job).filter(Job.id == application.job_id).first()
+            if not job:
+                raise ValueError(f"Job with ID {application.job_id} not found")
+            if job.worker_id:
+                raise ValueError("This job is already assigned to a worker")
+            if db.query(JobApplication).filter_by(job_id=application.job_id, worker_id=worker_id).first():
+                raise ValueError("You have already applied for this job")
 
-        db_application = JobApplication(
-            job_id=application.job_id,
-            worker_id=worker_id,
-            status=ApplicationStatus.PENDING
-        )
-        db.add(db_application)
-        db.commit()
-        db.refresh(db_application)
-        logger.info(f"Application created: {db_application.id} for job {application.job_id} by worker {worker_id}")
-        return JobApplicationOut.model_validate(db_application)
+            # Check worker availability if job has time constraints
+            if job.start_time and job.end_time:
+                # Query worker's availability slots
+                availabilities = db.query(WorkerAvailability).filter(
+                    WorkerAvailability.worker_id == worker_id,
+                    WorkerAvailability.start_time <= job.end_time,
+                    WorkerAvailability.end_time >= job.start_time
+                ).all()
+                
+                # Ensure at least one availability slot overlaps with job duration
+                if not availabilities:
+                    raise ValueError("Worker is not available during the job's scheduled time")
+
+            # Create the application
+            db_application = JobApplication(
+                job_id=application.job_id,
+                worker_id=worker_id,
+                status=ApplicationStatus.PENDING
+            )
+            db.add(db_application)
+            db.commit()
+            db.refresh(db_application)
+            logger.info(f"Application created: {db_application.id} for job {application.job_id} by worker {worker_id}")
+            return JobApplicationOut.model_validate(db_application)
+        except ValueError as e:
+            logger.warning(f"Application failed for job {application.job_id} by worker {worker_id}: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Error applying for job {application.job_id} by worker {worker_id}: {str(e)}")
+            db.rollback()
+            raise
 
     @staticmethod
     def get_application_by_id(db: Session, application_id: int) -> JobApplicationOut:

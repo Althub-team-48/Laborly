@@ -7,7 +7,7 @@ Defines the FastAPI routes for job-related operations:
 - Access control based on user roles (Admin, Client, Worker)
 """
 
-from typing import List
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -20,6 +20,7 @@ from jobs.schemas import (
 from jobs.service import JobService
 from core.dependencies import get_db, get_current_user
 from users.schemas import UserOut, UserRole
+from utils.logger import logger
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
@@ -45,14 +46,32 @@ def create_job(
 
 @router.get("/list", response_model=JobList)
 def list_jobs(
+    status: Optional[str] = None,  # Optional filter by job status
+    title: Optional[str] = None,   # Optional filter by partial title match
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user)
 ):
     """
-    List jobs based on user role.
-    Clients see their jobs, workers see jobs they applied for, admins see all jobs.
+    List jobs with optional filtering by status and title.
+    - Clients see their jobs, workers see jobs they applied for, admins see all.
+    - Filters are applied on top of role-based visibility.
     """
-    return {"jobs": JobService.get_jobs_by_user(db, current_user.id, current_user.role)}
+    try:
+        # Pass filters to service layer
+        jobs = JobService.get_jobs_by_user(
+            db, 
+            current_user.id, 
+            current_user.role, 
+            status=status, 
+            title=title
+        )
+        return {"jobs": jobs}
+    except ValueError as e:
+        logger.error(f"Error listing jobs: {str(e)}")
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error listing jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/find/{job_id}", response_model=JobOut)

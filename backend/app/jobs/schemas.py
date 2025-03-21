@@ -35,6 +35,18 @@ class ApplicationStatus(str, Enum):
 class JobBase(BaseModel):
     title: str
     description: str
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+
+    @field_validator("start_time", "end_time", mode="before")
+    @classmethod
+    def ensure_timezone(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """
+        Ensures that datetime values have timezone information.
+        """
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Datetime values must include timezone information")
+        return value
 
 
 class JobCreate(JobBase):
@@ -54,6 +66,8 @@ class JobUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[JobStatus] = None
     worker_id: Optional[int] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
 
     @field_validator("status", mode="before")
     @classmethod
@@ -67,6 +81,16 @@ class JobUpdate(BaseModel):
         if upper_value not in JobStatus.__members__:
             raise ValueError(f"Invalid status. Must be one of: {', '.join(JobStatus.__members__.keys())}")
         return JobStatus[upper_value]
+    
+    @field_validator("start_time", "end_time", mode="before")
+    @classmethod
+    def ensure_timezone(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """
+        Ensures that datetime values have timezone information.
+        """
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Datetime values must include timezone information")
+        return value
 
 
 class JobOut(BaseModel):
@@ -79,6 +103,8 @@ class JobOut(BaseModel):
     client: UserOut
     worker: Optional[UserOut]
     status: JobStatus
+    start_time: Optional[datetime]
+    end_time: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 

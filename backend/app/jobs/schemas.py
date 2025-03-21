@@ -8,7 +8,7 @@ Defines Pydantic models and enums for:
 """
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from pydantic import BaseModel, field_validator
@@ -35,6 +35,29 @@ class ApplicationStatus(str, Enum):
 class JobBase(BaseModel):
     title: str
     description: str
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+
+    @field_validator("start_time", "end_time", mode="before")
+    @classmethod
+    def ensure_timezone(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """
+        Ensures that datetime values have timezone information.
+        """
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Datetime values must include timezone information")
+        return value
+
+    @field_validator("end_time")
+    @classmethod
+    def validate_time_range(cls, end: Optional[datetime], values: dict) -> Optional[datetime]:
+        """
+        Ensures that end_time is after start_time, if both are provided.
+        """
+        start = values.get("start_time")
+        if start and end and end <= start:
+            raise ValueError("end_time must be after start_time")
+        return end
 
 
 class JobCreate(JobBase):
@@ -54,6 +77,8 @@ class JobUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[JobStatus] = None
     worker_id: Optional[int] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
 
     @field_validator("status", mode="before")
     @classmethod
@@ -68,6 +93,21 @@ class JobUpdate(BaseModel):
             raise ValueError(f"Invalid status. Must be one of: {', '.join(JobStatus.__members__.keys())}")
         return JobStatus[upper_value]
 
+    @field_validator("start_time", "end_time", mode="before")
+    @classmethod
+    def ensure_timezone(cls, value: Optional[datetime]) -> Optional[datetime]:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Datetime values must include timezone information")
+        return value
+
+    @field_validator("end_time")
+    @classmethod
+    def validate_time_range(cls, end: Optional[datetime], values: dict) -> Optional[datetime]:
+        start = values.get("start_time")
+        if start and end and end <= start:
+            raise ValueError("end_time must be after start_time")
+        return end
+
 
 class JobOut(BaseModel):
     """
@@ -79,6 +119,8 @@ class JobOut(BaseModel):
     client: UserOut
     worker: Optional[UserOut]
     status: JobStatus
+    start_time: Optional[datetime]
+    end_time: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 

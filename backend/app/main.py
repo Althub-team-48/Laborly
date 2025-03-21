@@ -9,14 +9,13 @@ Entry point for the Laborly API application.
 """
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 
 from users.routes import router as users_router
 from jobs.routes import router as jobs_router
 from workers.routes import router as workers_router
 from utils.middleware import LoggingMiddleware
 from utils.logger import logger
-
+from core.exceptions import APIError
 # Initialize FastAPI app
 app = FastAPI(
     title="Laborly API",
@@ -33,7 +32,7 @@ async def custom_404_handler(request: Request, exc):
     Logs and returns a standardized response for 404 errors.
     """
     logger.warning(f"404 Not Found: {request.method} {request.url.path}")
-    return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return APIError(status_code=404, message="Not Found")
 
 # Register application routers
 app.include_router(users_router)

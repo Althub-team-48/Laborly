@@ -9,6 +9,14 @@ It creates:
 - Random job applications from workers
 - Availability time slots for workers
 """
+import sys
+from pathlib import Path
+
+# Dynamically set the backend directory as the root module
+current_file = Path(__file__).resolve()
+project_root = current_file.parents[1]
+sys.path.insert(0, str(project_root))
+
 
 import random
 import string

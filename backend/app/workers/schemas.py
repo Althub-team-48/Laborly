@@ -7,7 +7,7 @@ Defines Pydantic schemas for Worker Availability:
 """
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, field_validator
 
 from users.schemas import UserOut
@@ -19,6 +19,38 @@ class WorkerAvailabilityBase(BaseModel):
     """
     start_time: datetime
     end_time: datetime
+
+    @field_validator("start_time", "end_time", mode="before")
+    @classmethod
+    def ensure_timezone(cls, value: datetime) -> datetime:
+        """
+        Ensures datetime fields include timezone info.
+        Raises a ValueError if naive datetime is detected.
+        """
+        if value and value.tzinfo is None:
+            raise ValueError("Datetime must include timezone information")
+        return value
+
+    @field_validator("end_time")
+    @classmethod
+    def validate_time_order(cls, end: datetime, values: dict) -> datetime:
+        """
+        Ensures start_time is before end_time.
+        """
+        start = values.get("start_time")
+        if start and end <= start:
+            raise ValueError("End time must be after start time")
+        return end
+
+    @field_validator("start_time")
+    @classmethod
+    def validate_future_start(cls, start: datetime) -> datetime:
+        """
+        Ensures start_time is in the future.
+        """
+        if start <= datetime.now(timezone.utc):
+            raise ValueError("Start time must be in the future")
+        return start
 
 
 class WorkerAvailabilityCreate(WorkerAvailabilityBase):
@@ -47,6 +79,27 @@ class WorkerAvailabilityUpdate(BaseModel):
         if value and value.tzinfo is None:
             raise ValueError("Datetime must include timezone information")
         return value
+
+    @field_validator("end_time")
+    @classmethod
+    def validate_time_order(cls, end: Optional[datetime], values: dict) -> Optional[datetime]:
+        """
+        If both start and end are present, ensure end > start.
+        """
+        start = values.get("start_time")
+        if start and end and end <= start:
+            raise ValueError("End time must be after start time")
+        return end
+
+    @field_validator("start_time")
+    @classmethod
+    def validate_future_start(cls, start: Optional[datetime]) -> Optional[datetime]:
+        """
+        Ensures optional start_time is in the future.
+        """
+        if start and start <= datetime.now(timezone.utc):
+            raise ValueError("Start time must be in the future")
+        return start
 
 
 class WorkerAvailabilityOut(WorkerAvailabilityBase):

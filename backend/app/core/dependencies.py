@@ -9,12 +9,13 @@ This file defines FastAPI dependency functions used throughout the application:
 
 from typing import Generator
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 from sqlalchemy.orm import Session
 
 from database.config import SessionLocal
 from core.security import oauth2_scheme, decode_access_token
-from database.models import User, UserRole  # Ensure UserRole enum is imported
+from core.exceptions import APIError
+from database.models import User, UserRole
 from utils.logger import logger
 
 
@@ -38,9 +39,9 @@ def get_current_user(
     Dependency to retrieve the currently authenticated user based on the token.
     Raises an HTTP 401 error if the token is invalid or the user is not found.
     """
-    credentials_exception = HTTPException(
+    credentials_exception = APIError(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        message="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -67,6 +68,6 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
     if current_user.role != UserRole.ADMIN:
         logger.warning(f"Unauthorized access attempt by {current_user.email}")
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise APIError(status_code=403, message="Admin access required")
 
     return current_user

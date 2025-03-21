@@ -22,7 +22,7 @@ logger = logging.getLogger("Laborly")
 logger.setLevel(logging.DEBUG)
 
 handler = RotatingFileHandler(LOG_PATH, maxBytes=1_000_000, backupCount=5)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s\n")
 handler.setFormatter(formatter)
 
 logger.addHandler(handler)

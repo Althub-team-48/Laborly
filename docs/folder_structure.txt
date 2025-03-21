@@ -4,20 +4,20 @@ Laborly/
 │   │   │── database/            # Database connection and migrations
 │   │   │   ├── __init__.py      # Package initialization
 │   │   │   ├── config.py        # DB connection settings
-│   │   │   ├── models.py        # Database models
-│   │   │   ├── seed.py          # Database seeding script
-│   │   │   ├── purge.py         # Database purge script
+│   │   │   ├── models.py        # Database models (updated with Job start_time/end_time)
+│   │   │   ├── seed.py          # Database seeding script (updated for Phase 3)
+│   │   │   ├── reset.py         # Database reset script (enhanced in Phase 3)
 │   │   │   ├── alembic.ini      # Alembic configuration
 │   │   │   ├── migrate.bat      # Migration automation script
 │   │   │   ├── migrations/      # Alembic migrations
 │   │   │       ├── __init__.py  # Package initialization
 │   │   │       ├── env.py       # Alembic environment setup
-│   │   │       ├── versions/    # Migration versions
+│   │   │       ├── versions/    # Migration versions (added start_time/end_time migration)
 │   │   │── jobs/                # Job module
 │   │   │   ├── __init__.py      # Package initialization
-│   │   │   ├── routes.py        # API endpoints for jobs
-│   │   │   ├── schemas.py       # Pydantic schemas
-│   │   │   ├── service.py       # Business logic
+│   │   │   ├── routes.py        # API endpoints for jobs (enhanced in Phase 3)
+│   │   │   ├── schemas.py       # Pydantic schemas (updated with validators)
+│   │   │   ├── service.py       # Business logic (updated with filtering, availability)
 │   │   │── reviews/             # Review module
 │   │   │   ├── __init__.py      # Package initialization
 │   │   │   ├── routes.py        # API endpoints for reviews
@@ -25,24 +25,31 @@ Laborly/
 │   │   │   ├── service.py       # Business logic
 │   │   │── users/               # User module
 │   │   │   ├── __init__.py      # Package initialization
-│   │   │   ├── routes.py        # API endpoints for users
-│   │   │   ├── schemas.py       # Pydantic schemas
+│   │   │   ├── routes.py        # API endpoints for users (enhanced in Phase 3)
+│   │   │   ├── schemas.py       # Pydantic schemas (updated with validators)
 │   │   │   ├── service.py       # Business logic
+│   │   │── workers/             # Worker module (added in Phase 3)
+│   │   │   ├── __init__.py      # Package initialization
+│   │   │   ├── routes.py        # API endpoints for worker availability
+│   │   │   ├── schemas.py       # Pydantic schemas with validators
+│   │   │   ├── service.py       # Business logic for availability
 │   │   │── core/                # Core app configurations
 │   │   │   ├── __init__.py      # Package initialization
 │   │   │   ├── config.py        # Global settings
 │   │   │   ├── dependencies.py  # Dependency injection for DB, auth, etc.
+│   │   │   ├── exceptions.py    # Custom APIError (added in Phase 3)
 │   │   │   ├── security.py      # Authentication/security methods
 │   │   │── utils/               # Utility functions
 │   │   │   ├── __init__.py      # Package initialization
 │   │   │   ├── email.py         # Email sending utilities
 │   │   │   ├── hash.py          # Password hashing utilities
 │   │   │   ├── logger.py        # Logging setup
-│   │   │── main.py              # FastAPI entry point
+│   │   │   ├── middleware.py    # Logging middleware (added in Phase 3)
+│   │   │── main.py              # FastAPI entry point (updated with middleware)
 │   │   │── run.sh               # Backend startup script
 │   │── logs/                    # Log files
 │   │   │── laborly.log          # Application logs
-│   │── tests/                   # Unit and integration tests
+│   │── tests/                   # Unit and integration tests (placeholder)
 │   │   ├── __init__.py          # Package initialization
 │   │   ├── test_admin.py        # Admin-related tests
 │   │   ├── test_jobs.py         # Job-related tests

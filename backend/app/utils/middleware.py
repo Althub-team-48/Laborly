@@ -17,9 +17,19 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Capture and log request details
         body = await request.body()
+        body_str = body.decode('utf-8').strip()
+        if body_str:
+            try:
+                parsed_body = json.loads(body_str)
+            except json.JSONDecodeError:
+                parsed_body = "Invalid JSON"
+        else:
+            parsed_body = "Empty body"
+
         logger.info(
             f"Request: {request.method} {request.url.path} "
-            f"Headers: {dict(request.headers)} Body: {body.decode('utf-8')}"
+            #f"Headers: {dict(request.headers)}"
+            f"Body: {parsed_body}"
         )
 
         # Process the request and capture the response

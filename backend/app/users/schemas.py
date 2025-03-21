@@ -42,6 +42,27 @@ class UserBase(BaseModel):
             raise ValueError(f"Invalid role. Must be one of: {', '.join(UserRole.__members__.keys())}")
         return UserRole[upper_value]
 
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """
+        Ensures name fields are at least 2 characters.
+        """
+        if len(value.strip()) < 2:
+            raise ValueError("First name and last name must be at least 2 characters long.")
+        return value.strip()
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        """
+        Validates phone number contains only digits and is between 10–15 digits.
+        """
+        digits = ''.join(filter(str.isdigit, value))
+        if len(digits) < 10 or len(digits) > 15:
+            raise ValueError("Phone number must be between 10 and 15 digits.")
+        return digits
+
 
 # --- Request Schemas ---
 
@@ -78,6 +99,29 @@ class UserUpdate(BaseModel):
         if upper_value not in UserRole.__members__:
             raise ValueError(f"Invalid role. Must be one of: {', '.join(UserRole.__members__.keys())}")
         return UserRole[upper_value]
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_optional_name(cls, value: Optional[str]) -> Optional[str]:
+        """
+        Ensures name fields are valid if provided.
+        """
+        if value is not None and len(value.strip()) < 2:
+            raise ValueError("First name and last name must be at least 2 characters long.")
+        return value.strip() if value else value
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_optional_phone(cls, value: Optional[str]) -> Optional[str]:
+        """
+        Validates phone number format if provided.
+        """
+        if value is None:
+            return None
+        digits = ''.join(filter(str.isdigit, value))
+        if len(digits) < 10 or len(digits) > 15:
+            raise ValueError("Phone number must be between 10 and 15 digits.")
+        return digits
 
 
 # --- Response Schemas ---

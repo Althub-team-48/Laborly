@@ -12,9 +12,10 @@ from typing import Optional
 import os
 import jwt
 from passlib.context import CryptContext
-from fastapi import HTTPException, status
+from fastapi import status
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
+from core.exceptions import APIError
 
 # Load environment variables from .env file
 load_dotenv()
@@ -69,8 +70,8 @@ def decode_access_token(token: str) -> dict:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.PyJWTError:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
+            message="Invalid token",
             headers={"WWW-Authenticate": "Bearer"},
         )

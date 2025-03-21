@@ -242,3 +242,96 @@
   - Verified database logs in `admin_logs` and `system_logs` tables.
 
 ---
+
+### **Phase 3: Core API Development**
+
+#### **Overview**
+Phase 3 focused on building the core API functionality using FastAPI, integrating user management, job management, job applications, worker availability, and logging. We enhanced the API with search/filtering, availability integration, and polished it with consistent error handling and improved documentation.
+
+#### **1. User Management**
+- **Endpoints Implemented** (`users/routes.py`):
+  - `POST /users/register`: Registers new users with role-based validation (client, worker, admin).
+  - `POST /users/login` (JSON & form): Authenticates users, returning JWT tokens.
+  - `PUT /users/me`: Updates authenticated user’s profile.
+  - Admin-only: `GET /users/list`, `GET /users/find/{user_id}`, `DELETE /users/delete/{user_id}`.
+- **Authentication** (`core/security.py`, `core/dependencies.py`):
+  - Implemented JWT-based authentication with `create_access_token` and `get_current_user`.
+  - Added role-based access control (RBAC) via `get_admin_user` dependency.
+- **Service Layer** (`users/service.py`):
+  - Handles user CRUD operations, password hashing (`utils/hash.py`), and authentication logic.
+
+#### **2. Job Management**
+- **Endpoints Implemented** (`jobs/routes.py`):
+  - `POST /jobs/create`: Creates jobs (clients/admins only).
+  - `GET /jobs/list`: Lists jobs based on role (clients: own jobs, workers: assigned, admins: all).
+  - `GET /jobs/find/{job_id}`: Retrieves job details (role-restricted).
+  - `PUT /jobs/update/{job_id}`: Updates jobs (clients/admins only).
+  - `DELETE /jobs/delete/{job_id}`: Deletes jobs (clients/admins only).
+- **Service Layer** (`jobs/service.py`):
+  - Manages job CRUD with lifecycle transitions (e.g., `PENDING` → `IN_PROGRESS` on assignment).
+- **Schema Enhancements** (`jobs/schemas.py`):
+  - Added `start_time` and `end_time` with timezone-aware validation.
+
+#### **3. Job Applications & Assignments**
+- **Endpoints Implemented** (`jobs/routes.py`):
+  - `POST /jobs/apply/{job_id}`: Workers apply to jobs.
+  - `GET /jobs/applications/{job_id}`: Lists applications (clients/admins only).
+  - `PUT /{job_id}/applications/{application_id}`: Approves/rejects applications, assigns workers on acceptance.
+- **Service Layer** (`jobs/service.py`):
+  - Ensures no duplicate applications, updates job status on acceptance.
+- **Schema** (`jobs/schemas.py`):
+  - Defined `JobApplicationCreate`, `JobApplicationUpdate`, `JobApplicationOut` for application workflows.
+
+#### **4. Worker Availability System**
+- **Endpoints Implemented** (`workers/routes.py`):
+  - `POST /api/workers/availability/`: Creates availability slots (workers only).
+  - `GET /api/workers/availability/me`: Lists worker’s slots.
+  - `GET /api/workers/availability/{availability_id}`: Retrieves specific slot (admins or owner).
+  - `PUT /api/workers/availability/{availability_id}`: Updates slots (workers only).
+  - `DELETE /api/workers/availability/{availability_id}`: Deletes slots (workers only).
+- **Service Layer** (`workers/service.py`):
+  - CRUD operations for availability, restricted to worker ownership or admin access.
+- **Integration**:
+  - Updated `apply_for_job` in `jobs/service.py` to check worker availability against job `start_time`/`end_time`.
+- **Schema Enhancements** (`workers/schemas.py`):
+  - Added timezone-aware `start_time`/`end_time` validation, ensured `end_time > start_time`.
+
+#### **5. Logging Implementation**
+- **Enhanced Logging**:
+  - File-based logs (`utils/logger.py`) capture all API actions (e.g., job creation, user login).
+  - Database logs (`system_logs`, `admin_logs`) record CRUD and auth events via `log_system_action`/`log_admin_action`.
+- **Middleware** (`utils/middleware.py`):
+  - Added `LoggingMiddleware` to log request/response details in `main.py`.
+
+#### **6. Job Search and Filtering**
+- **Endpoint Update** (`jobs/routes.py`):
+  - Enhanced `GET /jobs/list` with optional `status` and `title` query params for filtering.
+- **Service Logic** (`jobs/service.py`):
+  - Added filtering logic with SQLAlchemy `ilike` for titles and enum validation for status.
+
+#### **7. Polish and Documentation**
+- **Error Handling**:
+  - Introduced `APIError` (`core/exceptions.py`) for consistent `{"error": "message"}` responses across all endpoints.
+- **Schema Polish** (`jobs/schemas.py`, `users/schemas.py`, `workers/schemas.py`):
+  - Added field validators: timezone-aware datetimes, `end_time > start_time`, enum normalization, phone number regex.
+- **Route Polish**:
+  - Added `response_model` and `responses` metadata to all endpoints for Swagger clarity.
+  - Improved docstrings with role restrictions and behavior details.
+- **Migration Management**:
+  - Updated `reset.py` to purge, apply existing migrations, generate new ones, and seed, ensuring schema sync.
+
+#### **8. Database Updates**
+- **Model Changes** (`database/models.py`):
+  - Added `start_time` and `end_time` to `Job` with migrations applied via Alembic.
+- **Seeder Updates** (`database/seed.py`):
+  - Included `start_time`/`end_time` in job data for testing availability integration.
+
+#### **9. Tools and Scripts**
+- **Reset Script** (`database/reset.py`):
+  - Enhanced to apply existing migrations, autogenerate new ones, and clean up empty migrations with timestamped names.
+
+#### **Verification**
+- **API Testing**:
+  - Tested endpoints manually here: [(http://localhost:8000/docs)]
+- **Logs**: Verified file (`logs/laborly.log`) and database logs for all actions.
+- **Swagger**: Confirmed enhanced docs at `/docs` with error examples.

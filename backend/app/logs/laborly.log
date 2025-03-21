@@ -1,6 +1,0 @@
-2025-03-19 17:53:05 - LaborlyBackend - INFO - Admin user created: admin@laborly.com
-2025-03-19 17:53:05 - LaborlyBackend - INFO - Admin action logged: USER_CREATED by admin_id 1
-2025-03-19 17:53:05 - LaborlyBackend - INFO - Client user created: client@laborly.com
-2025-03-19 17:53:05 - LaborlyBackend - ERROR - Failed to log system action to database: name 'SystemLog' is not defined
-2025-03-19 17:53:05 - LaborlyBackend - INFO - Job created: Fix my sink by client_id 2
-2025-03-19 17:53:05 - LaborlyBackend - ERROR - Failed to log system action to database: name 'SystemLog' is not defined

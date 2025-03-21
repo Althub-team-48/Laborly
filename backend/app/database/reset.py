@@ -4,13 +4,13 @@ reset.py
 Description:
 This script resets the database by:
 - Dropping and recreating the public schema
-- Running Alembic migrations
+- Generating and applying Alembic migrations to reflect model changes
 - Seeding the database
 
 It supports multiple modes:
-- --auto: runs purge, migration, and seed in sequence
+- --auto: runs purge, migration (generate + apply), and seed in sequence
 - --purge-only: drops and recreates schema
-- --migrate-only: runs migrations only
+- --migrate-only: generates and applies migrations
 - --seed-only: runs seeding only
 - --message <message>: sets the Alembic migration message
 
@@ -25,6 +25,8 @@ import configparser
 from pathlib import Path
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
+from datetime import datetime
+import glob
 
 # Load environment variables
 load_dotenv()
@@ -63,35 +65,94 @@ def purge_database() -> None:
     actions_performed.append("Database Purged")
 
 
-def run_migration(message: str = "initial migration") -> None:
-    """Runs Alembic migrations, and generates one if none exist."""
-    # Inject database URL into alembic.ini
+def run_migration(message: str = None) -> None:
+    """
+    Generates a new Alembic migration only if there are model changes, and applies it.
+    Auto-names the migration with a timestamp if no message is provided.
+    """
+    # Use timestamp-based message if none provided
+    if not message:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        message = f"Auto migration - {timestamp}"
+
+    # Update alembic.ini with latest DB URL
     config = configparser.ConfigParser()
     config.read(ALEMBIC_INI_PATH)
     config.set("alembic", "sqlalchemy.url", DATABASE_URL)
     with open(ALEMBIC_INI_PATH, "w") as f:
         config.write(f)
 
-    # Set up PYTHONPATH and environment for Alembic
+    # Set up environment
     project_root = str(BASE_DIR.resolve().parents[2])
     env = os.environ.copy()
     env["PYTHONPATH"] = project_root
     os.chdir(BASE_DIR)
 
-    versions_dir = BASE_DIR / "migrations" / "versions"
-    if not any(versions_dir.glob("*.py")):
-        print("No existing migrations found. Generating initial migration.")
-        logger.info("Generating initial migration.")
+    # Apply existing migrations first (ensure up-to-date)
+    subprocess.run(["alembic", "-c", "alembic.ini", "upgrade", "head"], env=env)
+
+    # Get list of existing migration files before generating
+    before_files = set(glob.glob(str(BASE_DIR / "migrations" / "versions" / "*.py")))
+
+    print(f"Generating migration: {message}")
+    logger.info(f"Generating migration with message: {message}")
+
+    try:
         subprocess.run(
             ["alembic", "-c", "alembic.ini", "revision", "--autogenerate", "-m", message],
             check=True,
             env=env
         )
+    except subprocess.CalledProcessError as e:
+        print(f"Migration generation failed: {e}")
+        logger.error(f"Migration generation failed: {e}")
+        sys.exit(1)
 
-    subprocess.run(["alembic", "-c", "alembic.ini", "upgrade", "head"], check=True, env=env)
-    print("Migration applied.")
-    logger.info("Migration applied.")
-    actions_performed.append("Migration Applied")
+    # Get list of migration files after generation
+    after_files = set(glob.glob(str(BASE_DIR / "migrations" / "versions" / "*.py")))
+    new_files = list(after_files - before_files)
+
+    if not new_files:
+        print("✅ No model changes detected. No new migration file created.")
+        logger.info("No model changes detected. Skipping migration.")
+        return
+
+    # Check if generated file is empty (contains 'pass' only)
+    migration_path = new_files[0]
+
+    with open(migration_path, "r") as f:
+        content = f.read()
+
+    # Check for real schema operations
+    if "op." not in content:
+        print("⚠️  No schema changes detected. Skipping empty migration.")
+        logger.info("Empty migration file detected.")
+
+        try:
+            # Ensure file is closed before deletion
+            os.remove(migration_path)
+            logger.info(f"Deleted empty migration file: {migration_path}")
+        except PermissionError as e:
+            logger.error(f"Could not delete empty migration file: {e}")
+            print(f"❌ Could not delete empty migration file. You can remove it manually:\n{migration_path}")
+        
+        return
+
+    print("✅ New migration created:", os.path.basename(new_files[0]))
+    logger.info(f"New migration created: {new_files[0]}")
+    actions_performed.append("Migration Generated")
+
+    # Apply all migrations
+    print("Applying migrations...")
+    try:
+        subprocess.run(["alembic", "-c", "alembic.ini", "upgrade", "head"], check=True, env=env)
+        print("✅ Migrations applied.")
+        logger.info("Migrations applied.")
+        actions_performed.append("Migrations Applied")
+    except subprocess.CalledProcessError as e:
+        print(f"Migration apply failed: {e}")
+        logger.error(f"Migration application failed: {e}")
+        sys.exit(1)
 
 
 def run_seeding() -> None:
@@ -102,10 +163,20 @@ def run_seeding() -> None:
 
     print("Running seeder.")
     logger.info("Running database seeder.")
-    subprocess.run([sys.executable, str(SEED_SCRIPT_PATH)], check=True, env=env)
-    print("Seeding complete.")
-    logger.info("Database seeding complete.")
-    actions_performed.append("Database Seeded")
+
+    try:
+        subprocess.run([sys.executable, str(SEED_SCRIPT_PATH)], check=True, env=env)
+        print("Seeding complete.")
+        logger.info("Database seeding complete.")
+        actions_performed.append("Database Seeded")
+    except subprocess.CalledProcessError as e:
+        print("Error occurred while running seeder.")
+        logger.error(f"Seeder failed: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error occurred while running seeder: {e}")
+        logger.error(f"Seeder failed: {e}")
+        sys.exit(1)
 
 
 def print_summary() -> None:
@@ -133,7 +204,7 @@ if __name__ == "__main__":
             print("Auto mode enabled.")
             logger.info("Auto mode started.")
             purge_database()
-            run_migration(msg_arg or "initial migration")
+            run_migration(msg_arg or "schema update")
             run_seeding()
             print_summary()
             sys.exit(0)
@@ -144,7 +215,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
         if migrate_only:
-            run_migration(msg_arg or "initial migration")
+            run_migration(msg_arg or "schema update")
             print_summary()
             sys.exit(0)
 
@@ -157,7 +228,7 @@ if __name__ == "__main__":
         confirm = input("WARNING: This will DELETE ALL DATA. Type 'yes' to proceed: ")
         if confirm.lower() == "yes":
             purge_database()
-            migration_message = msg_arg or input("Enter migration message (or press Enter for default): ") or "initial migration"
+            migration_message = msg_arg or input("Enter migration message (or press Enter for default): ") or "schema update"
             run_migration(migration_message)
 
             seed = input("Do you want to seed the database now? (yes/no): ")

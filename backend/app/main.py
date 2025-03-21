@@ -1,41 +1,41 @@
-from fastapi import FastAPI, Request, Response, Depends
+"""
+main.py
+
+Entry point for the Laborly API application.
+- Initializes the FastAPI app with version and title
+- Adds custom logging middleware
+- Defines a custom 404 error handler
+- Includes routers for users, jobs, and workers
+"""
+
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from app.database.init_db import init_db
-from app.utils.logger import log_request_response, logger
-from app.core.dependencies import get_db_session
-from sqlalchemy.orm import Session
-from contextlib import asynccontextmanager
 
-# Define lifespan event handler
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup logic
-    logger.info("Starting up Laborly Backend...")
-    init_db()  # Initialize the database
-    yield
-    # Shutdown logic
-    logger.info("Shutting down Laborly Backend...")
+from users.routes import router as users_router
+from jobs.routes import router as jobs_router
+from workers.routes import router as workers_router
+from utils.middleware import LoggingMiddleware
+from utils.logger import logger
 
-# Create FastAPI app with lifespan
-app = FastAPI(lifespan=lifespan)
+# Initialize FastAPI app
+app = FastAPI(
+    title="Laborly API",
+    version="1.0.0"
+)
 
-# Middleware to log all requests and responses
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    db = next(get_db_session())  # Get the database session
-    response = await call_next(request)
-    await log_request_response(request, response, db)
-    return response
+# Register middleware
+app.add_middleware(LoggingMiddleware)
 
-@app.get("/")
-def read_root():
-    return {"message": "Laborly Backend is running!"}
+# Custom 404 error handler
+@app.exception_handler(404)
+async def custom_404_handler(request: Request, exc):
+    """
+    Logs and returns a standardized response for 404 errors.
+    """
+    logger.warning(f"404 Not Found: {request.method} {request.url.path}")
+    return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
-# Global exception handler (optional, for better error handling)
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception: {str(exc)}")
-    return JSONResponse(
-        status_code=500,
-        content={"message": "Internal Server Error"}
-    )
+# Register application routers
+app.include_router(users_router)
+app.include_router(jobs_router)
+app.include_router(workers_router)

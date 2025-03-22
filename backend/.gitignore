@@ -1,0 +1,28 @@
+# Environment variables
+.env
+
+# Log files and directories
+logs/
+*.log
+
+# Database migrations (optional: ignore versioned files if regenerated often)
+app/database/migrations/versions/*
+
+# Local development or testing artifacts
+app/__pycache__/
+app/*.pyc
+
+# Virtual environment (if created inside backend)
+venv/
+env/
+
+# Temporary files
+*.bak
+*.swp
+*.tmp
+
+# Configuration files
+*.ini
+
+#others
+*.sh

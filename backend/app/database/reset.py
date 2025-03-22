@@ -15,7 +15,7 @@ It supports multiple modes:
 - --message <message>: sets the Alembic migration message
 
 Usage:
-python app/database/reset.py [--auto] [--purge-only] [--migrate-only] [--seed-only] [--message <message>]
+python app/database/reset.py [--auto] [--purge-only] [--migrate-only] [--seed-only] [--message "message"]
 """
 
 import os

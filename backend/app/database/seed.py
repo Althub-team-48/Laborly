@@ -26,16 +26,17 @@ from sqlalchemy.orm import Session
 
 from database.config import SessionLocal
 from database.models import (
+    Review,
     User,
-    SystemLog,
     Job,
     JobApplication,
     WorkerAvailability,
     UserRole,
-    ActionType,
     JobStatus,
     ApplicationStatus,
 )
+
+from reviews.service import ReviewService
 from utils.logger import logger
 
 
@@ -129,6 +130,41 @@ def seed_data() -> None:
             db.add(job)
             jobs.append(job)
         db.commit()
+        
+        # Update jobs to include some completed ones
+        completed_jobs = random.sample(jobs, 5)
+        for job in completed_jobs:
+            job.status = JobStatus.COMPLETED
+            job.worker_id = random.choice(worker_users).id
+        db.commit()
+        
+        # Create sample reviews
+        for job in completed_jobs:
+            # Client reviews worker
+            client_review = Review(
+                job_id=job.id,
+                reviewer_id=job.client_id,
+                reviewee_id=job.worker_id,
+                rating=random.randint(1, 5)
+            )
+            db.add(client_review)
+
+            # Worker reviews client
+            worker_review = Review(
+                job_id=job.id,
+                reviewer_id=job.worker_id,
+                reviewee_id=job.client_id,
+                rating=random.randint(1, 5)
+            )
+            db.add(worker_review)
+        db.commit()
+
+        # Update average ratings
+        for user in client_users + worker_users:
+            ReviewService.update_average_rating(db, user.id)
+
+        print("Database seeded successfully.")
+        logger.info("Database seeded successfully.")
 
         # Create job applications for 10 jobs
         for job in random.sample(jobs, 10):

@@ -11,7 +11,7 @@ from enum import Enum as PyEnum
 
 from sqlalchemy import (
     Column, Integer, String, Enum, ForeignKey,
-    DateTime, Boolean
+    DateTime, Boolean, Float
 )
 from sqlalchemy.orm import relationship
 
@@ -65,6 +65,7 @@ class User(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    average_rating = Column(Float, default=0.0, nullable=True)
 
     # Relationships
     system_logs = relationship("SystemLog", back_populates="user")
@@ -72,6 +73,8 @@ class User(Base):
     jobs_assigned = relationship("Job", back_populates="worker", foreign_keys="Job.worker_id")
     applications = relationship("JobApplication", back_populates="worker")
     availability = relationship("WorkerAvailability", back_populates="worker")
+    reviews_written = relationship("Review", back_populates="reviewer", foreign_keys="Review.reviewer_id")
+    reviews_received = relationship("Review", back_populates="reviewee", foreign_keys="Review.reviewee_id")
 
 
 # System log table
@@ -148,3 +151,19 @@ class WorkerAvailability(Base):
     )
 
     worker = relationship("User", back_populates="availability")
+
+# Review table
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reviewee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    rating = Column(Integer, nullable=False)  # 1-5 stars
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    job = relationship("Job")
+    reviewer = relationship("User", back_populates="reviews_written", foreign_keys=[reviewer_id])
+    reviewee = relationship("User", back_populates="reviews_received", foreign_keys=[reviewee_id])

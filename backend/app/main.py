@@ -14,6 +14,7 @@ from users.routes import router as users_router
 from jobs.routes import router as jobs_router
 from workers.routes import router as workers_router
 from reviews.routes import router as reviews_router
+from admin.routes import router as admin_router
 from utils.middleware import LoggingMiddleware
 from utils.logger import logger
 from core.exceptions import APIError
@@ -40,3 +41,4 @@ app.include_router(users_router)
 app.include_router(jobs_router)
 app.include_router(workers_router)
 app.include_router(reviews_router)
+app.include_router(admin_router)

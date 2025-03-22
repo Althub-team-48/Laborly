@@ -41,8 +41,8 @@ fileConfig(config.config_file_name)
 
 # Import SQLAlchemy metadata for 'autogenerate' support
 from database.config import Base
-from database.models import *  # Ensure models are registered
-
+from database.models import *
+from database.models import User, Job, JobApplication, JobAssignment, Review, WorkerAvailability, SystemLog, AdminLog, Dispute
 target_metadata = Base.metadata
 
 

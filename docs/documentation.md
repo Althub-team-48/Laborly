@@ -414,3 +414,70 @@ Phase 4 focused on implementing the reviews and ratings system, enabling clients
   - Checked `laborly.log` and `system_logs` for review actions.
 
 ---
+
+### **Phase 5: Admin Dashboard & Dispute Resolution**
+
+#### **Overview**
+Phase 5 introduced an admin dashboard and dispute resolution system, enhancing administrative control and job lifecycle management. This phase implemented endpoints for admins to oversee users, jobs, and disputes, while enabling clients and workers to mark job completion and raise disputes, fulfilling PRD requirements (Sections 4.5 & 4.7).
+
+#### **1. Database Updates**
+- **Model Additions** (`database/models.py`):
+  - Added `Dispute` model with fields: `id`, `job_id` (FK to `jobs.id`), `raised_by_id` (FK to `users.id`), `reason`, `status` (enum: `PENDING`, `RESOLVED`, `DISMISSED`), `created_at`, `resolved_at`.
+  - Updated `Job` model with `client_completed` and `worker_completed` (Boolean) for completion tracking, and `DISPUTED` to `JobStatus` enum.
+  - Established `Job.disputes` relationship to `Dispute`.
+- **Migration**:
+  - Ran `migrate.bat "add disputes and job completion fields"` to create `disputes` table and update `jobs`.
+
+#### **2. Admin Dashboard Implementation**
+- **New Module** (`admin/`):
+  - Created `admin/routes.py`, `admin/schemas.py`, and `admin/service.py` for admin functionality.
+- **Endpoints Implemented** (`admin/routes.py`):
+  - `GET /api/admin/users/`: Lists all users (admin-only).
+  - `PATCH /api/admin/users/{user_id}`: Toggles user `is_verified` (admin-only).
+  - `GET /api/admin/jobs/`: Lists all jobs with optional `status` filter (admin-only).
+  - `GET /api/admin/disputes/`: Lists all disputes (admin-only).
+  - `PATCH /api/admin/disputes/{dispute_id}`: Resolves disputes, updating job status (admin-only).
+- **Service Layer** (`admin/service.py`):
+  - `get_users`, `update_user_verification`: Manage user data and verification.
+  - `get_jobs`, `get_disputes`: Fetch jobs and disputes with filtering.
+  - `resolve_dispute`: Updates dispute status (`RESOLVED` → job `COMPLETED`, `DISMISSED` → job `CANCELLED`).
+
+#### **3. Job Completion & Dispute System**
+- **Endpoints Updated** (`jobs/routes.py`):
+  - `PATCH /api/jobs/{job_id}/complete`: Client or worker marks their side complete; job becomes `COMPLETED` when both agree.
+  - `POST /api/jobs/{job_id}/dispute`: Raises a dispute, setting job to `DISPUTED` (client/worker only).
+- **Service Layer** (`jobs/service.py`):
+  - `mark_job_complete`: Updates completion flags, auto-completes job if both parties confirm.
+  - `raise_dispute`: Creates dispute, restricts to incomplete jobs and job participants.
+- **Schema** (`admin/schemas.py`):
+  - Defined `DisputeCreate`, `DisputeUpdate`, `DisputeOut`, `UserList`, `JobList` with nested outputs.
+
+#### **4. Integration**
+- **Router Registration** (`main.py`):
+  - Added `admin_router` to FastAPI app, secured with `get_admin_user`.
+- **Logging**:
+  - Used `log_system_action` for completion, dispute creation, and resolution; logged to `laborly.log`.
+- **Seeder Updates** (`database/seed.py`):
+  - Refactored into `Seeder` class with structured data generation.
+  - Added completed jobs (`client_completed`/`worker_completed` set), disputes with sample reasons, and updated reviews.
+
+#### **5. Polish and Documentation**
+- **Error Handling**:
+  - Extended `APIError` for dispute/completion errors (e.g., “Cannot dispute a completed job”).
+- **Route Polish**:
+  - Added `response_model` and `responses` metadata for admin and job endpoints.
+- **Swagger**:
+  - Enhanced docs at `/docs` with admin and dispute endpoints.
+
+#### **Verification**
+- **API Testing**:
+  - Tested in Swagger (`http://localhost:8000/docs`):
+    - Marked jobs complete, verified `COMPLETED` status.
+    - Raised and resolved disputes, checked job status updates.
+    - Listed users/jobs/disputes as admin, toggled verification.
+- **Database**:
+  - Confirmed `disputes` table and job fields via pgAdmin 4 (`SELECT * FROM disputes;`, `SELECT * FROM jobs;`).
+- **Logs**:
+  - Verified `laborly.log` and `system_logs` for all actions.
+
+---

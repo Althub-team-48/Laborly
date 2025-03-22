@@ -9,8 +9,8 @@ logs/
 app/database/migrations/versions/*
 
 # Local development or testing artifacts
-app/__pycache__/
-app/*.pyc
+**/__pycache__/
+**/*.pyc
 
 # Virtual environment (if created inside backend)
 venv/

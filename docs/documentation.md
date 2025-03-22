@@ -335,3 +335,82 @@ Phase 3 focused on building the core API functionality using FastAPI, integratin
   - Tested endpoints manually here: [(http://localhost:8000/docs)]
 - **Logs**: Verified file (`logs/laborly.log`) and database logs for all actions.
 - **Swagger**: Confirmed enhanced docs at `/docs` with error examples.
+
+---
+
+### **Phase 4: Reviews & Ratings System**
+
+#### **Overview**
+Phase 4 focused on implementing the reviews and ratings system, enabling clients and workers to rate each other after job completion. This phase introduced a star-based rating system (1-5), stored average ratings per user, and provided admin controls for managing reviews, aligning with the PRD’s trust-building goals (Section 4.4).
+
+#### **1. Database Updates**
+- **Model Additions** (`database/models.py`):
+  - Added `Review` model with fields: `id`, `job_id` (FK to `jobs.id`), `reviewer_id` (FK to `users.id`), `reviewee_id` (FK to `users.id`), `rating` (Integer, 1-5), `created_at` (timezone-aware).
+  - Updated `User` model with `average_rating` (Float, default 0.0, nullable) to store dynamic averages.
+  - Established relationships: `User.reviews_written` and `User.reviews_received` linking to `Review` via `reviewer_id` and `reviewee_id`.
+- **Migration**:
+  - Used `migrate.bat` to autogenerate and apply a migration adding the `reviews` table and `average_rating` column to `users`.
+
+#### **2. Reviews & Ratings Implementation**
+- **New Module** (`reviews/`):
+  - Created `reviews/routes.py`, `reviews/schemas.py`, and `reviews/service.py` for review functionality.
+- **Endpoints Implemented** (`reviews/routes.py`):
+  - `POST /api/reviews/`: Submits a review for a completed job (clients/workers only, role-restricted).
+  - `GET /api/reviews/job/{job_id}`: Retrieves reviews for a job (client/worker/admin access).
+  - `GET /api/reviews/user/{user_id}`: Fetches reviews where a user is the reviewee, with filters (`rating`, `role`, `date_from`, `date_to`) (self/admin access).
+  - `PUT /api/reviews/{review_id}`: Updates a review (admin-only).
+  - `PATCH /api/reviews/{review_id}`: Partially updates a review (admin-only).
+  - `DELETE /api/reviews/{review_id}`: Deletes a review (admin-only, returns 204 No Content).
+- **Service Layer** (`reviews/service.py`):
+  - `create_review`: Validates job completion, prevents duplicates, assigns `reviewee_id` based on job roles, updates `average_rating`.
+  - `update_average_rating`: Recalculates and stores a user’s average rating (rounded to 1 decimal) after review creation, update, or deletion.
+  - `get_reviews_by_job` and `get_reviews_by_user`: Fetch reviews with filtering logic.
+  - `update_review` and `delete_review`: Admin-only operations with `average_rating` recalculation.
+- **Schema** (`reviews/schemas.py`):
+  - Defined `ReviewCreate` (input validation for `rating` 1-5), `ReviewUpdate` (optional fields), `ReviewOut` (output with nested `JobOut`, `UserOut`), and `ReviewList` (list wrapper).
+
+#### **3. Business Logic**
+- **Review Submission**:
+  - Restricted to completed jobs (`Job.status == COMPLETED`).
+  - Clients review workers, workers review clients; validated via `job.client_id` and `job.worker_id`.
+  - Prevents duplicate reviews per job per reviewer.
+- **Average Rating**:
+  - Dynamically updated on review creation, update, or deletion using SQLAlchemy’s `func.avg`.
+- **Access Control**:
+  - `POST`: Authenticated users tied to the job.
+  - `GET /job/{job_id}`: Job client, worker, or admin.
+  - `GET /user/{user_id}`: Self or admin only (privacy-first).
+  - `PUT`, `PATCH`, `DELETE`: Admin-only via `get_admin_user`.
+
+#### **4. Integration**
+- **Router Registration** (`main.py`):
+  - Added `reviews_router` to the FastAPI app.
+- **Logging**:
+  - Integrated `log_system_action` for review creation, updates, and deletions; file-based logs via `logger`.
+- **Seeder Updates** (`database/seed.py`):
+  - Added reviews for completed jobs (client → worker, worker → client) with random ratings (1-5).
+  - Calculated initial `average_rating` for seeded users.
+
+#### **5. Polish and Documentation**
+- **Error Handling**:
+  - Extended `APIError` usage for review-specific errors (e.g., “Reviews can only be submitted for completed jobs”).
+- **Schema Polish**:
+  - Added `field_validator` for `rating` (1-5 range) in `ReviewCreate` and `ReviewUpdate`.
+- **Route Polish**:
+  - Included `response_model` (`ReviewOut`, `ReviewList`) and `responses` metadata for all endpoints.
+  - Detailed docstrings with access restrictions and behavior.
+- **Swagger**:
+  - Enhanced interactive docs at `/docs` with review endpoints and error examples.
+
+#### **Verification**
+- **API Testing**:
+  - Tested endpoints via Swagger (`http://localhost:8000/docs`):
+    - Created reviews for completed jobs, verified `average_rating` updates.
+    - Retrieved job/user reviews with filters.
+    - Updated/deleted reviews as admin, confirmed rating recalculation.
+- **Database**:
+  - Verified `reviews` table and `users.average_rating` via pgAdmin 4 (`SELECT * FROM reviews;`, `SELECT id, average_rating FROM users;`).
+- **Logs**:
+  - Checked `laborly.log` and `system_logs` for review actions.
+
+---

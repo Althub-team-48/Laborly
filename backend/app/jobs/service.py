@@ -11,9 +11,10 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
+from admin.schemas import DisputeCreate, DisputeOut
 from database.models import (
+    Dispute,
     Job,
-    User,
     JobApplication,
     JobStatus,
     ApplicationStatus,
@@ -28,7 +29,7 @@ from jobs.schemas import (
     JobApplicationUpdate,
     JobApplicationOut,
 )
-from utils.logger import logger
+from utils.logger import log_system_action, logger
 
 
 class JobService:
@@ -256,3 +257,51 @@ class JobService:
         db.refresh(job)
         logger.info(f"Application updated: {application_id} by user {user_id}")
         return JobApplicationOut.model_validate(application)
+
+    @staticmethod
+    def mark_job_complete(db: Session, job_id: int, user_id: int) -> JobOut:
+        """Mark job as completed by client or worker."""
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            raise ValueError("Job not found")
+        
+        if job.client_id == user_id:
+            job.client_completed = True
+        elif job.worker_id == user_id:
+            job.worker_completed = True
+        else:
+            raise ValueError("Only client or worker can mark job complete")
+        
+        if job.client_completed and job.worker_completed:
+            job.status = JobStatus.COMPLETED
+        
+        db.commit()
+        db.refresh(job)
+        log_system_action(db, user_id, "UPDATE", f"Job {job_id} marked complete by user {user_id}")
+        logger.info(f"Job {job_id} completion updated by {user_id}")
+        return JobOut.model_validate(job)
+
+    @staticmethod
+    def raise_dispute(db: Session, job_id: int, dispute: DisputeCreate, user_id: int) -> DisputeOut:
+        """Raise a dispute for a job."""
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            raise ValueError("Job not found")
+        if job.client_id != user_id and job.worker_id != user_id:
+            raise ValueError("Only client or worker can raise a dispute")
+        if job.status == JobStatus.COMPLETED:
+            raise ValueError("Cannot dispute a completed job")
+        
+        db_dispute = Dispute(
+            job_id=job_id,
+            raised_by_id=user_id,
+            reason=dispute.reason
+        )
+        job.status = JobStatus.DISPUTED
+        db.add(db_dispute)
+        db.commit()
+        db.refresh(db_dispute)
+        log_system_action(db, user_id, "CREATE", f"Dispute {db_dispute.id} raised for job {job_id}")
+        logger.info(f"Dispute {db_dispute.id} raised by {user_id} for job {job_id}")
+        return DisputeOut.model_validate(db_dispute)
+    

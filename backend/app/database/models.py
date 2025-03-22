@@ -11,7 +11,7 @@ from enum import Enum as PyEnum
 
 from sqlalchemy import (
     Column, Integer, String, Enum, ForeignKey,
-    DateTime, Boolean, Float
+    DateTime, Boolean
 )
 from sqlalchemy.orm import relationship
 
@@ -38,43 +38,49 @@ class JobStatus(str, PyEnum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+    DISPUTED = "DISPUTED"
 
 
 class ApplicationStatus(str, PyEnum):
     PENDING = "PENDING"
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
-
+    
+class DisputeStatus(str, PyEnum):
+    PENDING = "PENDING"
+    RESOLVED = "RESOLVED"
+    DISMISSED = "DISMISSED"
 
 # User table
-class User(Base):
-    __tablename__ = "users"
+class Job(Base):
+    __tablename__ = "jobs"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    phone_number = Column(String, nullable=False)
-    password_hash = Column(String, nullable=False)
-    role = Column(Enum(UserRole), nullable=False)
-    is_verified = Column(Boolean, default=False)
-    last_active = Column(DateTime(timezone=True))
+    client_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    worker_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    location = Column(String, nullable=False)
+    status = Column(Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
+    start_time = Column(DateTime(timezone=True), nullable=True)
+    end_time = Column(DateTime(timezone=True), nullable=True)
+    client_completed = Column(Boolean, default=False)
+    worker_completed = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-    average_rating = Column(Float, default=0.0, nullable=True)
 
-    # Relationships
-    system_logs = relationship("SystemLog", back_populates="user")
-    jobs_created = relationship("Job", back_populates="client", foreign_keys="Job.client_id")
-    jobs_assigned = relationship("Job", back_populates="worker", foreign_keys="Job.worker_id")
-    applications = relationship("JobApplication", back_populates="worker")
-    availability = relationship("WorkerAvailability", back_populates="worker")
-    reviews_written = relationship("Review", back_populates="reviewer", foreign_keys="Review.reviewer_id")
-    reviews_received = relationship("Review", back_populates="reviewee", foreign_keys="Review.reviewee_id")
+    client = relationship("User", back_populates="jobs_created", foreign_keys=[client_id])
+    worker = relationship("User", back_populates="jobs_assigned", foreign_keys=[worker_id])
+    applications = relationship("JobApplication", back_populates="job")
+    assignments = relationship("JobAssignment", back_populates="job")
+    reviews = relationship("Review", back_populates="job")
+    disputes = relationship("Dispute", back_populates="job")
 
 
 # System log table
@@ -93,6 +99,7 @@ class SystemLog(Base):
 # Job table
 class Job(Base):
     __tablename__ = "jobs"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
@@ -152,6 +159,7 @@ class WorkerAvailability(Base):
 
     worker = relationship("User", back_populates="availability")
 
+
 # Review table
 class Review(Base):
     __tablename__ = "reviews"
@@ -167,3 +175,20 @@ class Review(Base):
     job = relationship("Job")
     reviewer = relationship("User", back_populates="reviews_written", foreign_keys=[reviewer_id])
     reviewee = relationship("User", back_populates="reviews_received", foreign_keys=[reviewee_id])
+
+
+# Dispute model
+class Dispute(Base):
+    __tablename__ = "disputes"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    raised_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reason = Column(String, nullable=False)
+    status = Column(Enum(DisputeStatus), default=DisputeStatus.PENDING, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    job = relationship("Job", back_populates="disputes")
+    raised_by = relationship("User")

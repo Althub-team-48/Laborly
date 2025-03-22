@@ -12,6 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from admin.schemas import DisputeCreate, DisputeOut
 from jobs.schemas import (
     JobCreate, JobUpdate, JobOut, JobList,
     JobApplicationCreate, JobApplicationUpdate,
@@ -217,3 +218,29 @@ def update_application(
         raise APIError(status_code=400, message=str(e))
     except Exception as e:
         raise APIError(status_code=500, message=str(e))
+
+
+@router.patch("/{job_id}/complete", response_model=JobOut)
+def mark_job_complete(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user)
+):
+    """Mark job as completed by client or worker."""
+    try:
+        return JobService.mark_job_complete(db, job_id, current_user.id)
+    except ValueError as e:
+        raise APIError(status_code=400, message=str(e))
+
+@router.post("/{job_id}/dispute", response_model=DisputeOut, status_code=status.HTTP_201_CREATED)
+def raise_dispute(
+    job_id: int,
+    dispute: DisputeCreate,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user)
+):
+    """Raise a dispute for a job."""
+    try:
+        return JobService.raise_dispute(db, job_id, dispute, current_user.id)
+    except ValueError as e:
+        raise APIError(status_code=400, message=str(e))

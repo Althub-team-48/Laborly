@@ -1,22 +1,21 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Environment variables
+**/.env
+
+# Log files and directories
+**/logs/
+**/*.log
+
+# Database migrations (optional: ignore versioned files if regenerated often)
+**/app/database/migrations/versions/*
+
+# Local development or testing artifacts
+**/__pycache__/
+**/*.pyc
 
 # Virtual environments
-venv/
-.env
+**/venv/
+**/env/
 
-# IDEs
-.idea/
-.vscode/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-#personal folders
-personal/
+# Personal folders
 **/personal/
 **/personal/*

@@ -1,0 +1,79 @@
+backend/
+├── main.py                         # App entrypoint
+├── requirements.txt               # Python dependencies
+├── alembic.ini                    # Alembic config for migrations
+├── .env                           # Environment variables
+├── run.sh                         # Optional run script for local dev
+│
+├── app/                           # Core app directory
+│   ├── core/                      # Shared logic and utilities
+│   │   ├── config.py              # Settings loader (e.g., using Pydantic BaseSettings)
+│   │   ├── security.py            # JWT handling, password hashing
+│   │   ├── dependencies.py        # Role-based access control (RBAC), common deps
+│   │   └── logging.py             # Logging config and setup
+│   │
+│   ├── database/                  # DB models and session manager
+│   │   ├── base.py                # SQLAlchemy Base
+│   │   ├── session.py             # DB connection setup
+│   │   ├── models/                # Shared core models (User, KYC)
+│   │   └── enums.py               # Constants like user roles, job statuses
+│   │
+│   ├── auth/                      # Authentication module
+│   │   ├── routes.py
+│   │   ├── services.py
+│   │   ├── schemas.py
+│   │   └── utils.py
+│   │
+│   ├── client/                    # Client-related features
+│   │   ├── routes.py
+│   │   ├── services.py
+│   │   ├── schemas.py
+│   │   └── models.py
+│   │
+│   ├── worker/                    # Worker features and KYC
+│   │   ├── routes.py
+│   │   ├── services.py
+│   │   ├── schemas.py
+│   │   ├── models.py
+│   │   └── kyc.py                 # KYC-specific logic
+│   │
+│   ├── admin/                     # Admin-only tools
+│   │   ├── routes.py
+│   │   ├── services.py
+│   │   └── schemas.py
+│   │
+│   ├── service/                   # Worker service listings
+│   │   ├── routes.py
+│   │   ├── services.py
+│   │   ├── schemas.py
+│   │   └── models.py
+│   │
+│   ├── messaging/                 # Messaging system
+│   │   ├── routes.py
+│   │   ├── services.py
+│   │   ├── schemas.py
+│   │   └── models.py
+│   │
+│   ├── job/                       # Job creation and tracking
+│   │   ├── routes.py
+│   │   ├── services.py
+│   │   ├── schemas.py
+│   │   └── models.py
+│   │
+│   ├── review/                    # Worker reviews & ratings
+│   │   ├── routes.py
+│   │   ├── services.py
+│   │   ├── schemas.py
+│   │   └── models.py
+│
+├── alembic/                       # DB migration scripts (auto-generated)
+│   └── versions/                  # Versioned migration files
+│
+└── tests/                         # Test suite
+    ├── conftest.py                # Fixtures and test config
+    ├── auth/                      # Auth-related tests
+    ├── client/                    # Client tests
+    ├── worker/                    # Worker tests
+    ├── job/                       # Job lifecycle tests
+    ├── review/                    # Review tests
+    └── ... (other modules)

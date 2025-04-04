@@ -12,7 +12,7 @@ from typing import Generator
 from app.core.config import settings
 
 # Create the SQLAlchemy engine using the database URL from settings
-engine = create_engine(settings.database_url)
+engine = create_engine(settings.DATABASE_URL)
 
 # Configure a session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

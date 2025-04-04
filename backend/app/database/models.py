@@ -1,14 +1,23 @@
 """
-Shared models used across the platform, including User and KYC.
+models.py
+
+Defines SQLAlchemy ORM shared models used across the platform, like:
+- User and KYC verification
+- Includes role-based access and one-to-one KYC relationship
 """
 
+import uuid
+from sqlalchemy import (
+    String, Boolean, Enum, DateTime, ForeignKey, func
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, Boolean, Enum, DateTime, ForeignKey, func
 from app.database.base import Base
 from app.database.enums import UserRole, KYCStatus
-import uuid
 
 
+# -------------------------
+# USER MODEL
+# -------------------------
 class User(Base):
     __tablename__ = "users"
 
@@ -31,6 +40,9 @@ class User(Base):
     kyc: Mapped["KYC"] = relationship("KYC", back_populates="user", uselist=False)
 
 
+# -------------------------
+# KYC MODEL
+# -------------------------
 class KYC(Base):
     __tablename__ = "kyc"
 

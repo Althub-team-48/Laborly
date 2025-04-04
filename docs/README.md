@@ -83,12 +83,14 @@ This document explains the user experience and overall flow of the Laborly platf
   - Active jobs
   - Past job history
   - Favorited workers
+  - Report Abuse
 
 - **Workers** see:
   - Active and completed jobs
   - KYC status
   - Profile and service info
   - Received reviews and ratings
+  - Report Abuse
 
 ---
 
@@ -100,10 +102,17 @@ This document explains the user experience and overall flow of the Laborly platf
 
 ---
 
-### 12. Future Enhancements (Beyond MVP)
+### 12. Subscription Plans (Workers)
+- A monthly token to have a verified badge 
+- A token for priority profile during a search (more like an ad that could run for a week, two or a month)
+
+---
+
+### 13. Future Enhancements (Beyond MVP)
 - Automated KYC using third-party services
 - Admin dashboard UI
 - Notifications and alerts
 - Payment or escrow functionality
+- Support team chat box
 
 ---

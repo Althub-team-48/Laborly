@@ -85,3 +85,24 @@ def get_current_user_with_role(required_role: UserRole):
             )
         return user
     return role_dependency
+
+def require_roles(*roles: UserRole):
+    """
+    Dependency that restricts access to users with specified roles.
+
+    Usage:
+    - Attach to any route via Depends(require_roles(...)).
+    - Accepts one or more UserRole values.
+
+    Raises:
+        HTTPException 403 if the user's role is not in the allowed roles.
+    """
+    def checker(user: User = Depends(get_current_user)) -> User:
+        if user.role not in roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied"
+            )
+        return user
+
+    return checker

@@ -5,7 +5,7 @@ Loads and manages application configuration from environment variables.
 Utilizes Pydantic BaseSettings for type validation and `.env` support.
 """
 
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):

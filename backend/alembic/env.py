@@ -13,6 +13,8 @@ from alembic import context
 # --- Load SQLAlchemy base metadata and engine ---
 from app.database.session import engine
 from app.database.base import Base
+from app.database import models  # ensures models are loaded for Base.metadata
+
 
 # --- Alembic Config object ---
 config = context.config

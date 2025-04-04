@@ -12,12 +12,14 @@ class Settings(BaseSettings):
     """
     Application-wide settings loaded from environment variables.
     """
-    app_name: str
-    debug: bool = False
-    database_url: str
-    secret_key: str
-    algorithm: str
-    access_token_expire_minutes: int
+    APP_NAME: str
+    DEBUG: bool = False
+    DATABASE_URL: str
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
 
     class Config:
         env_file = ".env"  # Load variables from .env file

@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.auth.routes import router as auth_router
 from app.client.routes import router as client_router
 from app.worker.routes import router as worker_router
+from app.admin.routes import router as admin_router
 
 # -----------------------------
 # App Initialization
@@ -35,3 +36,4 @@ app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 app.include_router(auth_router)
 app.include_router(client_router)
 app.include_router(worker_router)
+app.include_router(admin_router)

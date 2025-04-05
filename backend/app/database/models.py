@@ -37,6 +37,10 @@ class User(Base):
     location: Mapped[str] = mapped_column(String, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_frozen: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
@@ -49,7 +53,6 @@ class User(Base):
     favorite_clients: Mapped[List["FavoriteWorker"]] = relationship("FavoriteWorker", foreign_keys="[FavoriteWorker.client_id]")
     # Which users (clients) favorited me?
     favorited_by: Mapped[List["FavoriteWorker"]] = relationship("FavoriteWorker", foreign_keys="[FavoriteWorker.worker_id]")
-
 
 
 # -------------------------

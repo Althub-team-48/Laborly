@@ -16,6 +16,7 @@ from app.auth.routes import router as auth_router
 from app.client.routes import router as client_router
 from app.worker.routes import router as worker_router
 from app.admin.routes import router as admin_router
+from app.service.routes import router as service_router
 
 # -----------------------------
 # App Initialization
@@ -37,3 +38,4 @@ app.include_router(auth_router)
 app.include_router(client_router)
 app.include_router(worker_router)
 app.include_router(admin_router)
+app.include_router(service_router)

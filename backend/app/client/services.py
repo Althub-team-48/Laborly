@@ -1,7 +1,7 @@
 """
 client/services.py
 
-Service class for handling all client-related logic, including:
+Service class for handling client-related logic:
 - Client profile management
 - Favorite worker management
 - Job history retrieval
@@ -28,55 +28,90 @@ class ClientService:
         self.db = db
 
     # ---------------------------
-    # Client Profile Services
+    # Client Profile Management
     # ---------------------------
-
-    def get_profile(self, user_id: UUID) -> models.ClientProfile:
+    def get_profile(self, user_id: UUID) -> schemas.ClientProfileRead:
         """
-        Retrieves the client profile for a given user ID.
+        Retrieve the client profile and merge user account data.
+        Creates a new profile if not found.
         """
         logger.info(f"Retrieving client profile for user_id={user_id}")
+
+        user = self.db.query(User).filter_by(id=user_id).first()
+        if not user:
+            logger.warning(f"User not found: user_id={user_id}")
+            raise HTTPException(status_code=404, detail="User not found")
+
+        profile = self.db.query(models.ClientProfile).filter_by(user_id=user_id).first()
+        if not profile:
+            logger.info(f"No profile found. Creating new one for user_id={user_id}")
+            profile = models.ClientProfile(user_id=user_id)
+            self.db.add(profile)
+            self.db.commit()
+            self.db.refresh(profile)
+            logger.info(f"New profile created: profile_id={profile.id}")
+
+        merged = {
+            **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
+            **{k: v for k, v in vars(user).items() if not k.startswith("_")},
+        }
+        return schemas.ClientProfileRead.model_validate(merged)
+
+    def update_profile(self, user_id: UUID, update: schemas.ClientProfileUpdate) -> schemas.ClientProfileRead:
+        """
+        Update both user and profile details for the given client.
+        """
+        logger.info(f"Updating profile for user_id={user_id}")
+
+        user = self.db.query(User).filter_by(id=user_id).first()
         profile = self.db.query(models.ClientProfile).filter_by(user_id=user_id).first()
 
+        if not user:
+            logger.warning(f"User not found: user_id={user_id}")
+            raise HTTPException(status_code=404, detail="User not found")
         if not profile:
-            logger.warning(f"Client profile not found for user_id={user_id}")
+            logger.warning(f"Profile not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="Client profile not found")
 
-        logger.info(f"Client profile retrieved: profile_id={profile.id}")
-        return profile
+        fields = update.model_dump(exclude_unset=True)
 
-    def update_profile(self, user_id: UUID, data: schemas.ClientProfileUpdate) -> models.ClientProfile:
-        """
-        Updates the client profile for a given user ID using provided data.
-        """
-        logger.info(f"Updating client profile for user_id={user_id}")
-        profile = self.get_profile(user_id)
+        # Update user fields
+        for attr in ["first_name", "last_name", "location", "profile_picture"]:
+            if attr in fields:
+                setattr(user, attr, fields[attr])
+                logger.debug(f"Updated User.{attr} = {fields[attr]}")
 
-        update_data = data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(profile, field, value)
-            logger.debug(f"Updated field '{field}' to '{value}'")
+        # Update profile fields
+        for attr in ["business_name"]:
+            if attr in fields:
+                setattr(profile, attr, fields[attr])
+                logger.debug(f"Updated ClientProfile.{attr} = {fields[attr]}")
 
         self.db.commit()
+        self.db.refresh(user)
         self.db.refresh(profile)
 
-        logger.info(f"Client profile updated: profile_id={profile.id}")
-        return profile
+        logger.info(f"Profile updated for user_id={user_id}, profile_id={profile.id}")
+
+        merged = {
+            **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
+            **{k: v for k, v in vars(user).items() if not k.startswith("_")},
+        }
+        return schemas.ClientProfileRead.model_validate(merged)
 
     # ---------------------------
-    # Favorite Worker Services
+    # Favorite Worker Management
     # ---------------------------
-
     def list_favorites(self, client_id: UUID):
         """
-        Returns a list of favorite workers for a given client.
+        List all favorite workers for a client.
         """
         logger.info(f"Listing favorites for client_id={client_id}")
         return self.db.query(models.FavoriteWorker).filter_by(client_id=client_id).all()
 
     def add_favorite(self, client_id: UUID, worker_id: UUID) -> models.FavoriteWorker:
         """
-        Adds a worker to the client's favorites list.
+        Add a worker to the client's favorites.
         """
         logger.info(f"Adding favorite: client_id={client_id}, worker_id={worker_id}")
 
@@ -86,7 +121,7 @@ class ClientService:
         ).first()
 
         if existing:
-            logger.warning("Worker already in favorites.")
+            logger.warning("Worker already favorited")
             raise HTTPException(status_code=400, detail="Worker already in favorites")
 
         favorite = models.FavoriteWorker(client_id=client_id, worker_id=worker_id)
@@ -99,7 +134,7 @@ class ClientService:
 
     def remove_favorite(self, client_id: UUID, worker_id: UUID):
         """
-        Removes a worker from the client's favorites list.
+        Remove a worker from the client's favorites list.
         """
         logger.info(f"Removing favorite: client_id={client_id}, worker_id={worker_id}")
 
@@ -109,36 +144,34 @@ class ClientService:
         ).first()
 
         if not favorite:
-            logger.warning("Favorite not found.")
+            logger.warning("Favorite not found")
             raise HTTPException(status_code=404, detail="Favorite not found")
 
         self.db.delete(favorite)
         self.db.commit()
-
-        logger.info("Favorite removed successfully.")
-        return
+        logger.info("Favorite removed successfully")
 
     # ---------------------------
-    # Job History Services
+    # Job History Management
     # ---------------------------
-
     def get_jobs(self, client_id: UUID):
         """
-        Retrieves all jobs associated with the client.
+        Retrieve all jobs created by a client.
         """
-        logger.info(f"Fetching job history for client_id={client_id}")
+        logger.info(f"Fetching job list for client_id={client_id}")
         return self.db.query(Job).filter_by(client_id=client_id).all()
 
     def get_job_detail(self, client_id: UUID, job_id: UUID):
         """
-        Retrieves a single job by ID, ensuring it belongs to the client.
+        Retrieve a specific job by ID for the client.
         """
-        logger.info(f"Fetching job detail: job_id={job_id}, client_id={client_id}")
+        logger.info(f"Fetching job detail: client_id={client_id}, job_id={job_id}")
+
         job = self.db.query(Job).filter_by(id=job_id, client_id=client_id).first()
 
         if not job:
-            logger.warning("Job not found or unauthorized access.")
+            logger.warning("Job not found or unauthorized access")
             raise HTTPException(status_code=404, detail="Job not found or unauthorized")
 
-        logger.info(f"Job detail retrieved: job_id={job.id}")
+        logger.info(f"Job retrieved: job_id={job.id}")
         return job

@@ -7,15 +7,21 @@ Defines SQLAlchemy models specific to the Client module:
 """
 
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 import uuid
+
 from sqlalchemy import String, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import mapped_column, Mapped, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
-from app.database.models import User
 
+if TYPE_CHECKING:
+    from app.database.models import User
 
+# -----------------------------------------
+# ClientProfile Model
+# -----------------------------------------
 class ClientProfile(Base):
     __tablename__ = "client_profiles"
 
@@ -53,6 +59,9 @@ class ClientProfile(Base):
     user: Mapped["User"] = relationship("User", back_populates="client_profile")
 
 
+# -----------------------------------------
+# FavoriteWorker Model
+# -----------------------------------------
 class FavoriteWorker(Base):
     __tablename__ = "favorites"
 
@@ -77,15 +86,23 @@ class FavoriteWorker(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
-        comment="When the favorite was created"
+        comment="Timestamp when the favorite was created"
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-        comment="When the favorite was last updated"
+        comment="Timestamp when the favorite was last updated"
     )
 
     # Relationships
-    client: Mapped["User"] = relationship("User", foreign_keys=[client_id], back_populates="favorite_clients")
-    worker: Mapped["User"] = relationship("User", foreign_keys=[worker_id], back_populates="favorited_by")
+    client: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[client_id],
+        back_populates="favorite_clients"
+    )
+    worker: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[worker_id],
+        back_populates="favorited_by"
+    )

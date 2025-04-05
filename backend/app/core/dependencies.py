@@ -21,10 +21,10 @@ from app.database.models import User
 from app.database.enums import UserRole
 
 
-# -------------------------
-# OAUTH2 BEARER TOKEN SCHEME
-# -------------------------
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# --------------------------------------
+# OAuth2 password bearer token scheme
+# --------------------------------------
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login/oauth")  # Points to the form-based login endpoint
 
 
 # -------------------------
@@ -100,8 +100,8 @@ def require_roles(*roles: UserRole):
     def checker(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
             raise HTTPException(
-                status_code=403,
-                detail="Access denied"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied for role: {user.role}"
             )
         return user
 

@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 from app.auth.schemas import (
     LoginRequest,
     SignupRequest,
-    TokenResponse,
     AuthSuccessResponse,
     AuthUserResponse,
 )
@@ -32,13 +31,14 @@ from app.database.enums import UserRole
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# ---------------------------------------
-# User Signup
-# ---------------------------------------
+
+# ---------------------------------------------------
+# User Registration
+# ---------------------------------------------------
 @router.post("/signup", response_model=AuthSuccessResponse)
 def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     """
-    Registers a new user and returns an access token + user info.
+    Registers a new user and returns an access token with user data.
     """
     existing_user = db.query(User).filter(User.email == payload.email).first()
     if existing_user:
@@ -46,73 +46,80 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 
     new_user = User(
         email=payload.email,
+        phone_number=payload.phone_number,
         hashed_password=get_password_hash(payload.password),
         role=payload.role,
         first_name=payload.first_name,
         last_name=payload.last_name,
     )
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    access_token = create_access_token({"sub": str(new_user.id), "role": new_user.role})
+    token = create_access_token({"sub": str(new_user.id), "role": new_user.role})
     return AuthSuccessResponse(
-        access_token=access_token,
+        access_token=token,
         user=AuthUserResponse.model_validate(new_user)
     )
 
-# ---------------------------------------
-# Login via JSON Payload
-# ---------------------------------------
+
+# ---------------------------------------------------
+# Login with JSON Credentials
+# ---------------------------------------------------
 @router.post("/login/json", response_model=AuthSuccessResponse)
 def login_json(payload: LoginRequest, db: Session = Depends(get_db)):
     """
-    Authenticates a user using JSON credentials.
+    Authenticates a user via JSON payload (email and password).
     """
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access_token = create_access_token({"sub": str(user.id), "role": user.role})
+    token = create_access_token({"sub": str(user.id), "role": user.role})
     return AuthSuccessResponse(
-        access_token=access_token,
+        access_token=token,
         user=AuthUserResponse.model_validate(user)
     )
 
-# ---------------------------------------
-# Login via OAuth2 Password Flow
-# ---------------------------------------
+
+# ---------------------------------------------------
+# Login with OAuth2 Form Fields
+# ---------------------------------------------------
 @router.post("/login/oauth", response_model=AuthSuccessResponse)
 def login_oauth(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
     """
-    Authenticates user via OAuth2-compatible form fields.
+    Authenticates a user via OAuth2-compatible form input.
     """
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access_token = create_access_token({"sub": str(user.id), "role": user.role})
+    token = create_access_token({"sub": str(user.id), "role": user.role})
     return AuthSuccessResponse(
-        access_token=access_token,
+        access_token=token,
         user=AuthUserResponse.model_validate(user)
     )
 
-# ---------------------------------------
+
+# ---------------------------------------------------
 # Google OAuth2 Login Flow
-# ---------------------------------------
+# ---------------------------------------------------
 @router.get("/google/login")
 async def google_login(request: Request):
     """
-    Starts the Google OAuth2 login redirect.
+    Initiates Google OAuth2 login redirect.
     """
     return await handle_google_login(request)
+
 
 @router.get("/google/callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
     """
-    Handles Google's OAuth2 callback, registers user if needed, and issues a JWT.
+    Handles Google OAuth2 callback, registers user if new,
+    and issues JWT access token.
     """
     return await handle_google_callback(request, db)

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 from app.database.enums import UserRole, KYCStatus
 from app.client.models import ClientProfile, FavoriteWorker
+from app.worker.models import WorkerProfile
 
 
 # -------------------------
@@ -25,6 +26,7 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    phone_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False)
 
@@ -40,6 +42,8 @@ class User(Base):
 
     # Relationships
     client_profile: Mapped["ClientProfile"] = relationship("ClientProfile", back_populates="user", uselist=False)
+    worker_profile: Mapped["WorkerProfile"] = relationship("WorkerProfile", back_populates="user", uselist=False)
+    # One-to-one relationship with KYC
     kyc: Mapped["KYC"] = relationship("KYC", back_populates="user", uselist=False)
     # Which workers did this user favorite?
     favorite_clients: Mapped[List["FavoriteWorker"]] = relationship("FavoriteWorker", foreign_keys="[FavoriteWorker.client_id]")

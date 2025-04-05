@@ -55,7 +55,7 @@ class Job(Base):
 
     service_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("services.id"),
+        #ForeignKey("services.id"),
         nullable=True,
         comment="Service related to the job"
     )

@@ -6,6 +6,7 @@ Defines SQLAlchemy ORM shared models used across the platform, like:
 - Includes role-based access and one-to-one KYC relationship
 """
 
+from typing import List
 import uuid
 from sqlalchemy import (
     String, Boolean, Enum, DateTime, ForeignKey, func
@@ -13,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 from app.database.enums import UserRole, KYCStatus
+from app.client.models import ClientProfile, FavoriteWorker
 
 
 # -------------------------
@@ -37,7 +39,13 @@ class User(Base):
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
     # Relationships
+    client_profile: Mapped["ClientProfile"] = relationship("ClientProfile", back_populates="user", uselist=False)
     kyc: Mapped["KYC"] = relationship("KYC", back_populates="user", uselist=False)
+    # Which workers did this user favorite?
+    favorite_clients: Mapped[List["FavoriteWorker"]] = relationship("FavoriteWorker", foreign_keys="[FavoriteWorker.client_id]")
+    # Which users (clients) favorited me?
+    favorited_by: Mapped[List["FavoriteWorker"]] = relationship("FavoriteWorker", foreign_keys="[FavoriteWorker.worker_id]")
+
 
 
 # -------------------------

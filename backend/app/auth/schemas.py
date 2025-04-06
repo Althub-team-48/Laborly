@@ -3,80 +3,119 @@ auth/schemas.py
 
 Defines Pydantic models for authentication flows:
 - Login & signup request payloads
-- JWT token responses and payloads
-- Authenticated user response shape
+- JWT token payload and response structure
+- Authenticated user response schema
+- Factory method for Google OAuth user creation
 """
 
-from pydantic import BaseModel, EmailStr, Field
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field
+
 from app.database.enums import UserRole
 
 
-# -------------------------
+# --------------------------------------------------
 # AUTH REQUEST SCHEMAS
-# -------------------------
+# --------------------------------------------------
+
 class LoginRequest(BaseModel):
     """
-    Payload for user login via JSON.
+    Request schema for user login using JSON payload.
     """
     email: EmailStr = Field(..., description="User email address")
-    password: str = Field(..., min_length=6, max_length=64, description="User password (6-64 characters)")
+    password: str = Field(..., min_length=6, max_length=64, description="User password (6–64 characters)")
 
 
 class SignupRequest(BaseModel):
     """
-    Payload for user registration.
+    Request schema for new user registration.
     """
     email: EmailStr = Field(..., description="Email address for new account")
-    password: str = Field(..., min_length=6, max_length=64, description="Password for the account (6-64 characters)")
+    phone_number: str = Field(..., min_length=10, max_length=15, description="Phone number for the new account")
+    password: str = Field(..., min_length=6, max_length=64, description="Password for the account (6–64 characters)")
     first_name: str = Field(..., max_length=50, description="User's first name")
     last_name: str = Field(..., max_length=50, description="User's last name")
-    role: UserRole = Field(..., description="Role of the user: CLIENT, WORKER, or ADMIN")
+    role: UserRole = Field(..., description="User role: CLIENT, WORKER, or ADMIN")
 
 
-# -------------------------
+# --------------------------------------------------
 # AUTH TOKEN SCHEMAS
-# -------------------------
+# --------------------------------------------------
+
 class TokenResponse(BaseModel):
     """
-    JWT token response model after successful login.
+    Response schema for JWT access token.
     """
     access_token: str = Field(..., description="JWT access token")
-    token_type: str = Field(default="bearer", description="Type of the token")
+    token_type: str = Field(default="bearer", description="Type of the token (default: bearer)")
 
 
 class TokenPayload(BaseModel):
     """
-    JWT token payload data decoded from the token.
+    Decoded JWT payload structure.
     """
-    sub: UUID = Field(..., description="Subject (user ID) from token")
-    role: UserRole = Field(..., description="Role embedded in the token")
-    exp: int = Field(..., description="Token expiration timestamp")
+    sub: UUID = Field(..., description="Subject (user ID)")
+    role: UserRole = Field(..., description="User role encoded in the token")
+    exp: int = Field(..., description="Expiration timestamp of the token")
+    jti: str = Field(..., description="JWT ID (used for token blacklist)")
 
 
-# -------------------------
+# --------------------------------------------------
 # AUTH RESPONSE SCHEMAS
-# -------------------------
+# --------------------------------------------------
+
 class AuthUserResponse(BaseModel):
     """
-    Serialized authenticated user data.
+    Response schema representing authenticated user data.
     """
-    id: UUID = Field(..., description="Unique identifier of the user")
+    id: UUID = Field(..., description="Unique identifier for the user")
     email: EmailStr = Field(..., description="User's email address")
+    phone_number: str = Field(..., description="User's phone number")
     first_name: str = Field(..., description="User's first name")
     last_name: str = Field(..., description="User's last name")
     role: UserRole = Field(..., description="User's role in the system")
-    created_at: datetime = Field(..., description="Time user was created")
-    updated_at: datetime = Field(..., description="Time user was last updated")
+    created_at: datetime = Field(..., description="Timestamp when the user was created")
+    updated_at: datetime = Field(..., description="Timestamp when the user was last updated")
 
     class Config:
-        from_attributes = True
+        from_attributes = True  # Enable ORM compatibility
 
 
 class AuthSuccessResponse(BaseModel):
     """
-    Successful authentication response containing JWT and user.
+    Response schema after successful login or signup.
     """
     access_token: str = Field(..., description="JWT access token")
-    user: AuthUserResponse = Field(..., description="Authenticated user details")
+    user: AuthUserResponse = Field(..., description="Details of the authenticated user")
+
+
+# --------------------------------------------------
+# GOOGLE OAUTH FACTORY SCHEMA
+# --------------------------------------------------
+
+class UserCreate(BaseModel):
+    """
+    Schema used to create a user instance from Google OAuth2 profile data.
+    """
+    email: EmailStr
+    first_name: str
+    last_name: str
+    phone_number: str
+    hashed_password: str
+    role: UserRole
+
+    @classmethod
+    def from_google(cls, user_info: dict, hashed_password: str, default_role: str = "CLIENT") -> "UserCreate":
+        """
+        Factory method to generate user data from Google OAuth2 payload.
+        """
+        return cls(
+            email=user_info.get("email"),
+            first_name=user_info.get("given_name"),
+            last_name=user_info.get("family_name"),
+            phone_number=user_info.get("phone_number") or "0000000000",  # Fallback for missing phone
+            hashed_password=hashed_password,
+            role=getattr(UserRole, default_role.upper(), UserRole.CLIENT)
+        )

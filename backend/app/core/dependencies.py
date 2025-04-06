@@ -1,6 +1,6 @@
-"""
-core/dependencies.py
+# core/dependencies.py
 
+"""
 Authentication and role-based access control (RBAC) dependencies for FastAPI routes:
 - Extract and validate JWT access tokens
 - Fetch the current user from the database
@@ -13,13 +13,19 @@ from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from uuid import UUID
 from typing import Generator
+import logging
 
+from app.core.blacklist import is_token_blacklisted
 from app.core.config import settings
 from app.database.session import SessionLocal
 from app.auth.schemas import TokenPayload
 from app.database.models import User
 from app.database.enums import UserRole
 
+# --------------------------------------
+# Logging
+# --------------------------------------
+logger = logging.getLogger(__name__)
 
 # --------------------------------------
 # OAuth2 password bearer token scheme
@@ -60,12 +66,18 @@ def get_current_user(
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         token_data = TokenPayload(**payload)
-    except (JWTError, ValueError):
+        if is_token_blacklisted(payload.get("jti")):
+            logger.warning(f"Token {payload.get('jti')} is blacklisted")
+            raise credentials_exception
+    except (JWTError, ValueError) as e:
+        logger.warning(f"JWT decoding failed: {str(e)}")
         raise credentials_exception
 
     user = db.query(User).filter(User.id == token_data.sub).first()
     if not user:
+        logger.warning(f"JWT validated but no user found with ID: {token_data.sub}")
         raise credentials_exception
+
     return user
 
 
@@ -79,12 +91,14 @@ def get_current_user_with_role(required_role: UserRole):
     """
     def role_dependency(user: User = Depends(get_current_user)) -> User:
         if user.role != required_role:
+            logger.warning(f"Access denied: User {user.id} has role {user.role}, attempted to access {required_role} area")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied for role: {user.role}"
             )
         return user
     return role_dependency
+
 
 def require_roles(*roles: UserRole):
     """
@@ -99,6 +113,7 @@ def require_roles(*roles: UserRole):
     """
     def checker(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
+            logger.warning(f"Access denied: User {user.id} with role {user.role} attempted to access roles {roles}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied for role: {user.role}"

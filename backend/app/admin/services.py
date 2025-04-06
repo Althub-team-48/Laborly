@@ -1,6 +1,6 @@
-"""
-admin/services.py
+# admin/services.py
 
+"""
 Encapsulates business logic for administrative actions:
 - KYC approvals and rejections
 - User management (ban, freeze, delete)
@@ -35,7 +35,7 @@ class AdminService:
         Fetch all KYC submissions with status 'PENDING'.
         """
         records = self.db.query(KYC).filter(KYC.status == "PENDING").all()
-        logger.info(f"Fetched {len(records)} pending KYC submissions.")
+        logger.info(f"[KYC] Fetched {len(records)} pending KYC submissions.")
         return records
 
     def approve_kyc(self, user_id: UUID) -> KYC:
@@ -44,12 +44,12 @@ class AdminService:
         """
         kyc = self.db.query(KYC).filter_by(user_id=user_id).first()
         if not kyc:
-            logger.warning(f"KYC not found for user_id={user_id}")
+            logger.warning(f"[KYC] KYC not found for user_id={user_id}")
             raise HTTPException(status_code=404, detail="KYC not found")
 
         kyc.status = "APPROVED"
         self.db.commit()
-        logger.info(f"KYC approved for user_id={user_id}")
+        logger.info(f"[KYC] Approved for user_id={user_id}")
         return kyc
 
     def reject_kyc(self, user_id: UUID) -> KYC:
@@ -58,12 +58,12 @@ class AdminService:
         """
         kyc = self.db.query(KYC).filter_by(user_id=user_id).first()
         if not kyc:
-            logger.warning(f"KYC not found for user_id={user_id}")
+            logger.warning(f"[KYC] KYC not found for user_id={user_id}")
             raise HTTPException(status_code=404, detail="KYC not found")
 
         kyc.status = "REJECTED"
         self.db.commit()
-        logger.info(f"KYC rejected for user_id={user_id}")
+        logger.info(f"[KYC] Rejected for user_id={user_id}")
         return kyc
 
     # ----------------------------
@@ -77,7 +77,7 @@ class AdminService:
         user = self._get_user_or_404(user_id)
         user.is_active = False
         self.db.commit()
-        logger.info(f"User frozen: user_id={user_id}")
+        logger.info(f"[USER] Frozen: user_id={user_id}")
         return user
 
     def unfreeze_user(self, user_id: UUID) -> User:
@@ -87,7 +87,7 @@ class AdminService:
         user = self._get_user_or_404(user_id)
         user.is_active = True
         self.db.commit()
-        logger.info(f"User unfrozen: user_id={user_id}")
+        logger.info(f"[USER] Unfrozen: user_id={user_id}")
         return user
 
     def ban_user(self, user_id: UUID) -> User:
@@ -97,7 +97,7 @@ class AdminService:
         user = self._get_user_or_404(user_id)
         user.is_active = False
         self.db.commit()
-        logger.info(f"User banned: user_id={user_id}")
+        logger.warning(f"[USER] Banned: user_id={user_id}")
         return user
 
     def unban_user(self, user_id: UUID) -> User:
@@ -107,7 +107,7 @@ class AdminService:
         user = self._get_user_or_404(user_id)
         user.is_active = True
         self.db.commit()
-        logger.info(f"User unbanned: user_id={user_id}")
+        logger.info(f"[USER] Unbanned: user_id={user_id}")
         return user
 
     def delete_user(self, user_id: UUID) -> None:
@@ -117,7 +117,7 @@ class AdminService:
         user = self._get_user_or_404(user_id)
         self.db.delete(user)
         self.db.commit()
-        logger.info(f"User deleted: user_id={user_id}")
+        logger.warning(f"[USER] Deleted: user_id={user_id}")
 
     # ----------------------------
     # Review Moderation
@@ -128,7 +128,7 @@ class AdminService:
         Return all reviews flagged for moderation.
         """
         reviews = self.db.query(Review).filter(Review.is_flagged.is_(True)).all()
-        logger.info(f"Fetched {len(reviews)} flagged reviews.")
+        logger.info(f"[REVIEW] Fetched {len(reviews)} flagged reviews.")
         return reviews
 
     def delete_review(self, review_id: UUID) -> None:
@@ -137,12 +137,12 @@ class AdminService:
         """
         review = self.db.query(Review).filter_by(id=review_id).first()
         if not review:
-            logger.warning(f"Review not found: review_id={review_id}")
+            logger.warning(f"[REVIEW] Not found: review_id={review_id}")
             raise HTTPException(status_code=404, detail="Review not found")
 
         self.db.delete(review)
         self.db.commit()
-        logger.info(f"Review deleted: review_id={review_id}")
+        logger.warning(f"[REVIEW] Deleted: review_id={review_id}")
 
     # ----------------------------
     # Internal Utility
@@ -154,6 +154,6 @@ class AdminService:
         """
         user = self.db.query(User).filter_by(id=user_id).first()
         if not user:
-            logger.warning(f"User not found: user_id={user_id}")
+            logger.warning(f"[USER] Not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="User not found")
         return user

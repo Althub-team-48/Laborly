@@ -11,6 +11,7 @@ import os
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Union
+from uuid import uuid4
 
 from jose import jwt
 from passlib.context import CryptContext
@@ -52,12 +53,20 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # -----------------------------
 def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
     """
-    Create a signed JWT token with an optional expiration.
+    Create a signed JWT token with an optional expiration and unique identifier (jti).
     """
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode = {**data, "exp": expire}
-    logger.info(f"Issuing access token for subject={data.get('sub')} exp={expire}")
+    jti = str(uuid4())  # Unique token ID
+
+    to_encode = {
+        **data,
+        "exp": expire,
+        "jti": jti
+    }
+
+    logger.info(f"Issuing access token for subject={data.get('sub')} exp={expire} jti={jti}")
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
 
 # -----------------------------
 # Google OAuth2 Configuration

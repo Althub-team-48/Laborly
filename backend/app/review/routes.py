@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.review import schemas
 from app.review.services import ReviewService
-from core.dependencies import get_db, get_current_user_with_role
+from app.core.dependencies import get_db, get_current_user_with_role
 from app.database.models import User, UserRole
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])

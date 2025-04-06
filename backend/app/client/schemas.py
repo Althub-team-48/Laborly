@@ -2,19 +2,22 @@
 client/schemas.py
 
 Defines Pydantic schemas for the Client module:
-- Client profile (create, update, read)
-- Favorite workers
-- Job history views
+- Client profile creation, update, and read
+- Favorite worker creation and read
+- Job history and job detail views
 """
 
-from pydantic import BaseModel, Field
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
 
-# ------------------------------------
+from pydantic import BaseModel, Field
+
+
+# ---------------------------------------------------
 # Client Profile Schemas
-# ------------------------------------
+# ---------------------------------------------------
+
 class ClientProfileBase(BaseModel):
     business_name: Optional[str] = Field(
         default=None,
@@ -23,12 +26,16 @@ class ClientProfileBase(BaseModel):
 
 
 class ClientProfileWrite(ClientProfileBase):
-    """Schema used for creating a client profile."""
+    """
+    Schema used when creating a client profile.
+    """
     pass
 
 
 class ClientProfileUpdate(ClientProfileBase):
-    """Schema used for updating a client profile."""
+    """
+    Schema used when updating an existing client profile.
+    """
     email: Optional[str] = Field(default=None, description="Client's email address")
     phone_number: Optional[str] = Field(default=None, description="Client's phone number")
     first_name: Optional[str] = Field(default=None, description="Client's first name")
@@ -38,7 +45,9 @@ class ClientProfileUpdate(ClientProfileBase):
 
 
 class ClientProfileRead(ClientProfileBase):
-    """Schema returned when reading a client profile."""
+    """
+    Schema returned when reading a client profile.
+    """
     id: UUID = Field(..., description="Unique identifier for the client profile")
     user_id: UUID = Field(..., description="UUID of the user this profile belongs to")
     email: str = Field(..., description="Email address of the client")
@@ -53,15 +62,19 @@ class ClientProfileRead(ClientProfileBase):
     class Config:
         from_attributes = True
 
-# ------------------------------------
+
+# ---------------------------------------------------
 # Favorite Worker Schemas
-# ------------------------------------
+# ---------------------------------------------------
+
 class FavoriteBase(BaseModel):
     worker_id: UUID = Field(..., description="UUID of the worker being favorited")
 
 
 class FavoriteRead(FavoriteBase):
-    """Schema returned when reading a favorite entry."""
+    """
+    Schema returned when reading a favorite worker record.
+    """
     id: UUID = Field(..., description="Unique identifier for the favorite entry")
     client_id: UUID = Field(..., description="UUID of the client who favorited the worker")
     created_at: datetime = Field(..., description="Timestamp when the favorite was created")
@@ -69,11 +82,15 @@ class FavoriteRead(FavoriteBase):
     class Config:
         from_attributes = True
 
-# ------------------------------------
+
+# ---------------------------------------------------
 # Client Job History Schemas
-# ------------------------------------
+# ---------------------------------------------------
+
 class ClientJobRead(BaseModel):
-    """Schema returned when reading a client's job history."""
+    """
+    Schema returned when reading a job in the client’s job history.
+    """
     id: UUID = Field(..., description="Unique identifier of the job")
     service_id: Optional[UUID] = Field(default=None, description="Service related to the job")
     worker_id: UUID = Field(..., description="Worker assigned to the job")

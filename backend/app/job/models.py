@@ -1,23 +1,31 @@
 """
 job/models.py
 
-Defines the Job model and status enum used for managing job lifecycle states.
+Defines the Job model and associated JobStatus enum.
+- Represents tasks created by clients and handled by workers
+- Tracks status transitions, assignment, and lifecycle timestamps
 """
 
 import uuid
 import enum
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, DateTime, ForeignKey, Text, Enum
+
+from sqlalchemy import (
+    String, Text, DateTime, Enum, ForeignKey
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
 
 
+# -----------------------------------------------
+# ENUM: Job Status
+# -----------------------------------------------
 class JobStatus(str, enum.Enum):
     """
-    Enum representing the various states a job can be in.
+    Enum representing lifecycle states for a job.
     """
     NEGOTIATING = "NEGOTIATING"
     ACCEPTED = "ACCEPTED"
@@ -26,6 +34,9 @@ class JobStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+# -----------------------------------------------
+# MODEL: Job
+# -----------------------------------------------
 class Job(Base):
     """
     Represents a job posted by a client and assigned to a worker.
@@ -53,11 +64,11 @@ class Job(Base):
         comment="Worker assigned to the job"
     )
 
-    service_id: Mapped[UUID] = mapped_column(
+    service_id: Mapped[Optional[UUID]] = mapped_column(
         UUID(as_uuid=True),
-        #ForeignKey("services.id"),
+        # ForeignKey("services.id"),
         nullable=True,
-        comment="Service related to the job"
+        comment="Optional service associated with the job"
     )
 
     status: Mapped[JobStatus] = mapped_column(

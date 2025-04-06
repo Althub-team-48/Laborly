@@ -1,15 +1,18 @@
 """
-routes.py
+job/routes.py
 
-Job-related API endpoints:
+Job-related API endpoints for both clients and workers:
 - Accept a job
 - Complete a job
-- Cancel a job
-- List all jobs for a user
-- Retrieve details for a specific job
+- Cancel a job with reason
+- List all jobs related to the current user
+- Retrieve details of a specific job
+
+All routes require authentication.
 """
 
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
@@ -18,14 +21,16 @@ from app.job.services import JobService
 from app.database.session import get_db
 from app.core.dependencies import get_current_user
 from app.database.models import User
+from main import limiter
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 
-# ---------------------------
+# -----------------------------------
 # Accept a Job
-# ---------------------------
+# -----------------------------------
 @router.post("/{worker_id}/{service_id}/accept", status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 def accept_job(
     worker_id: UUID,
     service_id: UUID,
@@ -42,10 +47,11 @@ def accept_job(
     )
 
 
-# ---------------------------
+# -----------------------------------
 # Complete a Job
-# ---------------------------
+# -----------------------------------
 @router.put("/{job_id}/complete", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 def complete_job(
     job_id: UUID,
     db: Session = Depends(get_db),
@@ -57,10 +63,11 @@ def complete_job(
     return JobService(db).complete_job(current_user.id, job_id)
 
 
-# ---------------------------
+# -----------------------------------
 # Cancel a Job
-# ---------------------------
+# -----------------------------------
 @router.put("/{job_id}/cancel", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 def cancel_job(
     job_id: UUID,
     payload: schemas.CancelJobRequest,
@@ -77,10 +84,11 @@ def cancel_job(
     )
 
 
-# ---------------------------
-# List All Jobs for a User
-# ---------------------------
+# -----------------------------------
+# List All Jobs for Current User
+# -----------------------------------
 @router.get("", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 def get_jobs_for_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -91,16 +99,17 @@ def get_jobs_for_user(
     return JobService(db).get_all_jobs_for_user(current_user.id)
 
 
-# ---------------------------
+# -----------------------------------
 # Get Job Details
-# ---------------------------
+# -----------------------------------
 @router.get("/{job_id}", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 def get_job_detail(
     job_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Retrieves detailed info for a specific job the user is involved in.
+    Retrieves detailed information for a specific job involving the current user.
     """
     return JobService(db).get_job_detail(current_user.id, job_id)

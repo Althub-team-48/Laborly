@@ -1,38 +1,41 @@
-# admin/services.py
-
 """
+admin/services.py
+
 Encapsulates business logic for administrative actions:
 - KYC approvals and rejections
-- User management (ban, freeze, delete)
-- Review moderation
+- User account management (ban, freeze, unfreeze, delete)
+- Review moderation (listing and deleting flagged reviews)
 """
 
 import logging
 from uuid import UUID
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database.models import User, KYC
+from app.database.models import KYC, User
 from app.review.models import Review
 
+# Set up module-level logger
 logger = logging.getLogger(__name__)
 
 
 class AdminService:
     """
-    Service layer for handling admin-specific tasks.
+    Service layer for handling administrative tasks such as
+    user status updates, KYC reviews, and moderation of flagged reviews.
     """
 
     def __init__(self, db: Session):
         self.db = db
 
-    # ----------------------------
+    # ----------------------------------------------------------------
     # KYC Management
-    # ----------------------------
+    # ----------------------------------------------------------------
 
     def list_pending_kyc(self):
         """
-        Fetch all KYC submissions with status 'PENDING'.
+        Retrieve all KYC submissions currently marked as 'PENDING'.
         """
         records = self.db.query(KYC).filter(KYC.status == "PENDING").all()
         logger.info(f"[KYC] Fetched {len(records)} pending KYC submissions.")
@@ -40,7 +43,7 @@ class AdminService:
 
     def approve_kyc(self, user_id: UUID) -> KYC:
         """
-        Approve a user's KYC request.
+        Approve a specific user's KYC submission.
         """
         kyc = self.db.query(KYC).filter_by(user_id=user_id).first()
         if not kyc:
@@ -54,7 +57,7 @@ class AdminService:
 
     def reject_kyc(self, user_id: UUID) -> KYC:
         """
-        Reject a user's KYC request.
+        Reject a specific user's KYC submission.
         """
         kyc = self.db.query(KYC).filter_by(user_id=user_id).first()
         if not kyc:
@@ -66,13 +69,13 @@ class AdminService:
         logger.info(f"[KYC] Rejected for user_id={user_id}")
         return kyc
 
-    # ----------------------------
+    # ----------------------------------------------------------------
     # User Status Management
-    # ----------------------------
+    # ----------------------------------------------------------------
 
     def freeze_user(self, user_id: UUID) -> User:
         """
-        Freeze a user (soft deactivate).
+        Freeze a user account to temporarily disable access.
         """
         user = self._get_user_or_404(user_id)
         user.is_active = False
@@ -82,7 +85,7 @@ class AdminService:
 
     def unfreeze_user(self, user_id: UUID) -> User:
         """
-        Unfreeze (reactivate) a previously frozen user.
+        Unfreeze a previously frozen user account.
         """
         user = self._get_user_or_404(user_id)
         user.is_active = True
@@ -92,7 +95,7 @@ class AdminService:
 
     def ban_user(self, user_id: UUID) -> User:
         """
-        Ban a user from the platform.
+        Permanently ban a user from the platform.
         """
         user = self._get_user_or_404(user_id)
         user.is_active = False
@@ -102,7 +105,7 @@ class AdminService:
 
     def unban_user(self, user_id: UUID) -> User:
         """
-        Unban a previously banned user.
+        Reinstate a previously banned user.
         """
         user = self._get_user_or_404(user_id)
         user.is_active = True
@@ -112,20 +115,20 @@ class AdminService:
 
     def delete_user(self, user_id: UUID) -> None:
         """
-        Permanently delete a user.
+        Permanently delete a user from the system.
         """
         user = self._get_user_or_404(user_id)
         self.db.delete(user)
         self.db.commit()
         logger.warning(f"[USER] Deleted: user_id={user_id}")
 
-    # ----------------------------
+    # ----------------------------------------------------------------
     # Review Moderation
-    # ----------------------------
+    # ----------------------------------------------------------------
 
     def list_flagged_reviews(self):
         """
-        Return all reviews flagged for moderation.
+        Retrieve all reviews that have been flagged for moderation.
         """
         reviews = self.db.query(Review).filter(Review.is_flagged.is_(True)).all()
         logger.info(f"[REVIEW] Fetched {len(reviews)} flagged reviews.")
@@ -133,7 +136,7 @@ class AdminService:
 
     def delete_review(self, review_id: UUID) -> None:
         """
-        Permanently delete a review.
+        Permanently delete a specific review flagged for moderation.
         """
         review = self.db.query(Review).filter_by(id=review_id).first()
         if not review:
@@ -144,13 +147,13 @@ class AdminService:
         self.db.commit()
         logger.warning(f"[REVIEW] Deleted: review_id={review_id}")
 
-    # ----------------------------
-    # Internal Utility
-    # ----------------------------
+    # ----------------------------------------------------------------
+    # Internal Utility Methods
+    # ----------------------------------------------------------------
 
     def _get_user_or_404(self, user_id: UUID) -> User:
         """
-        Retrieve a user or raise 404.
+        Retrieve a user by ID or raise a 404 error if not found.
         """
         user = self.db.query(User).filter_by(id=user_id).first()
         if not user:

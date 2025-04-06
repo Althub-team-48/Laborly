@@ -9,7 +9,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Boolean, Integer
+from sqlalchemy import (
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    Boolean,
+    Integer
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
@@ -19,6 +26,9 @@ if TYPE_CHECKING:
     from app.database.models import User
 
 
+# ------------------------------------------------------
+# WorkerProfile Model
+# ------------------------------------------------------
 class WorkerProfile(Base):
     __tablename__ = "worker_profiles"
 
@@ -46,20 +56,20 @@ class WorkerProfile(Base):
     years_experience: Mapped[int] = mapped_column(
         Integer,
         nullable=True,
-        comment="Number of years of experience"
+        comment="Number of years of relevant experience"
     )
 
     availability_note: Mapped[str] = mapped_column(
         Text,
         nullable=True,
-        comment="Custom note about availability"
+        comment="Custom note regarding availability (e.g., preferred hours)"
     )
 
     is_available: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
         nullable=False,
-        comment="Availability status for job assignments"
+        comment="Availability status for taking on job assignments"
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -75,5 +85,5 @@ class WorkerProfile(Base):
         comment="Timestamp when the profile was last updated"
     )
 
-    # Relationships
+    # One-to-one relationship with the User model
     user: Mapped["User"] = relationship("User", back_populates="worker_profile")

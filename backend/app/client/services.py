@@ -1,16 +1,17 @@
 """
 client/services.py
 
-Service class for handling client-related logic:
-- Client profile management
-- Favorite worker management
-- Job history retrieval
+Service class for handling all client-related business logic:
+- Client profile retrieval and updates
+- Managing favorite workers
+- Fetching job history and job details
 """
 
 import logging
 from uuid import UUID
-from sqlalchemy.orm import Session
+
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
 from app.client import models, schemas
 from app.database.models import User
@@ -27,13 +28,14 @@ class ClientService:
     def __init__(self, db: Session):
         self.db = db
 
-    # ---------------------------
+    # -------------------------------------------
     # Client Profile Management
-    # ---------------------------
+    # -------------------------------------------
+
     def get_profile(self, user_id: UUID) -> schemas.ClientProfileRead:
         """
         Retrieve the client profile and merge user account data.
-        Creates a new profile if not found.
+        Creates a new profile automatically if one does not exist.
         """
         logger.info(f"Retrieving client profile for user_id={user_id}")
 
@@ -51,6 +53,7 @@ class ClientService:
             self.db.refresh(profile)
             logger.info(f"New profile created: profile_id={profile.id}")
 
+        # Merge profile and user data for output
         merged = {
             **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
             **{k: v for k, v in vars(user).items() if not k.startswith("_")},
@@ -75,13 +78,13 @@ class ClientService:
 
         fields = update.model_dump(exclude_unset=True)
 
-        # Update user fields
+        # Update user attributes
         for attr in ["first_name", "last_name", "location", "profile_picture"]:
             if attr in fields:
                 setattr(user, attr, fields[attr])
                 logger.debug(f"Updated User.{attr} = {fields[attr]}")
 
-        # Update profile fields
+        # Update profile-specific attributes
         for attr in ["business_name"]:
             if attr in fields:
                 setattr(profile, attr, fields[attr])
@@ -99,19 +102,20 @@ class ClientService:
         }
         return schemas.ClientProfileRead.model_validate(merged)
 
-    # ---------------------------
+    # -------------------------------------------
     # Favorite Worker Management
-    # ---------------------------
+    # -------------------------------------------
+
     def list_favorites(self, client_id: UUID):
         """
-        List all favorite workers for a client.
+        List all favorite workers for a given client.
         """
         logger.info(f"Listing favorites for client_id={client_id}")
         return self.db.query(models.FavoriteWorker).filter_by(client_id=client_id).all()
 
     def add_favorite(self, client_id: UUID, worker_id: UUID) -> models.FavoriteWorker:
         """
-        Add a worker to the client's favorites.
+        Add a worker to the client's list of favorites.
         """
         logger.info(f"Adding favorite: client_id={client_id}, worker_id={worker_id}")
 
@@ -151,19 +155,20 @@ class ClientService:
         self.db.commit()
         logger.info("Favorite removed successfully")
 
-    # ---------------------------
+    # -------------------------------------------
     # Job History Management
-    # ---------------------------
+    # -------------------------------------------
+
     def get_jobs(self, client_id: UUID):
         """
-        Retrieve all jobs created by a client.
+        Retrieve all jobs submitted by the client.
         """
         logger.info(f"Fetching job list for client_id={client_id}")
         return self.db.query(Job).filter_by(client_id=client_id).all()
 
     def get_job_detail(self, client_id: UUID, job_id: UUID):
         """
-        Retrieve a specific job by ID for the client.
+        Retrieve a specific job record by the client.
         """
         logger.info(f"Fetching job detail: client_id={client_id}, job_id={job_id}")
 

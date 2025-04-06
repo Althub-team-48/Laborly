@@ -2,15 +2,15 @@
 client/models.py
 
 Defines SQLAlchemy models specific to the Client module:
-- ClientProfile: Stores profile information for a client
-- FavoriteWorker: Represents workers marked as favorites by a client
+- ClientProfile: Stores additional profile information for a client user
+- FavoriteWorker: Represents a relationship where a client marks a worker as a favorite
 """
 
+import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
-import uuid
 
-from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,10 +19,14 @@ from app.database.base import Base
 if TYPE_CHECKING:
     from app.database.models import User
 
-# -----------------------------------------
+
+# ----------------------------------------------------
 # ClientProfile Model
-# -----------------------------------------
+# ----------------------------------------------------
 class ClientProfile(Base):
+    """
+    Represents additional profile data for users with the 'CLIENT' role.
+    """
     __tablename__ = "client_profiles"
 
     id: Mapped[UUID] = mapped_column(
@@ -36,33 +40,37 @@ class ClientProfile(Base):
         ForeignKey("users.id"),
         unique=True,
         nullable=False,
-        comment="Related user account"
+        comment="ID of the user this profile belongs to"
     )
     business_name: Mapped[str] = mapped_column(
         String,
         nullable=True,
-        comment="Optional business name"
+        comment="Optional business name for the client"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
-        comment="Profile creation timestamp"
+        comment="Timestamp when the profile was created"
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-        comment="Profile update timestamp"
+        comment="Timestamp when the profile was last updated"
     )
 
-    # Relationships
+    # Relationship: one-to-one with User
     user: Mapped["User"] = relationship("User", back_populates="client_profile")
 
 
-# -----------------------------------------
+# ----------------------------------------------------
 # FavoriteWorker Model
-# -----------------------------------------
+# ----------------------------------------------------
 class FavoriteWorker(Base):
+    """
+    Represents a many-to-many relationship where a client user
+    marks a worker user as a favorite.
+    """
     __tablename__ = "favorites"
 
     id: Mapped[UUID] = mapped_column(
@@ -75,32 +83,34 @@ class FavoriteWorker(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id"),
         nullable=False,
-        comment="Client who favorited the worker"
+        comment="User ID of the client who favorited the worker"
     )
     worker_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
         nullable=False,
-        comment="Favorited worker"
+        comment="User ID of the worker who was favorited"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
-        comment="Timestamp when the favorite was created"
+        comment="Timestamp when the favorite relationship was created"
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-        comment="Timestamp when the favorite was last updated"
+        comment="Timestamp when the favorite relationship was last updated"
     )
 
-    # Relationships
+    # Relationship: many-to-one to User (as client)
     client: Mapped["User"] = relationship(
         "User",
         foreign_keys=[client_id],
         back_populates="favorite_clients"
     )
+
+    # Relationship: many-to-one to User (as worker)
     worker: Mapped["User"] = relationship(
         "User",
         foreign_keys=[worker_id],

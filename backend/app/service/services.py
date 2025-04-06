@@ -25,52 +25,75 @@ class ServiceListingService:
     def __init__(self, db: Session):
         self.db = db
 
+    # -----------------------------------------
+    # Create Service
+    # -----------------------------------------
     def create_service(self, worker_id: UUID, data: schemas.ServiceCreate) -> models.Service:
         """
         Create a new service listing for a worker.
         """
         logger.info(f"Creating new service for worker_id={worker_id}")
-        service = models.Service(worker_id=worker_id, **data.model_dump())
+
+        service = models.Service(
+            worker_id=worker_id,
+            **data.model_dump()
+        )
+
         self.db.add(service)
         self.db.commit()
         self.db.refresh(service)
+
         logger.info(f"Service created: id={service.id}")
         return service
 
+    # -----------------------------------------
+    # Update Service
+    # -----------------------------------------
     def update_service(self, worker_id: UUID, service_id: UUID, data: schemas.ServiceUpdate) -> models.Service:
         """
         Update an existing service listing owned by a worker.
         """
         logger.info(f"Updating service_id={service_id} for worker_id={worker_id}")
+
         service = self.db.query(models.Service).filter_by(id=service_id, worker_id=worker_id).first()
 
         if not service:
-            logger.warning("Service not found or unauthorized")
+            logger.warning(f"Service not found or unauthorized: service_id={service_id}")
             raise HTTPException(status_code=404, detail="Service not found or unauthorized")
 
+        # Apply only provided fields
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(service, field, value)
 
         self.db.commit()
         self.db.refresh(service)
+
         logger.info(f"Service updated: id={service.id}")
         return service
 
+    # -----------------------------------------
+    # Delete Service
+    # -----------------------------------------
     def delete_service(self, worker_id: UUID, service_id: UUID) -> None:
         """
         Delete a service owned by a worker.
         """
         logger.info(f"Deleting service_id={service_id} for worker_id={worker_id}")
+
         service = self.db.query(models.Service).filter_by(id=service_id, worker_id=worker_id).first()
 
         if not service:
-            logger.warning("Service not found or unauthorized")
+            logger.warning(f"Service not found or unauthorized: service_id={service_id}")
             raise HTTPException(status_code=404, detail="Service not found or unauthorized")
 
         self.db.delete(service)
         self.db.commit()
-        logger.info("Service deleted successfully")
 
+        logger.info(f"Service deleted successfully: id={service_id}")
+
+    # -----------------------------------------
+    # Get Services by Worker
+    # -----------------------------------------
     def get_my_services(self, worker_id: UUID) -> List[models.Service]:
         """
         Retrieve all services owned by a worker.
@@ -78,11 +101,14 @@ class ServiceListingService:
         logger.info(f"Fetching all services for worker_id={worker_id}")
         return self.db.query(models.Service).filter_by(worker_id=worker_id).all()
 
+    # -----------------------------------------
+    # Search Services (Public)
+    # -----------------------------------------
     def search_services(self, title: Optional[str] = None, location: Optional[str] = None) -> List[models.Service]:
         """
-        Search for services by optional title and location filters.
+        Search for services using optional title and/or location filters.
         """
-        logger.info("Searching services")
+        logger.info("Searching services...")
         query = self.db.query(models.Service)
 
         if title:

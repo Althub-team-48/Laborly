@@ -34,7 +34,7 @@ class WorkerService:
 
     def get_profile(self, user_id: UUID) -> schemas.WorkerProfileRead:
         """
-        Retrieves the merged worker profile + user details for a given user ID.
+        Retrieve the merged worker profile and user details for the given user ID.
         Creates a profile if none exists.
         """
         logger.info(f"Fetching worker profile for user_id={user_id}")
@@ -60,7 +60,7 @@ class WorkerService:
 
     def update_profile(self, user_id: UUID, data: schemas.WorkerProfileUpdate) -> schemas.WorkerProfileRead:
         """
-        Updates both the user and worker profile based on provided fields.
+        Update both user and profile fields for the given worker.
         """
         logger.info(f"Updating worker profile for user_id={user_id}")
 
@@ -76,13 +76,13 @@ class WorkerService:
 
         update_data = data.model_dump(exclude_unset=True)
 
-        # Update user table fields
+        # Update User model fields
         user_fields = {col.name for col in User.__table__.columns}
         for field in user_fields & update_data.keys():
             setattr(user, field, update_data[field])
             logger.debug(f"Updated user.{field} = {update_data[field]}")
 
-        # Update profile table fields
+        # Update WorkerProfile model fields
         profile_fields = {col.name for col in models.WorkerProfile.__table__.columns}
         for field in profile_fields & update_data.keys():
             setattr(profile, field, update_data[field])
@@ -104,9 +104,10 @@ class WorkerService:
 
     def toggle_availability(self, user_id: UUID, status: bool) -> models.WorkerProfile:
         """
-        Updates the is_available flag on the worker profile.
+        Update the is_available flag on the worker profile.
         """
         logger.info(f"Toggling availability: user_id={user_id}, status={status}")
+
         profile = self.db.query(models.WorkerProfile).filter_by(user_id=user_id).first()
         if not profile:
             raise HTTPException(status_code=404, detail="Worker profile not found")
@@ -114,6 +115,7 @@ class WorkerService:
         profile.is_available = status
         self.db.commit()
         self.db.refresh(profile)
+
         logger.info(f"Availability updated: user_id={user_id}, status={profile.is_available}")
         return profile
 
@@ -123,9 +125,10 @@ class WorkerService:
 
     def get_kyc(self, user_id: UUID) -> KYC:
         """
-        Retrieves the KYC record for the user.
+        Retrieve the KYC record for the user.
         """
         logger.info(f"Fetching KYC for user_id={user_id}")
+
         kyc = self.db.query(KYC).filter_by(user_id=user_id).first()
         if not kyc:
             raise HTTPException(status_code=404, detail="No KYC record found")
@@ -133,11 +136,12 @@ class WorkerService:
 
     def submit_kyc(self, user_id: UUID, document_type: str, document_path: str, selfie_path: str) -> KYC:
         """
-        Creates or updates a KYC record for the worker.
+        Create or update a KYC record for the worker.
         """
         logger.info(f"Submitting KYC for user_id={user_id}")
+
         kyc = self.db.query(KYC).filter_by(user_id=user_id).first()
-        current_time = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
 
         if not kyc:
             kyc = KYC(
@@ -145,18 +149,19 @@ class WorkerService:
                 document_type=document_type,
                 document_path=document_path,
                 selfie_path=selfie_path,
-                submitted_at=current_time
+                submitted_at=now
             )
             self.db.add(kyc)
         else:
             kyc.document_type = document_type
             kyc.document_path = document_path
             kyc.selfie_path = selfie_path
-            kyc.submitted_at = current_time
+            kyc.submitted_at = now
 
         kyc.status = "PENDING"
         self.db.commit()
         self.db.refresh(kyc)
+
         logger.info(f"KYC submitted: user_id={user_id}, kyc_id={kyc.id}")
         return kyc
 
@@ -166,17 +171,19 @@ class WorkerService:
 
     def get_jobs(self, user_id: UUID):
         """
-        Returns all jobs assigned to the worker.
+        Return all jobs assigned to the worker.
         """
         logger.info(f"Fetching jobs for user_id={user_id}")
         return self.db.query(Job).filter_by(worker_id=user_id).all()
 
     def get_job_detail(self, user_id: UUID, job_id: UUID):
         """
-        Returns a specific job assigned to the worker.
+        Return a specific job assigned to the worker.
         """
         logger.info(f"Fetching job_id={job_id} for user_id={user_id}")
+
         job = self.db.query(Job).filter_by(id=job_id, worker_id=user_id).first()
         if not job:
             raise HTTPException(status_code=404, detail="Job not found or unauthorized")
+
         return job

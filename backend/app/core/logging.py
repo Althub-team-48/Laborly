@@ -2,13 +2,20 @@
 core/logging.py
 
 Defines centralized logging configuration for the application.
-Sets up both console and file logging with consistent formatting.
+Sets up both console and file logging with consistent formatting and log rotation readiness.
+
+- Writes logs to console (stdout) and file at logs/app.log
+- Should be initialized once early in app startup (e.g., in main.py)
 """
 
+import os
 import logging
 from logging.config import dictConfig
 
-# Define logging settings
+# Ensure the logs directory exists
+os.makedirs("logs", exist_ok=True)
+
+# Define centralized logging settings
 LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -28,6 +35,7 @@ LOGGING_CONFIG = {
             "class": "logging.FileHandler",
             "filename": "logs/app.log",
             "formatter": "default",
+            "encoding": "utf-8",
         },
     },
 
@@ -40,7 +48,10 @@ LOGGING_CONFIG = {
 
 def init_logging() -> None:
     """
-    Initialize application-wide logging using the predefined LOGGING_CONFIG.
-    Call this early in the application lifecycle (e.g., main.py).
+    Initializes logging using the global LOGGING_CONFIG.
+
+    - Must be called once during app startup.
+    - Creates 'logs/' directory if it does not exist.
+    - Writes logs to both stdout and logs/app.log.
     """
     dictConfig(LOGGING_CONFIG)

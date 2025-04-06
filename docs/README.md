@@ -1,109 +1,189 @@
-## Laborly Platform Overview
+# Laborly Backend
 
-This document explains the user experience and overall flow of the Laborly platform. It outlines how the system works for clients, workers, and admins, along with key features included in the MVP (Minimum Viable Product).
-
----
-
-### 1. User Types
-- **Clients:** Individuals who need services and want to find skilled workers.
-- **Workers:** Skilled individuals offering services who can be discovered and hired.
-- **Admins:** Trusted internal users responsible for moderation and safety.
+Laborly is a service-based platform connecting clients and workers. This backend provides a robust API that supports user registration, authentication, job posting and tracking, worker-client communication, and administrative functions.
 
 ---
 
-### 2. Registration & Login
-- Users can sign up using email and password.
-- Login is via secure token-based authentication.
-- Google or Apple login is also supported.
-- Terms and Conditions must be accepted before account creation.
+## Overview
+
+This repository contains the FastAPI backend for Laborly. It is modular, secure, but still in development, featuring:
+
+- JWT and OAuth2-based authentication
+- Role-based access control (RBAC)
+- KYC verification with document uploads
+- Job lifecycle tracking (accept, complete, cancel)
+- Client-to-worker reviews and ratings
+- Reusable messaging system with WebSocket support
+- PostgreSQL with Alembic migrations
 
 ---
 
-### 3. Profiles
-- Clients and Workers have dedicated profile pages.
-- Workers can update their service offerings, location, and availability.
-- Clients can update personal details and view saved workers.
+## Architecture
+
+- **FastAPI** - Web framework
+- **SQLAlchemy** - ORM
+- **Alembic** - Migrations
+- **PostgreSQL** - Relational database
+- **Redis** - Token blacklist handling
+- **Pydantic** - Validation
+- **SlowAPI** - Rate limiting
+- **WebSocket** - Real-time messaging
 
 ---
 
-### 4. Worker Discovery
-- Clients can search and filter workers by:
-  - Type of service
-  - Location
-  - Rating
-  - Availability
-- Workers can be saved to a "favorites" list.
+## Modules
+
+### Authentication (`auth/`)
+- JWT login and logout
+- Google OAuth support
+- Token revocation using Redis
+- Role-based access enforcement
+
+### Clients (`client/`)
+- Client profile management
+- Favorite worker tracking
+- Job history and job detail access
+
+### Workers (`worker/`)
+- Profile and availability management
+- KYC document upload and verification
+- View assigned jobs and job details
+
+### Jobs (`job/`)
+- Accept, complete, or cancel jobs
+- Job history retrieval
+- Role-specific job filtering
+
+### Reviews (`review/`)
+- Submit and read reviews
+- Average rating calculation
+- Admin flagging support
+
+### Services (`service/`)
+- Worker service listing creation and updates
+- Public and private service searches
+
+### Messaging (`messaging/`)
+- Reusable and scalable messaging system
+- Thread-based communication (client-worker or admin-user)
+- WebSocket real-time chat support
+- Role-based message initiation and reply
 
 ---
 
-### 5. KYC (Verification)
-- Workers must upload a valid ID and selfie for manual identity verification.
-- This ensures that workers are legitimate and helps build trust.
-- Workers cannot offer services until approved.
+## Security
+
+- JWT token blacklisting for secure logout
+- Role-based access enforcement on all endpoints
+- Rate limiting to prevent abuse (`SlowAPI`)
+- KYC status management with admin review
+- Input validation via Pydantic
 
 ---
 
-### 6. Messaging & Contact
-- Clients initiate private message threads with workers.
-- Workers can reply and continue the conversation.
-- Contact details (phone/email) are hidden until a job is formally accepted.
+## Database
+
+- PostgreSQL
+- SQLAlchemy ORM
+- Alembic for migrations
+
+**Entities include:**
+- `User`
+- `ClientProfile`, `WorkerProfile`
+- `KYC`
+- `Job`
+- `Review`
+- `FavoriteWorker`
+- `Service`
+- `MessageThread`, `ThreadParticipant`, `Message`
 
 ---
 
-### 7. Job Acceptance Flow
-- After agreeing on terms in a chat, either party can confirm a job.
-- The system creates a job record marked as "negotiating."
-- Once both parties are aligned, the job becomes "accepted."
-- Either party can mark the job as "completed."
-- When both confirm completion, the job is "finalized."
-- Jobs can be cancelled if needed, with reasons recorded.
+## Environment Variables (`.env`)
+
+```env
+APP_NAME=Laborly
+DEBUG=True
+DATABASE_URL=postgresql://user:password@localhost/laborly
+SECRET_KEY=your_secret_key
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+```
 
 ---
 
-### 8. Ratings & Reviews
-- Clients can rate and review workers after job completion.
-- One review is allowed per job.
-- Ratings use a 1–5 star system with optional written feedback.
-- Workers accumulate average ratings over time.
+## Running Locally
+
+1. Clone the repo:
+   ```bash
+   git clone https://github.com/Althub-team-48/Laborly.git
+   cd laborly-backend
+   ```
+
+2. Create and activate a virtual environment (optional):
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # or venv\Scripts\activate on Windows
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Configure environment:
+   - Create a `.env` file with the required values.
+
+5. Run migrations:
+   ```bash
+   alembic upgrade head
+   ```
+
+6. Start the server:
+   ```bash
+   uvicorn main:app --reload
+   ```
 
 ---
 
-### 9. Admin Controls
-- Admins can:
-  - Approve or reject worker KYC documents
-  - Freeze or ban user accounts
-  - Delete user accounts on request
-  - Moderate inappropriate reviews
-- Admins do not interfere with job details unless absolutely necessary.
+## WebSocket Endpoint
+
+- **URL:** `/ws/{thread_id}`
+- **Auth:** JWT required
+- **Purpose:** Live messaging between thread participants
 
 ---
 
-### 10. Dashboards
-- **Clients** see:
-  - Active jobs
-  - Past job history
-  - Favorited workers
+## Rate Limiting
 
-- **Workers** see:
-  - Active and completed jobs
-  - KYC status
-  - Profile and service info
-  - Received reviews and ratings
+- `POST /messages/{worker_id}` → 5 requests/minute
+- `POST /messages/{thread_id}/reply` → 10 requests/minute
 
 ---
 
-### 11. Platform Security
-- All user inputs are validated to prevent errors and abuse.
-- Uploaded documents are scanned and sanitized.
-- Role-based access ensures users only access their permitted features.
-- The system logs all admin actions and critical user events.
+## Logging
+
+Logs are stored in `logs/app.log` and also printed to the console.
 
 ---
 
-### 12. Future Enhancements (Beyond MVP)
-- Automated KYC using third-party services
-- Admin dashboard UI
-- Notifications and alerts
-- Payment or escrow functionality
+## Folder Structure
+
+```
+app/
+├── auth/
+├── client/
+├── worker/
+├── job/
+├── review/
+├── service/
+├── messaging/
+├── core/             # Config, logging, security, rate limiting
+├── database/         # Models, enums, sessions, base
+main.py               # App entrypoint
+.env
+```
 
 ---

@@ -6,7 +6,7 @@
 **/*.log
 
 # Database migrations (optional: ignore versioned files if regenerated often)
-**/app/database/migrations/versions/*
+**/alembic/versions/*
 
 # Local development or testing artifacts
 **/__pycache__/

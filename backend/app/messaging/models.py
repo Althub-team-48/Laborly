@@ -47,14 +47,12 @@ class MessageThread(Base):
     participants = relationship(
         "ThreadParticipant",
         back_populates="thread",
-        cascade="all, delete",
-        comment="Users participating in this thread"
+        cascade="all, delete"
     )
     messages = relationship(
         "Message",
         back_populates="thread",
-        cascade="all, delete",
-        comment="Messages exchanged in this thread"
+        cascade="all, delete"
     )
 
 

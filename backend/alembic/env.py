@@ -21,6 +21,7 @@ from app.worker import models as worker_models
 from app.job import models as job_models
 from app.review import models as review_models
 from app.service import models as service_models
+from app.messaging import models as messaging_models
 
 
 # --- Alembic Config object ---

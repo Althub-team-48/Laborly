@@ -13,10 +13,14 @@ from alembic import context
 # --- Load SQLAlchemy base metadata and engine ---
 from app.database.session import engine
 from app.database.base import Base
+
+# --- Import models to ensure they are registered with SQLAlchemy and visible to Alembic---
 from app.database import models  # ensures models are loaded for Base.metadata
 from app.client import models as client_models
 from app.worker import models as worker_models
 from app.job import models as job_models
+from app.review import models as review_models
+from app.service import models as service_models
 
 
 # --- Alembic Config object ---

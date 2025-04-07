@@ -43,7 +43,7 @@ from app.core.config import settings
 from app.core.dependencies import get_db, oauth2_scheme
 from app.database.models import User
 from app.database.enums import UserRole
-from main import limiter
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 @router.post("/signup", response_model=AuthSuccessResponse)
 @limiter.limit("5/minute")
-def signup(payload: SignupRequest, db: Session = Depends(get_db)):
+def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_db)):
     """
     Register a new user and return a JWT token with user info.
     """
@@ -92,7 +92,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 
 @router.post("/login/json", response_model=AuthSuccessResponse)
 @limiter.limit("10/minute")
-def login_json(payload: LoginRequest, db: Session = Depends(get_db)):
+def login_json(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
     """
     Authenticate a user using JSON email/password.
     """
@@ -117,6 +117,7 @@ def login_json(payload: LoginRequest, db: Session = Depends(get_db)):
 @router.post("/login/oauth", response_model=AuthSuccessResponse)
 @limiter.limit("10/minute")
 def login_oauth(
+    request: Request, 
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -166,7 +167,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/logout")
 @limiter.limit("20/minute")
-def logout_user(token: str = Depends(oauth2_scheme)):
+def logout_user(request: Request, token: str = Depends(oauth2_scheme)):
     """
     Logs out the current user by blacklisting their JWT.
     """

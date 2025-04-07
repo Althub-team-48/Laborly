@@ -10,7 +10,7 @@ Defines routes for managing worker service listings:
 from uuid import UUID
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.service import schemas
@@ -27,6 +27,7 @@ router = APIRouter(prefix="/services", tags=["Services"])
 # --------------------------------------------------
 @router.post("", response_model=schemas.ServiceRead)
 def create_service(
+    request: Request, 
     data: schemas.ServiceCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
@@ -42,6 +43,7 @@ def create_service(
 # --------------------------------------------------
 @router.put("/{service_id}", response_model=schemas.ServiceRead)
 def update_service(
+    request: Request, 
     service_id: UUID,
     data: schemas.ServiceUpdate,
     db: Session = Depends(get_db),
@@ -58,6 +60,7 @@ def update_service(
 # --------------------------------------------------
 @router.delete("/{service_id}")
 def delete_service(
+    request: Request, 
     service_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
@@ -74,6 +77,7 @@ def delete_service(
 # --------------------------------------------------
 @router.get("/my", response_model=List[schemas.ServiceRead])
 def list_my_services(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
@@ -88,6 +92,7 @@ def list_my_services(
 # --------------------------------------------------
 @router.get("/search", response_model=List[schemas.ServiceRead])
 def search_services(
+    request: Request, 
     title: Optional[str] = Query(default=None, description="Filter by service title"),
     location: Optional[str] = Query(default=None, description="Filter by service location"),
     db: Session = Depends(get_db),

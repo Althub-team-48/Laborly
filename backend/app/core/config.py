@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     APP_NAME: str
     DEBUG: bool = False
     DATABASE_URL: str
+    TEST_DATABASE_URL: str
     SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"  # Load variables from .env file
+        extra = "forbid"   # controls undeclared vars, false by default
 
 
 # Instantiate the settings for global use

@@ -13,7 +13,7 @@ All routes require authentication.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
 from sqlalchemy.orm import Session
 
 from app.job import schemas
@@ -21,7 +21,7 @@ from app.job.services import JobService
 from app.database.session import get_db
 from app.core.dependencies import get_current_user
 from app.database.models import User
-from main import limiter
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
@@ -32,6 +32,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 @router.post("/{worker_id}/{service_id}/accept", status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def accept_job(
+    request: Request, 
     worker_id: UUID,
     service_id: UUID,
     db: Session = Depends(get_db),
@@ -53,6 +54,7 @@ def accept_job(
 @router.put("/{job_id}/complete", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 def complete_job(
+    request: Request, 
     job_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -69,6 +71,7 @@ def complete_job(
 @router.put("/{job_id}/cancel", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 def cancel_job(
+    request: Request, 
     job_id: UUID,
     payload: schemas.CancelJobRequest,
     db: Session = Depends(get_db),
@@ -90,6 +93,7 @@ def cancel_job(
 @router.get("", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 def get_jobs_for_user(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -105,6 +109,7 @@ def get_jobs_for_user(
 @router.get("/{job_id}", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 def get_job_detail(
+    request: Request, 
     job_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

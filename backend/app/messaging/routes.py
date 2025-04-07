@@ -11,14 +11,14 @@ API routes for the reusable messaging system:
 from uuid import UUID
 from typing import List
 
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.core.dependencies import get_current_user
 from app.messaging import schemas, services
 from app.database.models import User
-from main import limiter
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/messages", tags=["Messaging"])
 
@@ -29,6 +29,7 @@ router = APIRouter(prefix="/messages", tags=["Messaging"])
 @router.post("/{worker_id}", status_code=status.HTTP_201_CREATED, response_model=schemas.MessageRead)
 @limiter.limit("5/minute")
 def initiate_message(
+    request: Request, 
     worker_id: UUID,
     message_data: schemas.MessageCreate,
     db: Session = Depends(get_db),
@@ -58,6 +59,7 @@ def initiate_message(
 @router.post("/{thread_id}/reply", status_code=status.HTTP_201_CREATED, response_model=schemas.MessageRead)
 @limiter.limit("10/minute")
 def reply_message(
+    request: Request, 
     thread_id: UUID,
     message_data: schemas.MessageBase,
     db: Session = Depends(get_db),
@@ -82,6 +84,7 @@ def reply_message(
 # ----------------------------------------
 @router.get("/threads", response_model=List[schemas.ThreadRead])
 def get_my_threads(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -96,6 +99,7 @@ def get_my_threads(
 # ----------------------------------------
 @router.get("/threads/{thread_id}", response_model=schemas.ThreadRead)
 def get_thread_conversation(
+    request: Request, 
     thread_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

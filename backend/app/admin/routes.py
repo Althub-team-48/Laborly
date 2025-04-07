@@ -10,10 +10,10 @@ Defines routes for administrative actions:
 from uuid import UUID
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from main import limiter  # Using centralized limiter instance
+from app.core.limiter import limiter
 from app.core.dependencies import get_db, get_current_user_with_role
 from app.database.enums import UserRole
 from app.database.models import User
@@ -33,6 +33,7 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 @router.get("/kyc/pending")
 @limiter.limit("10/minute")
 def get_pending_kyc_list(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
 ):
@@ -46,6 +47,7 @@ def get_pending_kyc_list(
 @router.put("/kyc/{user_id}/approve")
 @limiter.limit("5/minute")
 def approve_user_kyc(
+    request: Request,
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
@@ -60,6 +62,7 @@ def approve_user_kyc(
 @router.put("/kyc/{user_id}/reject")
 @limiter.limit("5/minute")
 def reject_user_kyc(
+    request: Request,
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
@@ -78,6 +81,7 @@ def reject_user_kyc(
 @router.put("/users/{user_id}/freeze")
 @limiter.limit("5/minute")
 def freeze_user_account(
+    request: Request,
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
@@ -92,6 +96,7 @@ def freeze_user_account(
 @router.put("/users/{user_id}/unfreeze")
 @limiter.limit("5/minute")
 def unfreeze_user_account(
+    request: Request,
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
@@ -106,6 +111,7 @@ def unfreeze_user_account(
 @router.put("/users/{user_id}/ban")
 @limiter.limit("5/minute")
 def ban_user_account(
+    request: Request,
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
@@ -120,6 +126,7 @@ def ban_user_account(
 @router.put("/users/{user_id}/unban")
 @limiter.limit("5/minute")
 def unban_user_account(
+    request: Request,
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
@@ -134,6 +141,7 @@ def unban_user_account(
 @router.delete("/users/{user_id}")
 @limiter.limit("3/minute")
 def delete_user_account(
+    request: Request,
     user_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
@@ -153,6 +161,7 @@ def delete_user_account(
 @router.get("/reviews/flagged")
 @limiter.limit("10/minute")
 def get_flagged_reviews(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
 ):
@@ -166,6 +175,7 @@ def get_flagged_reviews(
 @router.delete("/reviews/{review_id}")
 @limiter.limit("5/minute")
 def delete_flagged_review(
+    request: Request,
     review_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),

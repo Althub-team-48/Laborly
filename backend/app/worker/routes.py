@@ -10,11 +10,11 @@ Worker module endpoints for:
 from uuid import UUID
 
 from fastapi import (
-    APIRouter, Depends, UploadFile, File, Form
+    APIRouter, Depends, UploadFile, File, Form, Request
 )
 from sqlalchemy.orm import Session
 
-from main import limiter
+from app.core.limiter import limiter
 from app.worker.services import WorkerService
 from app.worker import schemas
 from app.core.dependencies import get_db, require_roles
@@ -30,6 +30,7 @@ router = APIRouter(prefix="/worker", tags=["Worker"])
 @router.get("/profile", response_model=schemas.WorkerProfileRead)
 @limiter.limit("10/minute")
 def get_worker_profile(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
@@ -42,6 +43,7 @@ def get_worker_profile(
 @router.patch("/profile", response_model=schemas.WorkerProfileRead)
 @limiter.limit("5/minute")
 def update_worker_profile(
+    request: Request, 
     data: schemas.WorkerProfileUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
@@ -58,6 +60,7 @@ def update_worker_profile(
 @router.get("/kyc")
 @limiter.limit("10/minute")
 def get_worker_kyc(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
@@ -70,6 +73,7 @@ def get_worker_kyc(
 @router.post("/kyc")
 @limiter.limit("3/minute")
 def submit_worker_kyc(
+    request: Request, 
     document_type: str = Form(...),
     document_file: UploadFile = File(...),
     selfie_file: UploadFile = File(...),
@@ -96,6 +100,7 @@ def submit_worker_kyc(
 @router.get("/jobs")
 @limiter.limit("10/minute")
 def list_worker_jobs(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
@@ -108,6 +113,7 @@ def list_worker_jobs(
 @router.get("/jobs/{job_id}")
 @limiter.limit("10/minute")
 def get_worker_job_detail(
+    request: Request, 
     job_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),

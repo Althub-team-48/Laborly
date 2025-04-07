@@ -9,7 +9,7 @@ Defines routes under the Client module for:
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
 from sqlalchemy.orm import Session
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -18,7 +18,7 @@ from app.client.services import ClientService
 from app.client import schemas
 from app.core.dependencies import get_db, require_roles
 from app.database.models import User, UserRole
-from main import limiter
+from app.core.limiter import limiter
 
 # Set up API router
 router = APIRouter(prefix="/client", tags=["Client"])
@@ -31,6 +31,7 @@ router = APIRouter(prefix="/client", tags=["Client"])
 @router.get("/get/profile", response_model=schemas.ClientProfileRead)
 @limiter.limit("10/minute")
 def get_client_profile(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
 ):
@@ -43,6 +44,7 @@ def get_client_profile(
 @router.patch("/update/profile", response_model=schemas.ClientProfileRead)
 @limiter.limit("5/minute")
 def update_client_profile(
+    request: Request, 
     data: schemas.ClientProfileUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
@@ -60,6 +62,7 @@ def update_client_profile(
 @router.get("/get/favorites", response_model=list[schemas.FavoriteRead])
 @limiter.limit("10/minute")
 def list_favorite_workers(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
 ):
@@ -72,6 +75,7 @@ def list_favorite_workers(
 @router.post("/add/favorites/{worker_id}", response_model=schemas.FavoriteRead)
 @limiter.limit("5/minute")
 def add_favorite_worker(
+    request: Request, 
     worker_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
@@ -85,6 +89,7 @@ def add_favorite_worker(
 @router.delete("/delete/favorites/{worker_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("5/minute")
 def remove_favorite_worker(
+    request: Request, 
     worker_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
@@ -103,6 +108,7 @@ def remove_favorite_worker(
 @router.get("/list/jobs", response_model=list[schemas.ClientJobRead])
 @limiter.limit("10/minute")
 def list_client_jobs(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
 ):
@@ -115,6 +121,7 @@ def list_client_jobs(
 @router.get("/get/jobs/{job_id}", response_model=schemas.ClientJobRead)
 @limiter.limit("10/minute")
 def get_client_job_detail(
+    request: Request, 
     job_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),

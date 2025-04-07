@@ -10,14 +10,14 @@ Defines API endpoints related to job reviews:
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
 from sqlalchemy.orm import Session
 
 from app.review import schemas
 from app.review.services import ReviewService
 from app.core.dependencies import get_db, get_current_user_with_role
 from app.database.models import User, UserRole
-from main import limiter
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
@@ -28,6 +28,7 @@ router = APIRouter(prefix="/reviews", tags=["Reviews"])
 @router.post("/{job_id}", response_model=schemas.ReviewRead, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def submit_review(
+    request: Request, 
     job_id: UUID,
     payload: schemas.ReviewWrite,
     db: Session = Depends(get_db),
@@ -49,6 +50,7 @@ def submit_review(
 @router.get("/worker/{worker_id}", response_model=list[schemas.ReviewRead])
 @limiter.limit("5/minute")
 def get_worker_reviews(
+    request: Request, 
     worker_id: UUID,
     db: Session = Depends(get_db),
 ):
@@ -64,6 +66,7 @@ def get_worker_reviews(
 @router.get("/my", response_model=list[schemas.ReviewRead])
 @limiter.limit("5/minute")
 def get_my_reviews(
+    request: Request, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_with_role(UserRole.CLIENT))
 ):
@@ -79,6 +82,7 @@ def get_my_reviews(
 @router.get("/summary/{worker_id}", response_model=schemas.WorkerReviewSummary)
 @limiter.limit("5/minute")
 def get_worker_review_summary(
+    request: Request, 
     worker_id: UUID,
     db: Session = Depends(get_db)
 ):

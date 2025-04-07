@@ -1,79 +1,109 @@
 backend/
-├── main.py                         # App entrypoint
-├── requirements.txt               # Python dependencies
-├── alembic.ini                    # Alembic config for migrations
-├── .env                           # Environment variables
-├── run.sh                         # Optional run script for local dev
-│
-├── app/                           # Core app directory
-│   ├── core/                      # Shared logic and utilities
-│   │   ├── config.py              # Settings loader (e.g., using Pydantic BaseSettings)
-│   │   ├── security.py            # JWT handling, password hashing
-│   │   ├── dependencies.py        # Role-based access control (RBAC), common deps
-│   │   └── logging.py             # Logging config and setup
-│   │
-│   ├── database/                  # DB models and session manager
-│   │   ├── base.py                # SQLAlchemy Base
-│   │   ├── session.py             # DB connection setup
-│   │   ├── models/                # Shared core models (User, KYC)
-│   │   └── enums.py               # Constants like user roles, job statuses
-│   │
-│   ├── auth/                      # Authentication module
-│   │   ├── routes.py
-│   │   ├── services.py
-│   │   ├── schemas.py
-│   │   └── utils.py
-│   │
-│   ├── client/                    # Client-related features
-│   │   ├── routes.py
-│   │   ├── services.py
-│   │   ├── schemas.py
-│   │   └── models.py
-│   │
-│   ├── worker/                    # Worker features and KYC
-│   │   ├── routes.py
-│   │   ├── services.py
-│   │   ├── schemas.py
-│   │   ├── models.py
-│   │   └── kyc.py                 # KYC-specific logic
-│   │
-│   ├── admin/                     # Admin-only tools
-│   │   ├── routes.py
-│   │   ├── services.py
-│   │   └── schemas.py
-│   │
-│   ├── service/                   # Worker service listings
-│   │   ├── routes.py
-│   │   ├── services.py
-│   │   ├── schemas.py
-│   │   └── models.py
-│   │
-│   ├── messaging/                 # Messaging system
-│   │   ├── routes.py
-│   │   ├── services.py
-│   │   ├── schemas.py
-│   │   └── models.py
-│   │
-│   ├── job/                       # Job creation and tracking
-│   │   ├── routes.py
-│   │   ├── services.py
-│   │   ├── schemas.py
-│   │   └── models.py
-│   │
-│   ├── review/                    # Worker reviews & ratings
-│   │   ├── routes.py
-│   │   ├── services.py
-│   │   ├── schemas.py
-│   │   └── models.py
-│
-├── alembic/                       # DB migration scripts (auto-generated)
-│   └── versions/                  # Versioned migration files
-│
-└── tests/                         # Test suite
-    ├── conftest.py                # Fixtures and test config
-    ├── auth/                      # Auth-related tests
-    ├── client/                    # Client tests
-    ├── worker/                    # Worker tests
-    ├── job/                       # Job lifecycle tests
-    ├── review/                    # Review tests
-    └── ... (other modules)
+├── main.py                         # Application entrypoint (FastAPI app instance)
+├── requirements.txt               # List of Python dependencies
+├── alembic.ini                    # Alembic configuration for database migrations
+├── .env                           # Environment variables for local development
+├── .env.sample                    # Example .env file for setup reference
+├── __init__.py                    # Marks the directory as a Python package
+├── venv/                          # Python virtual environment (not committed)
+
+├── alembic/                       # Alembic migration scripts
+│   ├── env.py                     # Alembic migration environment config
+│   └── versions/                  # Auto-generated migration version files
+
+├── logs/                          # Application logs
+│   └── app.log                    # Central log file for all backend activity
+
+├── uploads/                       # Uploaded files directory (e.g., KYC documents)
+
+├── app/                           # Core backend application
+│   ├── __init__.py
+
+│   ├── admin/                     # Admin-exclusive features and actions
+│   │   ├── routes.py              # API routes for admin tasks
+│   │   ├── schemas.py             # Pydantic models for admin operations
+│   │   └── services.py            # Business logic for admin functionality
+
+│   ├── auth/                      # Authentication and security
+│   │   ├── routes.py              # Endpoints for login, logout, OAuth
+│   │   ├── schemas.py             # Token and user login models
+│   │   └── services.py            # Authentication logic (JWT, token validation)
+
+│   ├── client/                    # Client-specific features
+│   │   ├── models.py              # Client profile and favorites models
+│   │   ├── routes.py              # API routes for clients
+│   │   ├── schemas.py             # Pydantic models for client operations
+│   │   └── services.py            # Business logic for client module
+
+│   ├── core/                      # Shared utilities and configuration
+│   │   ├── blacklist.py           # JWT token blacklisting using Redis
+│   │   ├── config.py              # App settings using Pydantic
+│   │   ├── dependencies.py        # Common dependencies and RBAC enforcement
+│   │   ├── limiter.py             # Rate Limiter Config
+│   │   ├── logging.py             # Centralized logging configuration
+│   │   └── upload.py              # Secure file upload handler
+
+│   ├── database/                  # Database models and session handling
+│   │   ├── base.py                # Base SQLAlchemy model for ORM
+│   │   ├── enums.py               # Reusable Enums (e.g., UserRole, JobStatus)
+│   │   ├── models.py              # Core shared models (User, KYC, relationships)
+│   │   └── session.py             # SQLAlchemy session and engine config
+
+│   ├── job/                       # Job tracking and lifecycle management
+│   │   ├── models.py              # Job model and status enum
+│   │   ├── routes.py              # API routes for jobs
+│   │   ├── schemas.py             # Job-related Pydantic models
+│   │   └── services.py            # Logic for accepting, completing, cancelling jobs
+
+│   ├── messaging/                 # Reusable messaging system (with WebSocket)
+│   │   ├── manager.py             # WebSocket connection manager
+│   │   ├── models.py              # Thread, message, and participant models
+│   │   ├── routes.py              # REST API endpoints for messaging
+│   │   ├── schemas.py             # Message/thread schemas
+│   │   ├── services.py            # Thread creation, message sending, and querying
+│   │   └── websocket.py           # WebSocket endpoint for real-time messaging
+
+│   ├── review/                    # Client-to-worker review and rating system
+│   │   ├── models.py              # Review model
+│   │   ├── routes.py              # Endpoints to create/read reviews
+│   │   ├── schemas.py             # Pydantic schemas for reviews
+│   │   └── services.py            # Logic to submit and retrieve reviews
+
+│   ├── service/                   # Worker service offerings
+│   │   ├── models.py              # Service listing model
+│   │   ├── routes.py              # Endpoints to create, update, delete, search services
+│   │   ├── schemas.py             # Pydantic models for service operations
+│   │   └── services.py            # Logic to manage service listings
+
+│   └── worker/                    # Worker-related features
+│       ├── models.py              # Worker profile model
+│       ├── routes.py              # Endpoints for profiles, KYC, and job view
+│       ├── schemas.py             # Pydantic schemas for workers
+│       └── services.py            # Profile, availability, KYC, job logic
+
+└── tests/                         # Automated tests for all modules
+    ├── conftest.py                # Shared test fixtures
+    ├── auth/
+    │   ├── test_routes.py
+    │   └── test_services.py
+    ├── client/
+    │   ├── test_routes.py
+    │   └── test_services.py
+    ├── worker/
+    │   ├── test_routes.py
+    │   └── test_services.py
+    ├── admin/
+    │   ├── test_routes.py
+    │   └── test_services.py
+    ├── service/
+    │   ├── test_routes.py
+    │   └── test_services.py
+    ├── messaging/
+    │   ├── test_routes.py
+    │   └── test_services.py
+    ├── job/
+    │   ├── test_routes.py
+    │   └── test_services.py
+    └── review/
+        ├── test_routes.py
+        └── test_services.py

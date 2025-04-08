@@ -6,7 +6,7 @@ Defines Pydantic schemas for worker profile operations:
 - Reading merged user and profile data
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
@@ -67,5 +67,5 @@ class WorkerProfileRead(WorkerProfileBase):
     location: Optional[str] = Field(default=None, description="Worker's location")
     profile_picture: Optional[str] = Field(default=None, description="URL to profile picture")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+

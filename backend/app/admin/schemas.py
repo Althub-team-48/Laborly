@@ -10,7 +10,7 @@ Defines response schemas for admin operations:
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # -----------------------------------------------------
@@ -52,5 +52,5 @@ class FlaggedReviewRead(BaseModel):
     is_flagged: bool = Field(..., description="Indicates whether the review is flagged")
     created_at: datetime = Field(..., description="Date and time the review was created")
 
-    class Config:
-        from_attributes = True  # Enables conversion from ORM models
+    model_config = ConfigDict(from_attributes=True)
+  # Enables conversion from ORM models

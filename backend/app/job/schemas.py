@@ -12,7 +12,7 @@ from uuid import UUID
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.job.models import JobStatus
 
@@ -85,5 +85,5 @@ class JobRead(BaseModel):
     created_at: datetime = Field(..., description="Timestamp when the job was created")
     updated_at: datetime = Field(..., description="Timestamp when the job was last updated")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+

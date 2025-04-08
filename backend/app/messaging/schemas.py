@@ -9,7 +9,7 @@ Pydantic schemas for reusable messaging system:
 from uuid import UUID
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # -------------------------------
@@ -36,8 +36,8 @@ class MessageRead(MessageBase):
     sender_id: UUID = Field(..., description="User ID of the message sender")
     timestamp: datetime = Field(..., description="Timestamp when the message was sent")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 # -------------------------------
@@ -46,8 +46,8 @@ class MessageRead(MessageBase):
 class ThreadParticipantRead(BaseModel):
     user_id: UUID = Field(..., description="User ID of the participant")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 # -------------------------------
@@ -61,5 +61,5 @@ class ThreadRead(BaseModel):
     participants: List[ThreadParticipantRead] = Field(..., description="Users involved in the thread")
     messages: List[MessageRead] = Field(..., description="Messages in the thread")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+

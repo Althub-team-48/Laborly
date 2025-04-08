@@ -6,7 +6,7 @@ Utilizes Pydantic BaseSettings for type validation and `.env` support.
 """
 
 from pydantic_settings import BaseSettings
-
+from pydantic import ConfigDict
 
 class Settings(BaseSettings):
     """
@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
 
-    class Config:
-        env_file = ".env"  # Load variables from .env file
-        extra = "forbid"   # controls undeclared vars, false by default
-
+    model_config = ConfigDict(
+            env_file=".env",    # Load variables from .env file
+            extra="forbid"      # controls undeclared vars, false by default
+        )
 
 # Instantiate the settings for global use
 settings = Settings()

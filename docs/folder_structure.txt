@@ -84,26 +84,26 @@ backend/
 └── tests/                         # Automated tests for all modules
     ├── conftest.py                # Shared test fixtures
     ├── auth/
-    │   ├── test_routes.py
-    │   └── test_services.py
+    │   ├── test_auth_routes.py
+    │   └── test_auth_services.py
     ├── client/
-    │   ├── test_routes.py
-    │   └── test_services.py
+    │   ├── test_client_routes.py
+    │   └── test_client_services.py
     ├── worker/
-    │   ├── test_routes.py
-    │   └── test_services.py
+    │   ├── test_worker_routes.py
+    │   └── test_worker_services.py
     ├── admin/
-    │   ├── test_routes.py
-    │   └── test_services.py
+    │   ├── test_admin_routes.py
+    │   └── test_admin_services.py
     ├── service/
-    │   ├── test_routes.py
-    │   └── test_services.py
+    │   ├── test_service_routes.py
+    │   └── test_service_services.py
     ├── messaging/
-    │   ├── test_routes.py
-    │   └── test_services.py
+    │   ├── test_messaging_routes.py
+    │   └── test_messaging_services.py
     ├── job/
-    │   ├── test_routes.py
-    │   └── test_services.py
+    │   ├── test_job_routes.py
+    │   └── test_job_services.py
     └── review/
-        ├── test_routes.py
-        └── test_services.py
+        ├── test_review_routes.py
+        └── test_review_services.py

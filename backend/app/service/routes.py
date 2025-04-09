@@ -11,7 +11,7 @@ from uuid import UUID
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.service import schemas
 from app.service.services import ServiceListingService
@@ -22,82 +22,67 @@ from app.database.models import User, UserRole
 router = APIRouter(prefix="/services", tags=["Services"])
 
 
-# --------------------------------------------------
-# Create a new service listing (Worker or Admin)
-# --------------------------------------------------
+# ---------------------------
+# Create Service
+# ---------------------------
 @router.post("", response_model=schemas.ServiceRead)
-def create_service(
-    request: Request, 
+async def create_service(
+    request: Request,
     data: schemas.ServiceCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    """
-    Create a new service listing for the authenticated worker.
-    """
-    return ServiceListingService(db).create_service(current_user.id, data)
+    return await ServiceListingService(db).create_service(current_user.id, data)
 
 
-# --------------------------------------------------
-# Update an existing service (Worker or Admin)
-# --------------------------------------------------
+# ---------------------------
+# Update Service
+# ---------------------------
 @router.put("/{service_id}", response_model=schemas.ServiceRead)
-def update_service(
-    request: Request, 
+async def update_service(
+    request: Request,
     service_id: UUID,
     data: schemas.ServiceUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    """
-    Update a service listing owned by the authenticated worker.
-    """
-    return ServiceListingService(db).update_service(current_user.id, service_id, data)
+    return await ServiceListingService(db).update_service(current_user.id, service_id, data)
 
 
-# --------------------------------------------------
-# Delete a service listing (Worker or Admin)
-# --------------------------------------------------
+# ---------------------------
+# Delete Service
+# ---------------------------
 @router.delete("/{service_id}")
-def delete_service(
-    request: Request, 
+async def delete_service(
+    request: Request,
     service_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    """
-    Delete a service listing owned by the authenticated worker.
-    """
-    ServiceListingService(db).delete_service(current_user.id, service_id)
+    await ServiceListingService(db).delete_service(current_user.id, service_id)
     return {"detail": "Service deleted successfully"}
 
 
-# --------------------------------------------------
-# List all services by current authenticated user
-# --------------------------------------------------
+# ---------------------------
+# List My Services
+# ---------------------------
 @router.get("/my", response_model=List[schemas.ServiceRead])
-def list_my_services(
-    request: Request, 
-    db: Session = Depends(get_db),
+async def list_my_services(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    """
-    Get all services created by the authenticated worker.
-    """
-    return ServiceListingService(db).get_my_services(current_user.id)
+    return await ServiceListingService(db).get_my_services(current_user.id)
 
 
-# --------------------------------------------------
-# Public search for services (No login required)
-# --------------------------------------------------
+# ---------------------------
+# Search Public Services
+# ---------------------------
 @router.get("/search", response_model=List[schemas.ServiceRead])
-def search_services(
-    request: Request, 
+async def search_services(
+    request: Request,
     title: Optional[str] = Query(default=None, description="Filter by service title"),
     location: Optional[str] = Query(default=None, description="Filter by service location"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Public search endpoint to find services by title and/or location.
-    """
-    return ServiceListingService(db).search_services(title=title, location=location)
+    return await ServiceListingService(db).search_services(title=title, location=location)

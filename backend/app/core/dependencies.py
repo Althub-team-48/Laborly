@@ -9,60 +9,43 @@ Provides authentication and role-based access control (RBAC) dependencies for Fa
 """
 
 import logging
+from typing import AsyncGenerator
 from uuid import UUID
-from typing import Generator
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.schemas import TokenPayload
 from app.core.blacklist import is_token_blacklisted
 from app.core.config import settings
-from app.database.session import SessionLocal
-from app.database.models import User
 from app.database.enums import UserRole
+from app.database.models import User
+from app.database.session import AsyncSessionLocal
 
-# ----------------------------------------
-# Logging Configuration
-# ----------------------------------------
 logger = logging.getLogger(__name__)
 
-# ----------------------------------------
-# OAuth2 Bearer Token Scheme
-# ----------------------------------------
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/auth/login/oauth"  # OAuth2-compatible login endpoint
-)
+# OAuth2 password bearer token scheme (for OAuth-based login)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login/oauth")
 
 
-# ----------------------------------------
-# DATABASE SESSION DEPENDENCY
-# ----------------------------------------
-def get_db() -> Generator[Session, None, None]:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    Dependency that provides a SQLAlchemy session and ensures proper teardown.
+    Dependency to get a database session.
     """
-    db = SessionLocal()
-    try:
+    async with AsyncSessionLocal() as db:
         yield db
-    finally:
-        db.close()
 
 
-# ----------------------------------------
-# AUTHENTICATED USER DEPENDENCY
-# ----------------------------------------
-def get_current_user(
+async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> User:
     """
-    Validates JWT token, checks blacklist, and retrieves user from the database.
-
-    Raises:
-        HTTPException 401 if token is invalid, expired, blacklisted, or user not found.
+    Extract the user from the JWT token.
+    Validate token, check blacklist, and retrieve user from the DB.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -71,11 +54,9 @@ def get_current_user(
     )
 
     try:
-        # Decode JWT token
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         token_data = TokenPayload(**payload)
 
-        # Check Redis token blacklist
         jti = payload.get("jti")
         if jti and is_token_blacklisted(jti):
             logger.warning(f"Token {jti} is blacklisted")
@@ -85,8 +66,10 @@ def get_current_user(
         logger.warning(f"JWT decoding failed: {e}")
         raise credentials_exception
 
-    # Fetch user from DB
-    user = db.query(User).filter(User.id == token_data.sub).first()
+    user = (await db.execute(
+        select(User).filter(User.id == token_data.sub))
+    ).scalar_one_or_none()
+
     if not user:
         logger.warning(f"JWT valid but no user found: user_id={token_data.sub}")
         raise credentials_exception
@@ -94,26 +77,19 @@ def get_current_user(
     return user
 
 
-# ----------------------------------------
-# ROLE-RESTRICTED ACCESS DEPENDENCIES
-# ----------------------------------------
-
 def get_current_user_with_role(required_role: UserRole):
     """
-    Returns a dependency that ensures the current user has a specific role.
-
-    Usage:
-        Depends(get_current_user_with_role(UserRole.ADMIN))
+    Restrict access to users with an exact required role.
     """
-    def role_dependency(user: User = Depends(get_current_user)) -> User:
+
+    async def role_dependency(user: User = Depends(get_current_user)) -> User:
         if user.role != required_role:
             logger.warning(
-                f"Access denied: User {user.id} has role {user.role}, "
-                f"required: {required_role}"
+                f"Access denied: User {user.id} has role {user.role}, required: {required_role}"
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied for role: {user.role}"
+                detail=f"Access denied for role: {user.role}",
             )
         return user
 
@@ -122,23 +98,17 @@ def get_current_user_with_role(required_role: UserRole):
 
 def require_roles(*roles: UserRole):
     """
-    Dependency to restrict access to users with any of the specified roles.
-
-    Usage:
-        Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN))
-
-    Raises:
-        HTTPException 403 if the user's role is not among the allowed roles.
+    Restrict access to users with any one of the specified roles.
     """
-    def checker(user: User = Depends(get_current_user)) -> User:
+
+    async def checker(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
             logger.warning(
-                f"Access denied: User {user.id} with role {user.role} "
-                f"attempted to access restricted area (allowed: {roles})"
+                f"Access denied: User {user.id} with role {user.role} attempted to access restricted area (allowed: {roles})"
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied for role: {user.role}"
+                detail=f"Access denied for role: {user.role}",
             )
         return user
 

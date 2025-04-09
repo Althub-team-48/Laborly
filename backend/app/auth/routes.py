@@ -17,13 +17,12 @@ from fastapi import (
     HTTPException,
     status,
     Request,
-    Header,
 )
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from sqlalchemy.orm import Session
-from slowapi import Limiter
+from jose import jwt, JWTError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.schemas import (
     LoginRequest,
@@ -41,25 +40,31 @@ from app.auth.services import (
 from app.core.blacklist import blacklist_token
 from app.core.config import settings
 from app.core.dependencies import get_db, oauth2_scheme
-from app.database.models import User
-from app.database.enums import UserRole
 from app.core.limiter import limiter
+from app.database.enums import UserRole
+from app.database.models import User
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------
-# User Registration
-# ---------------------------------------------------
-
+# -----------------------------
+# Register a new user
+# -----------------------------
 @router.post("/signup", response_model=AuthSuccessResponse)
 @limiter.limit("5/minute")
-def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_db)):
+async def signup(
+    request: Request,
+    payload: SignupRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Register a new user and return a JWT token with user info.
+    Create a new user account.
     """
-    existing_user = db.query(User).filter(User.email == payload.email).first()
+    existing_user = (
+        await db.execute(select(User).filter(User.email == payload.email))
+    ).scalar_one_or_none()
+
     if existing_user:
         logger.warning(f"[SIGNUP] Email already registered: {payload.email}")
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -74,11 +79,10 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
     )
 
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
 
     logger.info(f"[SIGNUP] New user registered: {new_user.email} | Role: {new_user.role}")
-
     token = create_access_token({"sub": str(new_user.id), "role": new_user.role})
     return AuthSuccessResponse(
         access_token=token,
@@ -86,23 +90,28 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
     )
 
 
-# ---------------------------------------------------
-# Login with JSON Credentials
-# ---------------------------------------------------
-
+# -----------------------------
+# Login via JSON credentials
+# -----------------------------
 @router.post("/login/json", response_model=AuthSuccessResponse)
 @limiter.limit("10/minute")
-def login_json(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
+async def login_json(
+    request: Request,
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Authenticate a user using JSON email/password.
+    Log in using email and password (JSON body).
     """
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = (
+        await db.execute(select(User).filter(User.email == payload.email))
+    ).scalar_one_or_none()
+
     if not user or not verify_password(payload.password, user.hashed_password):
         logger.warning(f"[LOGIN-JSON] Invalid login attempt: {payload.email}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     logger.info(f"[LOGIN-JSON] Success: {user.email} | Role: {user.role}")
-
     token = create_access_token({"sub": str(user.id), "role": user.role})
     return AuthSuccessResponse(
         access_token=token,
@@ -110,27 +119,28 @@ def login_json(request: Request, payload: LoginRequest, db: Session = Depends(ge
     )
 
 
-# ---------------------------------------------------
-# Login with OAuth2 Form Fields
-# ---------------------------------------------------
-
+# -----------------------------
+# Login via OAuth2 form
+# -----------------------------
 @router.post("/login/oauth", response_model=AuthSuccessResponse)
 @limiter.limit("10/minute")
-def login_oauth(
-    request: Request, 
+async def login_oauth(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Authenticate a user using OAuth2-compatible form fields.
+    Log in using OAuth2-compatible form (username = email).
     """
-    user = db.query(User).filter(User.email == form_data.username).first()
+    user = (
+        await db.execute(select(User).filter(User.email == form_data.username))
+    ).scalar_one_or_none()
+
     if not user or not verify_password(form_data.password, user.hashed_password):
         logger.warning(f"[LOGIN-OAUTH2] Invalid login attempt: {form_data.username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     logger.info(f"[LOGIN-OAUTH2] Success: {user.email} | Role: {user.role}")
-
     token = create_access_token({"sub": str(user.id), "role": user.role})
     return AuthSuccessResponse(
         access_token=token,
@@ -138,48 +148,57 @@ def login_oauth(
     )
 
 
-# ---------------------------------------------------
-# Google OAuth2 Login Flow
-# ---------------------------------------------------
-
+# -----------------------------
+# Google OAuth2 Login (Step 1)
+# -----------------------------
 @router.get("/google/login")
 @limiter.limit("10/minute")
 async def google_login(request: Request):
     """
-    Start Google OAuth2 login redirect.
+    Initiate Google OAuth2 login and redirect user to Google consent screen.
     """
     return await handle_google_login(request)
 
 
+# -----------------------------
+# Google OAuth2 Callback (Step 2)
+# -----------------------------
 @router.get("/google/callback")
 @limiter.limit("10/minute")
-async def google_callback(request: Request, db: Session = Depends(get_db)):
+async def google_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Handle Google OAuth2 callback, register user if new,
-    and return a JWT access token.
+    Handle Google callback and complete user authentication.
     """
     return await handle_google_callback(request, db)
 
 
-# ---------------------------------------------------
-# User Logout
-# ---------------------------------------------------
-
+# -----------------------------
+# Logout (JWT blacklist)
+# -----------------------------
 @router.post("/logout")
 @limiter.limit("20/minute")
-def logout_user(request: Request, token: str = Depends(oauth2_scheme)):
+async def logout_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+):
     """
-    Logs out the current user by blacklisting their JWT.
+    Logout the user by blacklisting their JWT token.
     """
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         jti = payload.get("jti")
         exp = payload.get("exp")
+
         if jti and exp:
             ttl = exp - int(datetime.utcnow().timestamp())
             blacklist_token(jti, ttl)
             logger.info(f"[LOGOUT] Token jti={jti} blacklisted for {ttl} seconds.")
+
         return {"detail": "Logout successful"}
+
     except JWTError:
         logger.warning("[LOGOUT] Invalid token on logout request.")
         raise HTTPException(status_code=400, detail="Invalid token")

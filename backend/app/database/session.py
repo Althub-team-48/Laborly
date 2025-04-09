@@ -2,28 +2,36 @@
 database/session.py
 
 Initializes the SQLAlchemy database engine and session factory.
-Provides a dependency-compatible generator for database sessions.
+Provides a dependency-compatible AsyncGenerator for database sessions.
 """
 
-from sqlalchemy import create_engine
+from typing import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from typing import Generator
 
 from app.core.config import settings
 
-# Create the SQLAlchemy engine using the database URL from settings
-engine = create_engine(settings.DATABASE_URL)
+# --------------------------------------
+# SQLAlchemy Async Engine Initialization
+# --------------------------------------
+engine = create_async_engine(settings.DATABASE_URL, echo=True)
 
-# Configure a session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# --------------------------------------
+# Session Factory for Async DB Access
+# --------------------------------------
+AsyncSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    autocommit=False,
+    autoflush=False,
+)
 
-def get_db() -> Generator:
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    Dependency generator to provide a database session.
-    Ensures proper closing of the session after use.
+    Dependency function for FastAPI to provide an async DB session.
+    Yields a single session per request and closes it afterward.
     """
-    db = SessionLocal()
-    try:
+    async with AsyncSessionLocal() as db:
         yield db
-    finally:
-        db.close()

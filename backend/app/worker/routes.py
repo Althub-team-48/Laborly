@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import (
     APIRouter, Depends, UploadFile, File, Form, Request
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.limiter import limiter
 from app.worker.services import WorkerService
@@ -24,69 +24,70 @@ from app.core.upload import save_upload_file
 router = APIRouter(prefix="/worker", tags=["Worker"])
 
 
-# -------------------------------------------------
-# Worker Profile Endpoints
-# -------------------------------------------------
+# ----------------------------------------------------
+# Profile Endpoints
+# ----------------------------------------------------
+
 @router.get("/profile", response_model=schemas.WorkerProfileRead)
 @limiter.limit("10/minute")
-def get_worker_profile(
-    request: Request, 
-    db: Session = Depends(get_db),
+async def get_worker_profile(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
     """
-    Retrieve the authenticated worker's profile.
+    Retrieve the worker's profile details.
     """
-    return WorkerService(db).get_profile(current_user.id)
+    return await WorkerService(db).get_profile(current_user.id)
 
 
 @router.patch("/profile", response_model=schemas.WorkerProfileRead)
 @limiter.limit("5/minute")
-def update_worker_profile(
-    request: Request, 
+async def update_worker_profile(
+    request: Request,
     data: schemas.WorkerProfileUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
     """
-    Update the authenticated worker's profile.
+    Update worker profile fields (skills, experience, etc.).
     """
-    return WorkerService(db).update_profile(current_user.id, data)
+    return await WorkerService(db).update_profile(current_user.id, data)
 
 
-# -------------------------------------------------
-# KYC Submission Endpoints
-# -------------------------------------------------
+# ----------------------------------------------------
+# KYC Endpoints
+# ----------------------------------------------------
+
 @router.get("/kyc")
 @limiter.limit("10/minute")
-def get_worker_kyc(
-    request: Request, 
-    db: Session = Depends(get_db),
+async def get_worker_kyc(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
     """
-    Retrieve the current KYC status and documents for the worker.
+    Get current KYC status for the worker.
     """
-    return WorkerService(db).get_kyc(current_user.id)
+    return await WorkerService(db).get_kyc(current_user.id)
 
 
 @router.post("/kyc")
 @limiter.limit("3/minute")
-def submit_worker_kyc(
-    request: Request, 
+async def submit_worker_kyc(
+    request: Request,
     document_type: str = Form(...),
     document_file: UploadFile = File(...),
     selfie_file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
     """
-    Submit KYC documents (ID and selfie) for admin verification.
+    Submit KYC documents for verification (ID + Selfie).
     """
     document_path = save_upload_file(document_file, subfolder="kyc")
     selfie_path = save_upload_file(selfie_file, subfolder="kyc")
-
-    return WorkerService(db).submit_kyc(
+    return await WorkerService(db).submit_kyc(
         user_id=current_user.id,
         document_type=document_type,
         document_path=document_path,
@@ -94,31 +95,32 @@ def submit_worker_kyc(
     )
 
 
-# -------------------------------------------------
-# Worker Job Endpoints
-# -------------------------------------------------
+# ----------------------------------------------------
+# Job History Endpoints
+# ----------------------------------------------------
+
 @router.get("/jobs")
 @limiter.limit("10/minute")
-def list_worker_jobs(
-    request: Request, 
-    db: Session = Depends(get_db),
+async def list_worker_jobs(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
     """
-    List all jobs currently assigned to the authenticated worker.
+    Get a list of all jobs assigned to the worker.
     """
-    return WorkerService(db).get_jobs(current_user.id)
+    return await WorkerService(db).get_jobs(current_user.id)
 
 
 @router.get("/jobs/{job_id}")
 @limiter.limit("10/minute")
-def get_worker_job_detail(
-    request: Request, 
+async def get_worker_job_detail(
+    request: Request,
     job_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
     """
-    Retrieve detailed information for a specific job assigned to the worker.
+    Retrieve details for a specific job assigned to the worker.
     """
-    return WorkerService(db).get_job_detail(current_user.id, job_id)
+    return await WorkerService(db).get_job_detail(current_user.id, job_id)

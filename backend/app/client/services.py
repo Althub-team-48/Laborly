@@ -11,7 +11,8 @@ import logging
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.client import models, schemas
 from app.database.models import User
@@ -22,107 +23,121 @@ logger = logging.getLogger(__name__)
 
 class ClientService:
     """
-    Encapsulates all business logic for the Client module.
+    Provides methods for handling client-specific operations.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    # -------------------------------------------
+    # -------------------------------
     # Client Profile Management
-    # -------------------------------------------
+    # -------------------------------
 
-    def get_profile(self, user_id: UUID) -> schemas.ClientProfileRead:
+    async def get_profile(self, user_id: UUID) -> schemas.ClientProfileRead:
         """
-        Retrieve the client profile and merge user account data.
-        Creates a new profile automatically if one does not exist.
+        Retrieve or create a client profile for the user.
         """
         logger.info(f"Retrieving client profile for user_id={user_id}")
 
-        user = self.db.query(User).filter_by(id=user_id).first()
+        user = (await self.db.execute(
+            select(User).filter(User.id == user_id))
+        ).scalar_one_or_none()
+
         if not user:
             logger.warning(f"User not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="User not found")
 
-        profile = self.db.query(models.ClientProfile).filter_by(user_id=user_id).first()
+        profile = (await self.db.execute(
+            select(models.ClientProfile).filter(models.ClientProfile.user_id == user_id))
+        ).scalar_one_or_none()
+
         if not profile:
             logger.info(f"No profile found. Creating new one for user_id={user_id}")
             profile = models.ClientProfile(user_id=user_id)
             self.db.add(profile)
-            self.db.commit()
-            self.db.refresh(profile)
+            await self.db.commit()
+            await self.db.refresh(profile)
             logger.info(f"New profile created: profile_id={profile.id}")
 
-        # Merge profile and user data for output
         merged = {
             **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
-            **{k: v for k, v in vars(user).items() if not k.startswith("_")},
+            **{k: v for k, v in vars(user).items() if not k.startswith("_")}
         }
         return schemas.ClientProfileRead.model_validate(merged)
 
-    def update_profile(self, user_id: UUID, update: schemas.ClientProfileUpdate) -> schemas.ClientProfileRead:
+    async def update_profile(self, user_id: UUID, update: schemas.ClientProfileUpdate) -> schemas.ClientProfileRead:
         """
-        Update both user and profile details for the given client.
+        Update both user and profile fields for the client.
         """
         logger.info(f"Updating profile for user_id={user_id}")
 
-        user = self.db.query(User).filter_by(id=user_id).first()
-        profile = self.db.query(models.ClientProfile).filter_by(user_id=user_id).first()
+        user = (await self.db.execute(
+            select(User).filter(User.id == user_id))
+        ).scalar_one_or_none()
+
+        profile = (await self.db.execute(
+            select(models.ClientProfile).filter(models.ClientProfile.user_id == user_id))
+        ).scalar_one_or_none()
 
         if not user:
             logger.warning(f"User not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="User not found")
+
         if not profile:
             logger.warning(f"Profile not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="Client profile not found")
 
         fields = update.model_dump(exclude_unset=True)
 
-        # Update user attributes
+        # Update User model fields
         for attr in ["first_name", "last_name", "location", "profile_picture"]:
             if attr in fields:
                 setattr(user, attr, fields[attr])
                 logger.debug(f"Updated User.{attr} = {fields[attr]}")
 
-        # Update profile-specific attributes
+        # Update ClientProfile model fields
         for attr in ["business_name"]:
             if attr in fields:
                 setattr(profile, attr, fields[attr])
                 logger.debug(f"Updated ClientProfile.{attr} = {fields[attr]}")
 
-        self.db.commit()
-        self.db.refresh(user)
-        self.db.refresh(profile)
+        await self.db.commit()
+        await self.db.refresh(user)
+        await self.db.refresh(profile)
 
         logger.info(f"Profile updated for user_id={user_id}, profile_id={profile.id}")
 
         merged = {
             **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
-            **{k: v for k, v in vars(user).items() if not k.startswith("_")},
+            **{k: v for k, v in vars(user).items() if not k.startswith("_")}
         }
         return schemas.ClientProfileRead.model_validate(merged)
 
-    # -------------------------------------------
-    # Favorite Worker Management
-    # -------------------------------------------
+    # -------------------------------
+    # Favorites Management
+    # -------------------------------
 
-    def list_favorites(self, client_id: UUID):
+    async def list_favorites(self, client_id: UUID):
         """
-        List all favorite workers for a given client.
+        Retrieve all favorite workers saved by the client.
         """
         logger.info(f"Listing favorites for client_id={client_id}")
-        return self.db.query(models.FavoriteWorker).filter_by(client_id=client_id).all()
+        return (await self.db.execute(
+            select(models.FavoriteWorker).filter(models.FavoriteWorker.client_id == client_id))
+        ).scalars().all()
 
-    def add_favorite(self, client_id: UUID, worker_id: UUID) -> models.FavoriteWorker:
+    async def add_favorite(self, client_id: UUID, worker_id: UUID) -> models.FavoriteWorker:
         """
         Add a worker to the client's list of favorites.
         """
         logger.info(f"Adding favorite: client_id={client_id}, worker_id={worker_id}")
 
-        existing = self.db.query(models.FavoriteWorker).filter_by(
-            client_id=client_id,
-            worker_id=worker_id
-        ).first()
+        existing = (await self.db.execute(
+            select(models.FavoriteWorker).filter(
+                models.FavoriteWorker.client_id == client_id,
+                models.FavoriteWorker.worker_id == worker_id
+            ))
+        ).scalar_one_or_none()
 
         if existing:
             logger.warning("Worker already favorited")
@@ -130,49 +145,59 @@ class ClientService:
 
         favorite = models.FavoriteWorker(client_id=client_id, worker_id=worker_id)
         self.db.add(favorite)
-        self.db.commit()
-        self.db.refresh(favorite)
+        await self.db.commit()
+        await self.db.refresh(favorite)
 
         logger.info(f"Favorite added: favorite_id={favorite.id}")
         return favorite
 
-    def remove_favorite(self, client_id: UUID, worker_id: UUID):
+    async def remove_favorite(self, client_id: UUID, worker_id: UUID):
         """
         Remove a worker from the client's favorites list.
         """
         logger.info(f"Removing favorite: client_id={client_id}, worker_id={worker_id}")
 
-        favorite = self.db.query(models.FavoriteWorker).filter_by(
-            client_id=client_id,
-            worker_id=worker_id
-        ).first()
+        favorite = (await self.db.execute(
+            select(models.FavoriteWorker).filter(
+                models.FavoriteWorker.client_id == client_id,
+                models.FavoriteWorker.worker_id == worker_id
+            ))
+        ).scalar_one_or_none()
 
         if not favorite:
             logger.warning("Favorite not found")
             raise HTTPException(status_code=404, detail="Favorite not found")
 
         self.db.delete(favorite)
-        self.db.commit()
+        await self.db.commit()
+
         logger.info("Favorite removed successfully")
 
-    # -------------------------------------------
-    # Job History Management
-    # -------------------------------------------
+    # -------------------------------
+    # Job History
+    # -------------------------------
 
-    def get_jobs(self, client_id: UUID):
+    async def get_jobs(self, client_id: UUID):
         """
-        Retrieve all jobs submitted by the client.
+        Retrieve all jobs created by the client.
         """
         logger.info(f"Fetching job list for client_id={client_id}")
-        return self.db.query(Job).filter_by(client_id=client_id).all()
+        return (await self.db.execute(
+            select(Job).filter(Job.client_id == client_id))
+        ).scalars().all()
 
-    def get_job_detail(self, client_id: UUID, job_id: UUID):
+    async def get_job_detail(self, client_id: UUID, job_id: UUID):
         """
-        Retrieve a specific job record by the client.
+        Retrieve detailed info about a job created by the client.
         """
         logger.info(f"Fetching job detail: client_id={client_id}, job_id={job_id}")
 
-        job = self.db.query(Job).filter_by(id=job_id, client_id=client_id).first()
+        job = (await self.db.execute(
+            select(Job).filter(
+                Job.id == job_id,
+                Job.client_id == client_id
+            ))
+        ).scalar_one_or_none()
 
         if not job:
             logger.warning("Job not found or unauthorized access")

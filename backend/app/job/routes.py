@@ -13,8 +13,8 @@ All routes require authentication.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status, Request
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.job import schemas
 from app.job.services import JobService
@@ -26,95 +26,95 @@ from app.core.limiter import limiter
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 
-# -----------------------------------
-# Accept a Job
-# -----------------------------------
+# ---------------------------
+# Accept Job
+# ---------------------------
 @router.post("/{worker_id}/{service_id}/accept", status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
-def accept_job(
-    request: Request, 
+async def accept_job(
+    request: Request,
     worker_id: UUID,
     service_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Allows a client to initiate a job by accepting a worker's service.
+    Client initiates a job request for a specific worker and service.
     """
-    return JobService(db).accept_job(
+    return await JobService(db).accept_job(
         client_id=current_user.id,
         worker_id=worker_id,
         service_id=service_id
     )
 
 
-# -----------------------------------
-# Complete a Job
-# -----------------------------------
+# ---------------------------
+# Complete Job
+# ---------------------------
 @router.put("/{job_id}/complete", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
-def complete_job(
-    request: Request, 
+async def complete_job(
+    request: Request,
     job_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Marks a job as completed by the client.
+    Worker marks a job as completed.
     """
-    return JobService(db).complete_job(current_user.id, job_id)
+    return await JobService(db).complete_job(current_user.id, job_id)
 
 
-# -----------------------------------
-# Cancel a Job
-# -----------------------------------
+# ---------------------------
+# Cancel Job
+# ---------------------------
 @router.put("/{job_id}/cancel", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
-def cancel_job(
-    request: Request, 
+async def cancel_job(
+    request: Request,
     job_id: UUID,
     payload: schemas.CancelJobRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Cancels a job with a provided reason.
+    Client cancels a job with a reason.
     """
-    return JobService(db).cancel_job(
+    return await JobService(db).cancel_job(
         client_id=current_user.id,
         job_id=job_id,
         reason=payload.cancel_reason
     )
 
 
-# -----------------------------------
-# List All Jobs for Current User
-# -----------------------------------
+# ---------------------------
+# List Jobs for Current User
+# ---------------------------
 @router.get("", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
-def get_jobs_for_user(
-    request: Request, 
-    db: Session = Depends(get_db),
+async def get_jobs_for_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Retrieves all jobs (as client or worker) for the current user.
+    Returns all jobs related to the authenticated user (client or worker).
     """
-    return JobService(db).get_all_jobs_for_user(current_user.id)
+    return await JobService(db).get_all_jobs_for_user(current_user.id)
 
 
-# -----------------------------------
+# ---------------------------
 # Get Job Details
-# -----------------------------------
+# ---------------------------
 @router.get("/{job_id}", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
-def get_job_detail(
-    request: Request, 
+async def get_job_detail(
+    request: Request,
     job_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Retrieves detailed information for a specific job involving the current user.
+    Retrieve detailed information about a specific job.
     """
-    return JobService(db).get_job_detail(current_user.id, job_id)
+    return await JobService(db).get_job_detail(current_user.id, job_id)

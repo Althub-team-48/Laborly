@@ -11,11 +11,9 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     String,
-    Text,
     DateTime,
     ForeignKey,
-    Boolean,
-    Integer
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import mapped_column, Mapped, relationship
@@ -29,61 +27,46 @@ if TYPE_CHECKING:
 # ------------------------------------------------------
 # WorkerProfile Model
 # ------------------------------------------------------
+
 class WorkerProfile(Base):
+    """
+    Represents additional profile information for users with the 'WORKER' role.
+    Stores professional background and experience of the worker.
+    """
     __tablename__ = "worker_profiles"
 
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+    id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for a worker profile"
+        comment="Unique identifier for the worker profile"
     )
 
-    user_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+    user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id"),
-        unique=True,
         nullable=False,
-        comment="Related user account"
+        comment="Reference to the associated user"
     )
 
-    bio: Mapped[str] = mapped_column(
-        Text,
+    professional_skills: Mapped[str] = mapped_column(
+        String,
         nullable=True,
-        comment="Short biography of the worker"
+        comment="Comma-separated list of skills (e.g., plumbing, carpentry)"
     )
 
-    years_experience: Mapped[int] = mapped_column(
-        Integer,
+    work_experience: Mapped[str] = mapped_column(
+        String,
         nullable=True,
-        comment="Number of years of relevant experience"
+        comment="Brief summary of the worker's experience or background"
     )
 
-    availability_note: Mapped[str] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Custom note regarding availability (e.g., preferred hours)"
-    )
-
-    is_available: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        nullable=False,
-        comment="Availability status for taking on job assignments"
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc),
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
         comment="Timestamp when the profile was created"
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        comment="Timestamp when the profile was last updated"
+    # One-to-one relationship back to User model
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="worker_profile"
     )
-
-    # One-to-one relationship with the User model
-    user: Mapped["User"] = relationship("User", back_populates="worker_profile")

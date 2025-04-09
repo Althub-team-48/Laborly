@@ -7,92 +7,41 @@ Defines the Review model for storing job-related feedback.
 """
 
 from datetime import datetime
-from uuid import uuid4, UUID
+from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
 
-from sqlalchemy import (
-    ForeignKey, Integer, Text, DateTime, Boolean
-)
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
 
+if TYPE_CHECKING:
+    from app.database.models import User
+
 
 class Review(Base):
+    """
+    Review submitted by a client about a worker for a specific job.
+    Includes a star rating (1-5), optional review text, and admin moderation flag.
+    """
     __tablename__ = "reviews"
 
-    id: Mapped[UUID] = mapped_column(
-        primary_key=True,
-        default=uuid4,
-        comment="Unique identifier for the review"
-    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
 
-    reviewer_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id"),
-        nullable=False,
-        comment="User who wrote the review (usually the client)"
-    )
+    # Review content
+    review_text: Mapped[str] = mapped_column(String, nullable=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    worker_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id"),
-        nullable=False,
-        comment="Worker being reviewed"
-    )
-
-    job_id: Mapped[UUID] = mapped_column(
-        ForeignKey("jobs.id"),
-        unique=True,
-        nullable=False,
-        comment="Associated job (enforces one review per job)"
-    )
-
-    rating: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        comment="Star rating from 1 to 5"
-    )
-
-    text: Mapped[str] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Optional textual feedback"
-    )
-
-    is_flagged: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        comment="Admin moderation flag"
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.now,
-        comment="Timestamp when review was created"
-    )
-
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.now,
-        onupdate=datetime.now,
-        comment="Timestamp when review was last updated"
-    )
-
-    # ----------------------------
     # Relationships
-    # ----------------------------
+    client_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    worker_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
 
-    reviewer = relationship(
-        "User",
-        foreign_keys=[reviewer_id],
-        back_populates="given_reviews"
-    )
+    # Admin moderation
+    is_flagged: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    worker = relationship(
-        "User",
-        foreign_keys=[worker_id],
-        back_populates="received_reviews"
-    )
+    # Timestamp
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    job = relationship(
-        "Job",
-        back_populates="review"
-    )
+    # Relationship mappings
+    client: Mapped["User"] = relationship("User", back_populates="given_reviews", foreign_keys=[client_id])
+    worker: Mapped["User"] = relationship("User", back_populates="received_reviews", foreign_keys=[worker_id])

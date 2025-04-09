@@ -9,11 +9,11 @@ Defines API routes for administrative actions such as:
 
 from uuid import UUID
 import logging
-
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.services import AdminService
+from app.admin.schemas import KYCReviewResponse, UserStatusUpdateResponse, FlaggedReviewRead
 from app.core.dependencies import get_db, get_current_user_with_role
 from app.core.limiter import limiter
 from app.database.enums import UserRole
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # KYC Approval/Moderation
 # ---------------------------
 
-@router.get("/kyc/pending")
+@router.get("/kyc/pending", response_model=list[KYCReviewResponse], status_code=status.HTTP_200_OK)
 @limiter.limit("10/minute")
 async def get_pending_kyc_list(
     request: Request,
@@ -41,7 +41,7 @@ async def get_pending_kyc_list(
     return await AdminService(db).list_pending_kyc()
 
 
-@router.put("/kyc/{user_id}/approve")
+@router.put("/kyc/{user_id}/approve", response_model=KYCReviewResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def approve_user_kyc(
     request: Request,
@@ -56,7 +56,7 @@ async def approve_user_kyc(
     return await AdminService(db).approve_kyc(user_id)
 
 
-@router.put("/kyc/{user_id}/reject")
+@router.put("/kyc/{user_id}/reject", response_model=KYCReviewResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def reject_user_kyc(
     request: Request,
@@ -75,7 +75,7 @@ async def reject_user_kyc(
 # User Moderation
 # ---------------------------
 
-@router.put("/users/{user_id}/freeze")
+@router.put("/users/{user_id}/freeze", response_model=UserStatusUpdateResponse)
 @limiter.limit("5/minute")
 async def freeze_user_account(
     request: Request,
@@ -90,7 +90,7 @@ async def freeze_user_account(
     return await AdminService(db).freeze_user(user_id)
 
 
-@router.put("/users/{user_id}/unfreeze")
+@router.put("/users/{user_id}/unfreeze", response_model=UserStatusUpdateResponse)
 @limiter.limit("5/minute")
 async def unfreeze_user_account(
     request: Request,
@@ -105,7 +105,7 @@ async def unfreeze_user_account(
     return await AdminService(db).unfreeze_user(user_id)
 
 
-@router.put("/users/{user_id}/ban")
+@router.put("/users/{user_id}/ban", response_model=UserStatusUpdateResponse)
 @limiter.limit("5/minute")
 async def ban_user_account(
     request: Request,
@@ -120,7 +120,7 @@ async def ban_user_account(
     return await AdminService(db).ban_user(user_id)
 
 
-@router.put("/users/{user_id}/unban")
+@router.put("/users/{user_id}/unban", response_model=UserStatusUpdateResponse)
 @limiter.limit("5/minute")
 async def unban_user_account(
     request: Request,
@@ -135,7 +135,7 @@ async def unban_user_account(
     return await AdminService(db).unban_user(user_id)
 
 
-@router.delete("/users/{user_id}")
+@router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)
 @limiter.limit("3/minute")
 async def delete_user_account(
     request: Request,
@@ -155,7 +155,7 @@ async def delete_user_account(
 # Review Moderation
 # ---------------------------
 
-@router.get("/reviews/flagged")
+@router.get("/reviews/flagged", response_model=list[FlaggedReviewRead], status_code=status.HTTP_200_OK)
 @limiter.limit("10/minute")
 async def get_flagged_reviews(
     request: Request,
@@ -169,7 +169,7 @@ async def get_flagged_reviews(
     return await AdminService(db).list_flagged_reviews()
 
 
-@router.delete("/reviews/{review_id}")
+@router.delete("/reviews/{review_id}", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def delete_flagged_review(
     request: Request,

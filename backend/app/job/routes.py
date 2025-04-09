@@ -12,6 +12,7 @@ All routes require authentication.
 """
 
 from uuid import UUID
+from typing import List
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +30,13 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 # ---------------------------
 # Accept Job
 # ---------------------------
-@router.post("/{worker_id}/{service_id}/accept", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{worker_id}/{service_id}/accept",
+    response_model=schemas.JobRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Accept Job",
+    description="Client initiates a job request for a specific worker and service.",
+)
 @limiter.limit("5/minute")
 async def accept_job(
     request: Request,
@@ -38,9 +45,6 @@ async def accept_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Client initiates a job request for a specific worker and service.
-    """
     return await JobService(db).accept_job(
         client_id=current_user.id,
         worker_id=worker_id,
@@ -51,7 +55,13 @@ async def accept_job(
 # ---------------------------
 # Complete Job
 # ---------------------------
-@router.put("/{job_id}/complete", status_code=status.HTTP_200_OK)
+@router.put(
+    "/{job_id}/complete",
+    response_model=schemas.JobRead,
+    status_code=status.HTTP_200_OK,
+    summary="Complete Job",
+    description="Worker marks a job as completed.",
+)
 @limiter.limit("5/minute")
 async def complete_job(
     request: Request,
@@ -59,16 +69,19 @@ async def complete_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Worker marks a job as completed.
-    """
     return await JobService(db).complete_job(current_user.id, job_id)
 
 
 # ---------------------------
 # Cancel Job
 # ---------------------------
-@router.put("/{job_id}/cancel", status_code=status.HTTP_200_OK)
+@router.put(
+    "/{job_id}/cancel",
+    response_model=schemas.JobRead,
+    status_code=status.HTTP_200_OK,
+    summary="Cancel Job",
+    description="Client cancels a job and provides a reason for cancellation.",
+)
 @limiter.limit("5/minute")
 async def cancel_job(
     request: Request,
@@ -77,9 +90,6 @@ async def cancel_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Client cancels a job with a reason.
-    """
     return await JobService(db).cancel_job(
         client_id=current_user.id,
         job_id=job_id,
@@ -90,23 +100,32 @@ async def cancel_job(
 # ---------------------------
 # List Jobs for Current User
 # ---------------------------
-@router.get("", status_code=status.HTTP_200_OK)
+@router.get(
+    "",
+    response_model=List[schemas.JobRead],
+    status_code=status.HTTP_200_OK,
+    summary="List My Jobs",
+    description="Retrieve all jobs associated with the currently authenticated user (client or worker).",
+)
 @limiter.limit("5/minute")
 async def get_jobs_for_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Returns all jobs related to the authenticated user (client or worker).
-    """
     return await JobService(db).get_all_jobs_for_user(current_user.id)
 
 
 # ---------------------------
 # Get Job Details
 # ---------------------------
-@router.get("/{job_id}", status_code=status.HTTP_200_OK)
+@router.get(
+    "/{job_id}",
+    response_model=schemas.JobRead,
+    status_code=status.HTTP_200_OK,
+    summary="Get Job Detail",
+    description="Retrieve full details for a specific job related to the authenticated user.",
+)
 @limiter.limit("5/minute")
 async def get_job_detail(
     request: Request,
@@ -114,7 +133,4 @@ async def get_job_detail(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Retrieve detailed information about a specific job.
-    """
     return await JobService(db).get_job_detail(current_user.id, job_id)

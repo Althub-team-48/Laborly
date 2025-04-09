@@ -9,7 +9,6 @@ Defines API endpoints related to job reviews:
 """
 
 from uuid import UUID
-
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,9 +22,15 @@ router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
 
 # -------------------------------
-# Submit a review for a job
+# Submit Review for a Completed Job
 # -------------------------------
-@router.post("/{job_id}", response_model=schemas.ReviewRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{job_id}",
+    response_model=schemas.ReviewRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit Review",
+    description="Allows a client to submit a review for a completed job. Each job can have only one review."
+)
 @limiter.limit("5/minute")
 async def submit_review(
     request: Request,
@@ -42,9 +47,15 @@ async def submit_review(
 
 
 # -------------------------------
-# Get reviews received by a worker
+# Get Reviews Received by Worker
 # -------------------------------
-@router.get("/worker/{worker_id}", response_model=list[schemas.ReviewRead])
+@router.get(
+    "/worker/{worker_id}",
+    response_model=list[schemas.ReviewRead],
+    status_code=status.HTTP_200_OK,
+    summary="Worker Reviews",
+    description="Fetches all reviews received by a specific worker."
+)
 @limiter.limit("5/minute")
 async def get_worker_reviews(
     request: Request,
@@ -55,9 +66,15 @@ async def get_worker_reviews(
 
 
 # -------------------------------
-# Get reviews submitted by the current client
+# Get Reviews Submitted by Client
 # -------------------------------
-@router.get("/my", response_model=list[schemas.ReviewRead])
+@router.get(
+    "/my",
+    response_model=list[schemas.ReviewRead],
+    status_code=status.HTTP_200_OK,
+    summary="My Submitted Reviews",
+    description="Returns all reviews submitted by the currently authenticated client."
+)
 @limiter.limit("5/minute")
 async def get_my_reviews(
     request: Request,
@@ -68,9 +85,15 @@ async def get_my_reviews(
 
 
 # -------------------------------
-# Get average rating and review count for a worker
+# Get Review Summary for Worker
 # -------------------------------
-@router.get("/summary/{worker_id}", response_model=schemas.WorkerReviewSummary)
+@router.get(
+    "/summary/{worker_id}",
+    response_model=schemas.WorkerReviewSummary,
+    status_code=status.HTTP_200_OK,
+    summary="Worker Review Summary",
+    description="Returns the average rating and total number of reviews for a specific worker."
+)
 @limiter.limit("5/minute")
 async def get_worker_review_summary(
     request: Request,

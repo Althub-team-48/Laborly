@@ -10,7 +10,7 @@ Defines routes for managing worker service listings:
 from uuid import UUID
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.service import schemas
@@ -25,7 +25,13 @@ router = APIRouter(prefix="/services", tags=["Services"])
 # ---------------------------
 # Create Service
 # ---------------------------
-@router.post("", response_model=schemas.ServiceRead)
+@router.post(
+    "",
+    response_model=schemas.ServiceRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create New Service",
+    description="Create a new service listing. Only workers and admins can perform this action."
+)
 async def create_service(
     request: Request,
     data: schemas.ServiceCreate,
@@ -38,7 +44,13 @@ async def create_service(
 # ---------------------------
 # Update Service
 # ---------------------------
-@router.put("/{service_id}", response_model=schemas.ServiceRead)
+@router.put(
+    "/{service_id}",
+    response_model=schemas.ServiceRead,
+    status_code=status.HTTP_200_OK,
+    summary="Update Service",
+    description="Update an existing service. Only the owner (worker) or admin can update."
+)
 async def update_service(
     request: Request,
     service_id: UUID,
@@ -52,7 +64,12 @@ async def update_service(
 # ---------------------------
 # Delete Service
 # ---------------------------
-@router.delete("/{service_id}")
+@router.delete(
+    "/{service_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete Service",
+    description="Delete an existing service. Only the owner (worker) or admin can delete."
+)
 async def delete_service(
     request: Request,
     service_id: UUID,
@@ -66,7 +83,13 @@ async def delete_service(
 # ---------------------------
 # List My Services
 # ---------------------------
-@router.get("/my", response_model=List[schemas.ServiceRead])
+@router.get(
+    "/my",
+    response_model=List[schemas.ServiceRead],
+    status_code=status.HTTP_200_OK,
+    summary="List My Services",
+    description="Returns all services created by the authenticated worker or admin."
+)
 async def list_my_services(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -78,7 +101,13 @@ async def list_my_services(
 # ---------------------------
 # Search Public Services
 # ---------------------------
-@router.get("/search", response_model=List[schemas.ServiceRead])
+@router.get(
+    "/search",
+    response_model=List[schemas.ServiceRead],
+    status_code=status.HTTP_200_OK,
+    summary="Search Services",
+    description="Search public service listings by title and/or location."
+)
 async def search_services(
     request: Request,
     title: Optional[str] = Query(default=None, description="Filter by service title"),

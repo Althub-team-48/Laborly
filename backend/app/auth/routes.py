@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------
 # Register a new user
 # -----------------------------
-@router.post("/signup", response_model=AuthSuccessResponse)
+@router.post("/signup", response_model=AuthSuccessResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def signup(
     request: Request,
@@ -93,7 +93,7 @@ async def signup(
 # -----------------------------
 # Login via JSON credentials
 # -----------------------------
-@router.post("/login/json", response_model=AuthSuccessResponse)
+@router.post("/login/json", response_model=AuthSuccessResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("10/minute")
 async def login_json(
     request: Request,
@@ -122,7 +122,7 @@ async def login_json(
 # -----------------------------
 # Login via OAuth2 form
 # -----------------------------
-@router.post("/login/oauth", response_model=AuthSuccessResponse)
+@router.post("/login/oauth", response_model=AuthSuccessResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("10/minute")
 async def login_oauth(
     request: Request,
@@ -151,7 +151,7 @@ async def login_oauth(
 # -----------------------------
 # Google OAuth2 Login (Step 1)
 # -----------------------------
-@router.get("/google/login")
+@router.get("/google/login", status_code=status.HTTP_200_OK)
 @limiter.limit("10/minute")
 async def google_login(request: Request):
     """
@@ -163,7 +163,7 @@ async def google_login(request: Request):
 # -----------------------------
 # Google OAuth2 Callback (Step 2)
 # -----------------------------
-@router.get("/google/callback")
+@router.get("/google/callback", status_code=status.HTTP_200_OK)
 @limiter.limit("10/minute")
 async def google_callback(
     request: Request,
@@ -178,7 +178,7 @@ async def google_callback(
 # -----------------------------
 # Logout (JWT blacklist)
 # -----------------------------
-@router.post("/logout")
+@router.post("/logout", status_code=status.HTTP_200_OK, response_model=dict)
 @limiter.limit("20/minute")
 async def logout_user(
     request: Request,

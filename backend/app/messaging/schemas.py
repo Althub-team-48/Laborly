@@ -26,6 +26,7 @@ class MessageCreate(MessageBase):
     thread_id: Optional[UUID] = Field(None, description="Thread ID if replying to an existing thread")
     receiver_id: Optional[UUID] = Field(None, description="Receiver ID if starting a new thread")
     job_id: Optional[UUID] = Field(None, description="Job ID associated with the message (required for non-admins)")
+    service_id: Optional[UUID] = Field(None, description="Service ID associated with the message (required for non-admins)")
 
 
 # -------------------------------
@@ -38,6 +39,13 @@ class MessageRead(MessageBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# -------------------------------
+# Thread Initiate Schema
+# -------------------------------
+class ThreadInitiate(BaseModel):
+    content: str = Field(..., description="Message content to start a new thread")
+    service_id: UUID = Field(..., description="Service ID to associate with the message")
 
 
 # -------------------------------

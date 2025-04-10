@@ -24,6 +24,7 @@ from app.admin.routes import router as admin_router
 from app.service.routes import router as service_router
 from app.review.routes import router as review_router
 from app.job.routes import router as job_router
+from app.messaging.routes import router as messaging_router
 from app.core.limiter import limiter
 
 
@@ -51,3 +52,4 @@ app.include_router(job_router)
 app.include_router(review_router)
 app.include_router(service_router)
 app.include_router(worker_router)
+app.include_router(messaging_router)

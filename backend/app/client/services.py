@@ -20,6 +20,18 @@ from app.job.models import Job
 
 logger = logging.getLogger(__name__)
 
+def merge_user_profile(profile: models.ClientProfile, user: User) -> dict:
+    return {
+        **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
+        "email": user.email,
+        "phone_number": user.phone_number,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "location": user.location,
+        "profile_picture": user.profile_picture,
+        "updated_at": user.updated_at,
+    }
+
 
 class ClientService:
     """
@@ -59,10 +71,7 @@ class ClientService:
             await self.db.refresh(profile)
             logger.info(f"New profile created: profile_id={profile.id}")
 
-        merged = {
-            **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
-            **{k: v for k, v in vars(user).items() if not k.startswith("_")}
-        }
+        merged = merge_user_profile(profile, user)
         return schemas.ClientProfileRead.model_validate(merged)
 
     async def update_profile(self, user_id: UUID, update: schemas.ClientProfileUpdate) -> schemas.ClientProfileRead:
@@ -107,10 +116,7 @@ class ClientService:
 
         logger.info(f"Profile updated for user_id={user_id}, profile_id={profile.id}")
 
-        merged = {
-            **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
-            **{k: v for k, v in vars(user).items() if not k.startswith("_")}
-        }
+        merged = merge_user_profile(profile, user)
         return schemas.ClientProfileRead.model_validate(merged)
 
     # -------------------------------

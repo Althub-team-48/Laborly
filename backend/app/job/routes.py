@@ -26,30 +26,43 @@ from app.core.limiter import limiter
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
-
 # ---------------------------
-# Accept Job
+# Create Job (Client)
 # ---------------------------
 @router.post(
-    "/{worker_id}/{service_id}/accept",
+    "",
     response_model=schemas.JobRead,
     status_code=status.HTTP_201_CREATED,
+    summary="Create Job",
+    description="Client creates a job when initiating a conversation with a worker.",
+)
+@limiter.limit("5/minute")
+async def create_job(
+    request: Request,
+    payload: schemas.JobCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return await JobService(db).create_job(client_id=current_user.id, payload=payload)
+
+# ---------------------------
+# Accept Job (Worker)
+# ---------------------------
+@router.post(
+    "/accept",
+    response_model=schemas.JobRead,
+    status_code=status.HTTP_200_OK,
     summary="Accept Job",
-    description="Client initiates a job request for a specific worker and service.",
+    description="Worker accepts a job previously created by a client.",
 )
 @limiter.limit("5/minute")
 async def accept_job(
     request: Request,
-    worker_id: UUID,
-    service_id: UUID,
+    payload: schemas.JobAccept,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return await JobService(db).accept_job(
-        client_id=current_user.id,
-        worker_id=worker_id,
-        service_id=service_id
-    )
+    return await JobService(db).accept_job(worker_id=current_user.id, job_id=payload.job_id)
 
 
 # ---------------------------

@@ -15,8 +15,10 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.models import User
 from app.job import models
 from app.job.models import JobStatus
+from app.job.schemas import JobCreate
 
 logger = logging.getLogger(__name__)
 
@@ -30,24 +32,52 @@ class JobService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def accept_job(self, client_id: UUID, worker_id: UUID, service_id: UUID) -> models.Job:
+    async def create_job(self, client_id: UUID, worker_id: UUID, service_id: UUID, thread_id: UUID) -> models.Job:
         """
-        Client initiates a new job request with a specific worker and service.
+        Client initiates a new job request with a specific worker, service, and conversation thread.
+        The job status is set to 'NEGOTIATING' while waiting for the worker to accept it.
         """
-        logger.info(f"[ACCEPT] Client {client_id} initiating job with worker {worker_id}")
+        logger.info(f"[CREATE] Client {client_id} creating job with worker {worker_id} via thread {thread_id}")
 
         job = models.Job(
             client_id=client_id,
             worker_id=worker_id,
             service_id=service_id,
-            status=JobStatus.ACCEPTED,
-            started_at=datetime.now(timezone.utc)
+            status=JobStatus.NEGOTIATING,
+            thread_id=thread_id,  # Thread ID is now required
+            started_at=None,  # Not started yet
         )
         self.db.add(job)
         await self.db.commit()
         await self.db.refresh(job)
 
-        logger.info(f"[ACCEPT] Job created: job_id={job.id}")
+        logger.info(f"[CREATE] Job created: job_id={job.id}")
+        return job
+
+    async def accept_job(self, worker_id: UUID, job_id: UUID) -> models.Job:
+        """
+        Worker accepts the job. The job status is updated to 'ACCEPTED'.
+        """
+        logger.info(f"[ACCEPT] Worker {worker_id} accepting job {job_id}")
+
+        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
+        job = result.scalars().first()
+
+        if not job:
+            logger.error(f"[ACCEPT] Job not found: job_id={job_id}")
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        if job.status != JobStatus.NEGOTIATING:
+            logger.warning(f"[ACCEPT] Invalid status for acceptance: job_id={job_id}, current_status={job.status}")
+            raise HTTPException(status_code=400, detail="Only jobs in 'NEGOTIATING' status can be accepted")
+
+        job.status = JobStatus.ACCEPTED
+        job.started_at = datetime.now(timezone.utc)
+
+        await self.db.commit()
+        await self.db.refresh(job)
+
+        logger.info(f"[ACCEPT] Job accepted: job_id={job.id}")
         return job
 
     async def complete_job(self, user_id: UUID, job_id: UUID) -> models.Job:

@@ -53,4 +53,3 @@ class FlaggedReviewRead(BaseModel):
     created_at: datetime = Field(..., description="Date and time the review was created")
 
     model_config = ConfigDict(from_attributes=True)
-  # Enables conversion from ORM models

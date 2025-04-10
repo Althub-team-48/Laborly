@@ -37,7 +37,7 @@ router = APIRouter(prefix="/messages", tags=["Messaging"])
 async def initiate_message(
     request: Request,
     worker_id: UUID,
-    message_data: schemas.MessageCreate,
+    message_data: schemas.ThreadInitiate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

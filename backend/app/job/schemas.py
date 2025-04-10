@@ -16,7 +16,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.job.models import JobStatus
 
-
 # --------------------------------------------------
 # Base Schema for Shared Fields
 # --------------------------------------------------
@@ -31,16 +30,24 @@ class JobBase(BaseModel):
 
 
 # --------------------------------------------------
-# Accept Job Input Schema
+# Job Creation Schema
+# --------------------------------------------------
+class JobCreate(JobBase):
+    """
+    Payload for creating a job manually by the client.
+    """
+    worker_id: UUID = Field(..., description="UUID of the assigned worker")
+    thread_id: UUID = Field(..., description="UUID of the conversation thread initiating the job")
+
+
+# --------------------------------------------------
+# Accept Job Input Schema (Worker)
 # --------------------------------------------------
 class JobAccept(BaseModel):
     """
-    Payload for initiating a job based on a conversation thread.
+    Payload for worker to accept a job by ID.
     """
-    thread_id: UUID = Field(
-        ...,
-        description="ID of the thread that triggered this job"
-    )
+    job_id: UUID = Field(..., description="ID of the job to accept")
 
 
 # --------------------------------------------------

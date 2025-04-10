@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,99 +20,110 @@ if TYPE_CHECKING:
     from app.database.models import User
 
 
-# ----------------------------------------------------
-# ClientProfile Model
-# ----------------------------------------------------
 class ClientProfile(Base):
     """
     Represents additional profile data for users with the 'CLIENT' role.
     """
     __tablename__ = "client_profiles"
 
-    id: Mapped[UUID] = mapped_column(
+    id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for a client profile"
+        comment="Unique identifier for the client profile"
     )
-    user_id: Mapped[UUID] = mapped_column(
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
-        unique=True,
         nullable=False,
-        comment="ID of the user this profile belongs to"
+        comment="Linked user ID for this client profile"
     )
-    business_name: Mapped[str] = mapped_column(
+
+    profile_description: Mapped[str] = mapped_column(
         String,
         nullable=True,
-        comment="Optional business name for the client"
+        comment="Optional profile description or note"
     )
+
+    address: Mapped[str] = mapped_column(
+        String,
+        nullable=True,
+        comment="Optional client address"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        server_default=func.now(),
         comment="Timestamp when the profile was created"
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        comment="Timestamp when the profile was last updated"
+
+    # -------------------------------------
+    # Relationships
+    # -------------------------------------
+    # One-to-One Relationships
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="client_profile",
+        foreign_keys=[user_id],
+        # Relationship: One ClientProfile belongs to one User
     )
 
-    # Relationship: one-to-one with User
-    user: Mapped["User"] = relationship("User", back_populates="client_profile")
 
-
-# ----------------------------------------------------
-# FavoriteWorker Model
-# ----------------------------------------------------
 class FavoriteWorker(Base):
     """
-    Represents a many-to-many relationship where a client user
-    marks a worker user as a favorite.
+    Represents a many-to-many relationship where a client marks a worker as favorite.
     """
     __tablename__ = "favorites"
 
-    id: Mapped[UUID] = mapped_column(
+    id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for a favorite entry"
+        comment="Unique identifier for the favorite relationship"
     )
-    client_id: Mapped[UUID] = mapped_column(
+
+    client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
         nullable=False,
         comment="User ID of the client who favorited the worker"
     )
-    worker_id: Mapped[UUID] = mapped_column(
+
+    worker_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
         nullable=False,
         comment="User ID of the worker who was favorited"
     )
+
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        server_default=func.now(),
         comment="Timestamp when the favorite relationship was created"
     )
+
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
         comment="Timestamp when the favorite relationship was last updated"
     )
 
-    # Relationship: many-to-one to User (as client)
+    # -------------------------------------
+    # Relationships
+    # -------------------------------------
+    # Many-to-One Relationships
     client: Mapped["User"] = relationship(
         "User",
         foreign_keys=[client_id],
-        back_populates="favorite_clients"
+        back_populates="favorite_clients",
+        # Relationship: Many FavoriteWorker records can reference one User (client)
     )
 
-    # Relationship: many-to-one to User (as worker)
     worker: Mapped["User"] = relationship(
         "User",
         foreign_keys=[worker_id],
-        back_populates="favorited_by"
+        back_populates="favorited_by",
+        # Relationship: Many FavoriteWorker records can reference one User (worker)
     )

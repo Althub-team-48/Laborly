@@ -19,3 +19,8 @@
 # Personal folders
 **/personal/
 **/personal/*
+
+# Personal file
+**/notes.py
+**/notes.txt
+**/notes.md

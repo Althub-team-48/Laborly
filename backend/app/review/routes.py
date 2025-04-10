@@ -9,80 +9,95 @@ Defines API endpoints related to job reviews:
 """
 
 from uuid import UUID
+from fastapi import APIRouter, Depends, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
-
+from app.core.dependencies import get_current_user_with_role, get_db
+from app.core.limiter import limiter
+from app.database.models import User, UserRole
 from app.review import schemas
 from app.review.services import ReviewService
-from app.core.dependencies import get_db, get_current_user_with_role
-from app.database.models import User, UserRole
-from main import limiter
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
 
-# --------------------------------------------------------
-# Submit Review (Client Only)
-# --------------------------------------------------------
-@router.post("/{job_id}", response_model=schemas.ReviewRead, status_code=status.HTTP_201_CREATED)
+# -------------------------------
+# Submit Review for a Completed Job
+# -------------------------------
+@router.post(
+    "/{job_id}",
+    response_model=schemas.ReviewRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit Review",
+    description="Allows a client to submit a review for a completed job. Each job can have only one review."
+)
 @limiter.limit("5/minute")
-def submit_review(
+async def submit_review(
+    request: Request,
     job_id: UUID,
     payload: schemas.ReviewWrite,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.CLIENT))
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_with_role(UserRole.CLIENT)),
 ):
-    """
-    Submit a review for a completed job (Client only).
-    """
-    return ReviewService(db).submit_review(
+    return await ReviewService(db).submit_review(
         job_id=job_id,
         reviewer_id=current_user.id,
         data=payload
     )
 
 
-# --------------------------------------------------------
-# Get Reviews for a Worker (Public)
-# --------------------------------------------------------
-@router.get("/worker/{worker_id}", response_model=list[schemas.ReviewRead])
+# -------------------------------
+# Get Reviews Received by Worker
+# -------------------------------
+@router.get(
+    "/worker/{worker_id}",
+    response_model=list[schemas.ReviewRead],
+    status_code=status.HTTP_200_OK,
+    summary="Worker Reviews",
+    description="Fetches all reviews received by a specific worker."
+)
 @limiter.limit("5/minute")
-def get_worker_reviews(
+async def get_worker_reviews(
+    request: Request,
     worker_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Retrieve all public reviews submitted for a worker.
-    """
-    return ReviewService(db).get_reviews_for_worker(worker_id=worker_id)
+    return await ReviewService(db).get_reviews_for_worker(worker_id=worker_id)
 
 
-# --------------------------------------------------------
-# Get Reviews by Client (Client Only)
-# --------------------------------------------------------
-@router.get("/my", response_model=list[schemas.ReviewRead])
+# -------------------------------
+# Get Reviews Submitted by Client
+# -------------------------------
+@router.get(
+    "/my",
+    response_model=list[schemas.ReviewRead],
+    status_code=status.HTTP_200_OK,
+    summary="My Submitted Reviews",
+    description="Returns all reviews submitted by the currently authenticated client."
+)
 @limiter.limit("5/minute")
-def get_my_reviews(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.CLIENT))
+async def get_my_reviews(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_with_role(UserRole.CLIENT)),
 ):
-    """
-    Retrieve all reviews submitted by the current authenticated client.
-    """
-    return ReviewService(db).get_reviews_by_client(client_id=current_user.id)
+    return await ReviewService(db).get_reviews_by_client(client_id=current_user.id)
 
 
-# --------------------------------------------------------
-# Get Review Summary for a Worker
-# --------------------------------------------------------
-@router.get("/summary/{worker_id}", response_model=schemas.WorkerReviewSummary)
+# -------------------------------
+# Get Review Summary for Worker
+# -------------------------------
+@router.get(
+    "/summary/{worker_id}",
+    response_model=schemas.WorkerReviewSummary,
+    status_code=status.HTTP_200_OK,
+    summary="Worker Review Summary",
+    description="Returns the average rating and total number of reviews for a specific worker."
+)
 @limiter.limit("5/minute")
-def get_worker_review_summary(
+async def get_worker_review_summary(
+    request: Request,
     worker_id: UUID,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Returns average rating and total number of reviews for a specific worker.
-    """
-    return ReviewService(db).get_review_summary(worker_id=worker_id)
+    return await ReviewService(db).get_review_summary(worker_id=worker_id)

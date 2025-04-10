@@ -6,12 +6,18 @@ Each service is linked to a worker (User with WORKER role).
 """
 
 import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, List
+
 from sqlalchemy import String, Text, DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
-from app.database.models import User
+
+if TYPE_CHECKING:
+    from app.database.models import User
+    from app.job.models import Job
 
 
 class Service(Base):
@@ -21,14 +27,14 @@ class Service(Base):
     """
     __tablename__ = "services"
 
-    id: Mapped[UUID] = mapped_column(
+    id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
         comment="Unique identifier for the service"
     )
 
-    worker_id: Mapped[UUID] = mapped_column(
+    worker_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -53,13 +59,13 @@ class Service(Base):
         comment="Location where the service is offered"
     )
 
-    created_at: Mapped[DateTime] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         comment="Timestamp when the service was created"
     )
 
-    updated_at: Mapped[DateTime] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
@@ -69,8 +75,18 @@ class Service(Base):
     # -------------------------------------
     # Relationships
     # -------------------------------------
+    # Many-to-One Relationships
     worker: Mapped["User"] = relationship(
         "User",
-        backref="services",       # Allows user.services to access all services by the worker
-        lazy="joined"             # Eager-load the associated user when fetching services
+        back_populates="services",
+        lazy="joined",
+        # Relationship: Many Services can be offered by one User (worker)
+    )
+
+    # One-to-Many Relationships
+    jobs: Mapped[List["Job"]] = relationship(
+        "Job",
+        back_populates="service",
+        lazy="joined",
+        # Relationship: One Service can be associated with many Jobs
     )

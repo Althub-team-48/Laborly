@@ -7,7 +7,7 @@ Defines Pydantic schemas for:
 - Reading a service (response model)
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
@@ -57,5 +57,5 @@ class ServiceRead(ServiceBase):
     created_at: datetime = Field(..., description="Timestamp when the service was created")
     updated_at: datetime = Field(..., description="Timestamp when the service was last updated")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+

@@ -11,7 +11,7 @@ Defines Pydantic models for authentication flows:
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.database.enums import UserRole
 
@@ -79,8 +79,7 @@ class AuthUserResponse(BaseModel):
     created_at: datetime = Field(..., description="Timestamp when the user was created")
     updated_at: datetime = Field(..., description="Timestamp when the user was last updated")
 
-    class Config:
-        from_attributes = True  # Enable ORM compatibility
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AuthSuccessResponse(BaseModel):

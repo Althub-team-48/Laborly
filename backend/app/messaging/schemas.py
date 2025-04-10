@@ -9,7 +9,7 @@ Pydantic schemas for reusable messaging system:
 from uuid import UUID
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # -------------------------------
@@ -26,6 +26,7 @@ class MessageCreate(MessageBase):
     thread_id: Optional[UUID] = Field(None, description="Thread ID if replying to an existing thread")
     receiver_id: Optional[UUID] = Field(None, description="Receiver ID if starting a new thread")
     job_id: Optional[UUID] = Field(None, description="Job ID associated with the message (required for non-admins)")
+    service_id: Optional[UUID] = Field(None, description="Service ID associated with the message (required for non-admins)")
 
 
 # -------------------------------
@@ -36,8 +37,15 @@ class MessageRead(MessageBase):
     sender_id: UUID = Field(..., description="User ID of the message sender")
     timestamp: datetime = Field(..., description="Timestamp when the message was sent")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+# -------------------------------
+# Thread Initiate Schema
+# -------------------------------
+class ThreadInitiate(BaseModel):
+    content: str = Field(..., description="Message content to start a new thread")
+    service_id: UUID = Field(..., description="Service ID to associate with the message")
 
 
 # -------------------------------
@@ -46,8 +54,8 @@ class MessageRead(MessageBase):
 class ThreadParticipantRead(BaseModel):
     user_id: UUID = Field(..., description="User ID of the participant")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 # -------------------------------
@@ -61,5 +69,5 @@ class ThreadRead(BaseModel):
     participants: List[ThreadParticipantRead] = Field(..., description="Users involved in the thread")
     messages: List[MessageRead] = Field(..., description="Messages in the thread")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+

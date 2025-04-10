@@ -39,12 +39,6 @@ class MessageThread(Base):
         server_default=func.now(),
         comment="Timestamp when the thread was created"
     )
-    job_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("jobs.id"),
-        nullable=True,
-        comment="Optional job linked to this thread"
-    )
     is_closed: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
@@ -52,7 +46,7 @@ class MessageThread(Base):
     )
 
     # -------------------------------------
-    # Relationships
+    # Relationships (grouped by type)
     # -------------------------------------
     # One-to-Many Relationships
     participants: Mapped[List["ThreadParticipant"]] = relationship(
@@ -73,7 +67,7 @@ class MessageThread(Base):
         "Job",
         back_populates="thread",
         uselist=False,
-        # Relationship: One MessageThread is linked to one Job (optional)
+        # Relationship: One MessageThread is linked to one Job via Job.thread_id
     )
 
 
@@ -103,7 +97,7 @@ class ThreadParticipant(Base):
     )
 
     # -------------------------------------
-    # Relationships
+    # Relationships (grouped by type)
     # -------------------------------------
     # Many-to-One Relationships
     thread: Mapped["MessageThread"] = relationship(
@@ -154,7 +148,7 @@ class Message(Base):
     )
 
     # -------------------------------------
-    # Relationships
+    # Relationships (grouped by type)
     # -------------------------------------
     # Many-to-One Relationships
     thread: Mapped["MessageThread"] = relationship(

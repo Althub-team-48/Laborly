@@ -79,14 +79,7 @@ class Job(Base):
 
     thread_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "message_threads.id",
-            # Avoids circular dependency error during migrations by deferring FK creation until both tables exist. This is a workaround for the issue with circular dependencies in SQLAlchemy migrations.
-            use_alter=True,
-            name="fk_jobs_thread_id",
-            deferrable=True,
-            initially="DEFERRED"
-        ),
+        ForeignKey("message_threads.id"),
         nullable=True,
         unique=True,
         comment="Thread ID for messaging related to the job"
@@ -96,7 +89,8 @@ class Job(Base):
         UUID(as_uuid=True),
         ForeignKey("reviews.id"),
         nullable=True,
-        comment="Review associated with the job"
+        unique=True,
+        comment="Review associated with this job (optional, one-to-one)"
     )
 
     status: Mapped[JobStatus] = mapped_column(
@@ -131,7 +125,7 @@ class Job(Base):
     )
 
     # -------------------------------------
-    # Relationships
+    # Relationships (grouped by type)
     # -------------------------------------
     # One-to-Many Relationships
     client: Mapped["User"] = relationship(
@@ -160,8 +154,7 @@ class Job(Base):
         foreign_keys=[thread_id],
         # Relationship: One Job has one MessageThread (unique constraint on thread_id)
     )
-
-    reviews: Mapped["Review"] = relationship(
+    review: Mapped["Review"] = relationship(
         "Review",
         back_populates="job",
         uselist=False,

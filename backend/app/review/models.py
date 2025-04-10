@@ -2,7 +2,7 @@
 review/models.py
 
 Defines the Review model for storing job-related feedback.
-- Each review is linked to a specific job and user pair.
+- Each review is linked to a specific job (one-to-one) and user pair.
 - Supports star ratings, optional text, and admin flagging.
 """
 
@@ -64,12 +64,6 @@ class Review(Base):
         nullable=False,
         comment="User ID of the worker being reviewed"
     )
-    job_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("jobs.id"),
-        nullable=False,
-        comment="Job ID associated with this review"
-    )
 
     # Admin moderation
     is_flagged: Mapped[bool] = mapped_column(
@@ -101,9 +95,11 @@ class Review(Base):
         foreign_keys=[worker_id],
         # Relationship: Many Reviews can be received by one User (worker)
     )
+
+    # One-to-One Relationships
     job: Mapped["Job"] = relationship(
         "Job",
-        back_populates="reviews",
-        foreign_keys=[job_id],
-        # Relationship: Many Reviews can be linked to one Job
+        back_populates="review",
+        uselist=False,
+        # Relationship: One Review is linked to one Job
     )

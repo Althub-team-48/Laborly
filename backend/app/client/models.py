@@ -58,8 +58,16 @@ class ClientProfile(Base):
         comment="Timestamp when the profile was created"
     )
 
-    # Relationship to user
-    user: Mapped["User"] = relationship("User", back_populates="client_profile")
+    # -------------------------------------
+    # Relationships
+    # -------------------------------------
+    # One-to-One Relationships
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="client_profile",
+        foreign_keys=[user_id],
+        # Relationship: One ClientProfile belongs to one User
+    )
 
 
 class FavoriteWorker(Base):
@@ -91,27 +99,31 @@ class FavoriteWorker(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
         comment="Timestamp when the favorite relationship was created"
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        onupdate=func.now(),
         comment="Timestamp when the favorite relationship was last updated"
     )
 
-    # Relationship to client (user who favorited the worker)
+    # -------------------------------------
+    # Relationships
+    # -------------------------------------
+    # Many-to-One Relationships
     client: Mapped["User"] = relationship(
         "User",
         foreign_keys=[client_id],
-        back_populates="favorite_clients"
+        back_populates="favorite_clients",
+        # Relationship: Many FavoriteWorker records can reference one User (client)
     )
 
-    # Relationship to worker (user who was favorited)
     worker: Mapped["User"] = relationship(
         "User",
         foreign_keys=[worker_id],
-        back_populates="favorited_by"
+        back_populates="favorited_by",
+        # Relationship: Many FavoriteWorker records can reference one User (worker)
     )

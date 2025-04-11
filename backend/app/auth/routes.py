@@ -8,7 +8,7 @@ Handles authentication routes including:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import (
@@ -193,7 +193,7 @@ async def logout_user(
         exp = payload.get("exp")
 
         if jti and exp:
-            ttl = exp - int(datetime.utcnow().timestamp())
+            ttl = exp - int(datetime.now(timezone.utc).timestamp())
             blacklist_token(jti, ttl)
             logger.info(f"[LOGOUT] Token jti={jti} blacklisted for {ttl} seconds.")
 

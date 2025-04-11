@@ -16,6 +16,7 @@ from httpx import AsyncClient
 from fastapi import status
 
 
+
 @pytest.mark.asyncio
 async def test_signup_success(async_client: AsyncClient):
     """Test successful signup with unique email and phone number."""

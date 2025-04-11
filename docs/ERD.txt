@@ -75,18 +75,18 @@ Table jobs {
   worker_id uuid [ref: > users.id, note: 'Worker assigned to the job (optional)']
   service_id uuid [ref: > services.id, note: 'Service associated with the job (optional)']
   thread_id uuid [unique, ref: > message_threads.id, note: 'Messaging thread for the job (optional)']
+  review_id uuid [unique, ref: > reviews.id, note: 'Review for this job (optional, one-to-one)']
   status enum('NEGOTIATING', 'ACCEPTED', 'COMPLETED', 'FINALIZED', 'CANCELLED') [default: 'NEGOTIATING', not null, note: 'Job status']
-  started_at timestamp [note: 'Start timestamp']
-  completed_at timestamp [note: 'Completion timestamp']
-  cancelled_at timestamp [note: 'Cancellation timestamp']
+  started_at timestamp with time zone [note: 'Start timestamp']
+  completed_at timestamp with time zone [note: 'Completion timestamp']
+  cancelled_at timestamp with time zone [note: 'Cancellation timestamp']
   cancel_reason text [note: 'Reason for cancellation']
 }
 
 // Messaging Module
 Table message_threads {
   id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the message thread']
-  created_at timestamp [default: `now()`, note: 'Creation timestamp']
-  job_id uuid [ref: > jobs.id, note: 'Job linked to this thread (optional)']
+  created_at timestamp with time zone [default: `now()`, note: 'Creation timestamp']
   is_closed boolean [default: false, note: 'Whether the thread is closed']
 }
 

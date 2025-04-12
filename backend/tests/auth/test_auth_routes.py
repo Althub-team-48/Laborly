@@ -21,7 +21,7 @@ from fastapi import status
 async def test_signup_success(async_client: AsyncClient):
     """Test successful signup with unique email and phone number."""
     unique_email = f"signup_{uuid.uuid4().hex[:8]}@test.com"
-    unique_phone = f"0801{uuid.uuid4().int % 10**7:07}"
+    unique_phone = f"0801{str(uuid.uuid4().int)[-7:]}"
 
     response = await async_client.post("/auth/signup", json={
         "email": unique_email,
@@ -61,7 +61,7 @@ async def test_signup_duplicate_email(async_client: AsyncClient):
 async def test_login_json_success(async_client: AsyncClient):
     """Test successful login using JSON credentials."""
     unique_email = f"login_{uuid.uuid4().hex[:8]}@test.com"
-    unique_phone = f"0802{uuid.uuid4().int % 10**7:07}"
+    unique_phone = f"0802{str(uuid.uuid4().int)[-7:]}"
 
     signup_response = await async_client.post("/auth/signup", json={
         "email": unique_email,

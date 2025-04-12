@@ -12,6 +12,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Union
 from uuid import uuid4
+import uuid
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import HTTPException, Request, status
@@ -124,7 +125,14 @@ async def handle_google_callback(request: Request, db: AsyncSession):
 
     if not user:
         logger.info("Registering new Google user...")
-        user_obj = UserCreate.from_google(user_info)
+
+        # Generate UUID password
+        uuid_password = str(uuid.uuid4())
+        hashed_password = get_password_hash(uuid_password)
+
+
+        user_obj = UserCreate.from_google(user_info,  hashed_password=hashed_password)
+        
         user_fields = {c.key for c in inspect(User).mapper.column_attrs}
         user_data = {k: v for k, v in user_obj.dict().items() if k in user_fields}
 

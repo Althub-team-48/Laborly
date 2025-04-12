@@ -1,6 +1,6 @@
-# tests/conftest.py
-
 """
+tests/conftest.py
+
 Test fixtures for async database setup, client authentication, and test users.
 Used across all test modules in the Laborly backend.
 """
@@ -31,7 +31,7 @@ engine = create_async_engine(TEST_DATABASE_URL, echo=True)
 TestSessionLocal = sessionmaker(
     bind=engine,
     class_=AsyncSession,
-    expire_on_commit=False,  # ✅ important to avoid re-accessing stale state
+    expire_on_commit=False,
     autocommit=False,
     autoflush=False,
 )
@@ -56,7 +56,6 @@ def event_loop():
 async def setup_database():
     """Create and tear down the test database schema per test function."""
     async with engine.begin() as conn:
-        # Drop tables in order to handle dependencies (instead of using cascade=True)
         await drop_all_tables(conn)
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -94,9 +93,12 @@ async def client_user(db_session):
     """Create a test client user."""
     user = User(
         id=uuid4(),
-        email=f"client_{uuid4().hex[:6]}@test.com",
+        email=f"client_{uuid4().hex[:8]}@test.com",
+        phone_number=f"0800{uuid4().int % 10000000:07}",
         hashed_password=get_password_hash("testpassword"),
         role=UserRole.CLIENT,
+        first_name="Test",
+        last_name="Client",
         is_active=True
     )
     db_session.add(user)
@@ -110,9 +112,12 @@ async def worker_user(db_session):
     """Create a test worker user."""
     user = User(
         id=uuid4(),
-        email=f"worker_{uuid4().hex[:6]}@test.com",
+        email=f"worker_{uuid4().hex[:8]}@test.com",
+        phone_number=f"0801{uuid4().int % 10000000:07}",
         hashed_password=get_password_hash("testpassword"),
         role=UserRole.WORKER,
+        first_name="Worker",
+        last_name="User",
         is_active=True
     )
     db_session.add(user)
@@ -126,9 +131,12 @@ async def admin_user(db_session):
     """Create a test admin user."""
     user = User(
         id=uuid4(),
-        email=f"admin_{uuid4().hex[:6]}@test.com",
+        email=f"admin_{uuid4().hex[:8]}@test.com",
+        phone_number=f"0802{uuid4().int % 10000000:07}",
         hashed_password=get_password_hash("testpassword"),
         role=UserRole.ADMIN,
+        first_name="Admin",
+        last_name="User",
         is_active=True
     )
     db_session.add(user)
@@ -153,5 +161,3 @@ def worker_token(worker_user):
 def admin_token(admin_user):
     """Generate a JWT token for an admin user."""
     return create_access_token({"sub": str(admin_user.id), "role": "ADMIN"})
-
-

@@ -1,91 +1,117 @@
-# # tests/auth/test_auth_routes.py
+"""
+tests/auth/test_auth_routes.py
 
-# """
-# Unit tests for authentication routes.
-# Covers: /auth/signup, /auth/login/json, /auth/login/oauth
-# """
+Tests for authentication routes:
+- /auth/signup
+- /auth/login/json
+- /auth/logout
 
-# import pytest
-# from httpx import AsyncClient
-# from app.database.enums import UserRole
+Note:
+- Google OAuth endpoints are excluded from these tests.
+"""
 
-
-# @pytest.mark.asyncio
-# async def test_signup_success(async_client: AsyncClient):
-#     payload = {
-#         "email": "testuser@example.com",
-#         "phone_number": "08012345678",
-#         "password": "testpass123",
-#         "first_name": "Test",
-#         "last_name": "User",
-#         "role": "CLIENT"
-#     }
-#     response = await async_client.post("/auth/signup", json=payload)
-#     assert response.status_code == 200
-#     data = response.json()
-#     assert "access_token" in data
-#     assert data["user"]["email"] == payload["email"]
-#     assert data["user"]["role"] == payload["role"]
+import uuid
+import pytest
+from httpx import AsyncClient
+from fastapi import status
 
 
-# @pytest.mark.asyncio
-# async def test_signup_duplicate_email(async_client: AsyncClient):
-#     payload = {
-#         "email": "testdupe@example.com",
-#         "phone_number": "08087654321",
-#         "password": "testpass321",
-#         "first_name": "Dupe",
-#         "last_name": "User",
-#         "role": "CLIENT"
-#     }
-#     # First signup should succeed
-#     await async_client.post("/auth/signup", json=payload)
-#     # Second signup should fail
-#     response = await async_client.post("/auth/signup", json=payload)
-#     assert response.status_code == 400
-#     assert response.json()["detail"] == "Email already registered"
+
+@pytest.mark.asyncio
+async def test_signup_success(async_client: AsyncClient):
+    """Test successful signup with unique email and phone number."""
+    unique_email = f"signup_{uuid.uuid4().hex[:8]}@test.com"
+    unique_phone = f"0801{str(uuid.uuid4().int)[-7:]}"
+
+    response = await async_client.post("/auth/signup", json={
+        "email": unique_email,
+        "phone_number": unique_phone,
+        "password": "securepass123",
+        "first_name": "Sign",
+        "last_name": "Up",
+        "role": "CLIENT"
+    })
+
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert "access_token" in data
+    assert data["user"]["email"] == unique_email
 
 
-# @pytest.mark.asyncio
-# async def test_login_json_success(async_client: AsyncClient):
-#     signup_payload = {
-#         "email": "loginuser@example.com",
-#         "phone_number": "08111111111",
-#         "password": "securepass",
-#         "first_name": "Login",
-#         "last_name": "User",
-#         "role": "WORKER"
-#     }
-#     await async_client.post("/auth/signup", json=signup_payload)
+@pytest.mark.asyncio
+async def test_signup_duplicate_email(async_client: AsyncClient):
+    """Test signup failure when using an email that already exists."""
+    payload = {
+        "email": "duplicate@example.com",
+        "phone_number": "08000000000",
+        "password": "password123",
+        "first_name": "Test",
+        "last_name": "User",
+        "role": "CLIENT"
+    }
 
-#     login_payload = {
-#         "email": signup_payload["email"],
-#         "password": signup_payload["password"]
-#     }
-#     response = await async_client.post("/auth/login/json", json=login_payload)
-#     assert response.status_code == 200
-#     data = response.json()
-#     assert "access_token" in data
-#     assert data["user"]["email"] == signup_payload["email"]
-#     assert data["user"]["role"] == signup_payload["role"]
+    await async_client.post("/auth/signup", json=payload)
+    response = await async_client.post("/auth/signup", json=payload)
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json()["detail"] == "Email already registered"
 
 
-# @pytest.mark.asyncio
-# async def test_login_json_invalid_password(async_client: AsyncClient):
-#     signup_payload = {
-#         "email": "wrongpass@example.com",
-#         "phone_number": "08122223333",
-#         "password": "realpass",
-#         "first_name": "Wrong",
-#         "last_name": "Pass",
-#         "role": "WORKER"
-#     }
-#     await async_client.post("/auth/signup", json=signup_payload)
+@pytest.mark.asyncio
+async def test_login_json_success(async_client: AsyncClient):
+    """Test successful login using JSON credentials."""
+    unique_email = f"login_{uuid.uuid4().hex[:8]}@test.com"
+    unique_phone = f"0802{str(uuid.uuid4().int)[-7:]}"
 
-#     bad_login = {
-#         "email": signup_payload["email"],
-#         "password": "incorrect"
-#     }
-#     response = await async_client.post("/auth/login/json", json=bad_login)
-#     assert response.status_code == 401
-#     assert response.json()["detail"] == "Invalid credentials"
+    signup_response = await async_client.post("/auth/signup", json={
+        "email": unique_email,
+        "phone_number": unique_phone,
+        "password": "loginpass",
+        "first_name": "Login",
+        "last_name": "User",
+        "role": "WORKER"
+    })
+
+    assert signup_response.status_code == status.HTTP_201_CREATED
+
+    login_response = await async_client.post("/auth/login/json", json={
+        "email": unique_email,
+        "password": "loginpass"
+    })
+
+    assert login_response.status_code == status.HTTP_200_OK
+    assert "access_token" in login_response.json()
+
+
+@pytest.mark.asyncio
+async def test_login_json_invalid_credentials(async_client: AsyncClient):
+    """Test login failure with incorrect credentials."""
+    response = await async_client.post("/auth/login/json", json={
+        "email": "fakeuser@example.com",
+        "password": "wrongpass"
+    })
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "Invalid credentials"
+
+
+@pytest.mark.asyncio
+async def test_logout_success(async_client: AsyncClient, client_token: str):
+    """Test successful logout with a valid JWT token."""
+    headers = {"Authorization": f"Bearer {client_token}"}
+
+    response = await async_client.post("/auth/logout", headers=headers)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["detail"] == "Logout successful"
+
+
+@pytest.mark.asyncio
+async def test_logout_invalid_token(async_client: AsyncClient):
+    """Test logout failure when token is invalid or malformed."""
+    headers = {"Authorization": "Bearer invalid.token.value"}
+
+    response = await async_client.post("/auth/logout", headers=headers)
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json()["detail"] == "Invalid token"

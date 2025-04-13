@@ -7,16 +7,14 @@ Handles file uploads securely by:
 - Enforcing upload directory structure and safety
 """
 
-import os
 import uuid
 import filetype
+import boto3
 
 from fastapi import UploadFile, HTTPException
 from typing import Literal
 
-# Upload storage path
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+from app.core.config import settings
 
 # Supported file types (safe for KYC and similar purposes)
 ALLOWED_MIME_TYPES = {
@@ -25,17 +23,24 @@ ALLOWED_MIME_TYPES = {
     "application/pdf"
 }
 
+# Init Boto3 S3 client
+s3_client = boto3.client(
+    "s3",
+    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+    region_name=settings.AWS_REGION
+)
 
-def save_upload_file(file: UploadFile, subfolder: Literal["kyc"] = "kyc") -> str:
+def upload_file_to_s3(file: UploadFile, subfolder: Literal["kyc"] = "kyc") -> str:
     """
-    Validates and saves an uploaded file into a secure subfolder.
+    Validates MIME type and uploads file to S3 in a structured path.
 
     Args:
         file (UploadFile): Uploaded file from FastAPI request
-        subfolder (str): Destination subfolder within uploads/ (e.g., "kyc")
+        subfolder (str): Destination subfolder in the S3 bucket (e.g., "kyc")
 
     Returns:
-        str: Full path to saved file
+        str: Public URL to uploaded file on S3
 
     Raises:
         HTTPException: If file type is invalid or upload fails
@@ -50,18 +55,20 @@ def save_upload_file(file: UploadFile, subfolder: Literal["kyc"] = "kyc") -> str
             detail="Unsupported or unsafe file type. Allowed: JPG, PNG, PDF"
         )
 
-    # Sanitize filename and generate a unique path
+    # Sanitize and generate unique filename
     safe_filename = file.filename.replace(" ", "_").replace("/", "_")
     unique_name = f"{uuid.uuid4()}_{safe_filename}"
-    folder_path = os.path.join(UPLOAD_DIR, subfolder)
-    os.makedirs(folder_path, exist_ok=True)
-
-    full_path = os.path.join(folder_path, unique_name)
+    s3_key = f"{subfolder}/{unique_name}"
 
     try:
-        with open(full_path, "wb") as destination:
-            destination.write(content)
+        s3_client.put_object(
+            Bucket=settings.AWS_S3_BUCKET,
+            Key=s3_key,
+            Body=content,
+            ContentType=kind.mime
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload to S3: {str(e)}")
 
-    return full_path
+    # Return full S3 URL
+    return f"https://{settings.AWS_S3_BUCKET}.s3.{settings.AWS_REGION}.amazonaws.com/{s3_key}"

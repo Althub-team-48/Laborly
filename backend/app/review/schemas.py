@@ -10,7 +10,7 @@ Defines Pydantic schemas for job reviews:
 from uuid import UUID
 from typing import Optional, Annotated
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # -------------------------------------------------------
@@ -44,8 +44,8 @@ class ReviewRead(BaseModel):
     created_at: datetime = Field(..., description="Timestamp when the review was created")
     updated_at: datetime = Field(..., description="Timestamp when the review was last updated")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 # -------------------------------------------------------

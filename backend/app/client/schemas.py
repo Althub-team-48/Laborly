@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------
@@ -59,8 +59,8 @@ class ClientProfileRead(ClientProfileBase):
     created_at: datetime = Field(..., description="Profile creation timestamp")
     updated_at: datetime = Field(..., description="Profile last update timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 # ---------------------------------------------------
@@ -79,8 +79,8 @@ class FavoriteRead(FavoriteBase):
     client_id: UUID = Field(..., description="UUID of the client who favorited the worker")
     created_at: datetime = Field(..., description="Timestamp when the favorite was created")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 # ---------------------------------------------------
@@ -100,5 +100,5 @@ class ClientJobRead(BaseModel):
     cancelled_at: Optional[datetime] = Field(default=None, description="Timestamp when the job was cancelled")
     cancel_reason: Optional[str] = Field(default=None, description="Reason for job cancellation")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+

@@ -10,8 +10,8 @@ Defines routes for managing worker service listings:
 from uuid import UUID
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Query, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.service import schemas
 from app.service.services import ServiceListingService
@@ -22,77 +22,96 @@ from app.database.models import User, UserRole
 router = APIRouter(prefix="/services", tags=["Services"])
 
 
-# --------------------------------------------------
-# Create a new service listing (Worker or Admin)
-# --------------------------------------------------
-@router.post("", response_model=schemas.ServiceRead)
-def create_service(
+# ---------------------------
+# Create Service
+# ---------------------------
+@router.post(
+    "",
+    response_model=schemas.ServiceRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create New Service",
+    description="Create a new service listing. Only workers and admins can perform this action."
+)
+async def create_service(
+    request: Request,
     data: schemas.ServiceCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    """
-    Create a new service listing for the authenticated worker.
-    """
-    return ServiceListingService(db).create_service(current_user.id, data)
+    return await ServiceListingService(db).create_service(current_user.id, data)
 
 
-# --------------------------------------------------
-# Update an existing service (Worker or Admin)
-# --------------------------------------------------
-@router.put("/{service_id}", response_model=schemas.ServiceRead)
-def update_service(
+# ---------------------------
+# Update Service
+# ---------------------------
+@router.put(
+    "/{service_id}",
+    response_model=schemas.ServiceRead,
+    status_code=status.HTTP_200_OK,
+    summary="Update Service",
+    description="Update an existing service. Only the owner (worker) or admin can update."
+)
+async def update_service(
+    request: Request,
     service_id: UUID,
     data: schemas.ServiceUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    """
-    Update a service listing owned by the authenticated worker.
-    """
-    return ServiceListingService(db).update_service(current_user.id, service_id, data)
+    return await ServiceListingService(db).update_service(current_user.id, service_id, data)
 
 
-# --------------------------------------------------
-# Delete a service listing (Worker or Admin)
-# --------------------------------------------------
-@router.delete("/{service_id}")
-def delete_service(
+# ---------------------------
+# Delete Service
+# ---------------------------
+@router.delete(
+    "/{service_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete Service",
+    description="Delete an existing service. Only the owner (worker) or admin can delete."
+)
+async def delete_service(
+    request: Request,
     service_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    """
-    Delete a service listing owned by the authenticated worker.
-    """
-    ServiceListingService(db).delete_service(current_user.id, service_id)
+    await ServiceListingService(db).delete_service(current_user.id, service_id)
     return {"detail": "Service deleted successfully"}
 
 
-# --------------------------------------------------
-# List all services by current authenticated user
-# --------------------------------------------------
-@router.get("/my", response_model=List[schemas.ServiceRead])
-def list_my_services(
-    db: Session = Depends(get_db),
+# ---------------------------
+# List My Services
+# ---------------------------
+@router.get(
+    "/my",
+    response_model=List[schemas.ServiceRead],
+    status_code=status.HTTP_200_OK,
+    summary="List My Services",
+    description="Returns all services created by the authenticated worker or admin."
+)
+async def list_my_services(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    """
-    Get all services created by the authenticated worker.
-    """
-    return ServiceListingService(db).get_my_services(current_user.id)
+    return await ServiceListingService(db).get_my_services(current_user.id)
 
 
-# --------------------------------------------------
-# Public search for services (No login required)
-# --------------------------------------------------
-@router.get("/search", response_model=List[schemas.ServiceRead])
-def search_services(
+# ---------------------------
+# Search Public Services
+# ---------------------------
+@router.get(
+    "/search",
+    response_model=List[schemas.ServiceRead],
+    status_code=status.HTTP_200_OK,
+    summary="Search Services",
+    description="Search public service listings by title and/or location."
+)
+async def search_services(
+    request: Request,
     title: Optional[str] = Query(default=None, description="Filter by service title"),
     location: Optional[str] = Query(default=None, description="Filter by service location"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Public search endpoint to find services by title and/or location.
-    """
-    return ServiceListingService(db).search_services(title=title, location=location)
+    return await ServiceListingService(db).search_services(title=title, location=location)

@@ -1,0 +1,117 @@
+// Laborly Backend ERD
+// https://dbdiagram.io/d/New-Laborly-ERD-67ee7c514f7afba1843a37a0
+
+// Core Tables (Users and KYC)
+Table users {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the user']
+  email varchar(255) [unique, not null, note: 'User’s email address']
+  phone_number varchar(20) [unique, not null, note: 'User’s phone number']
+  hashed_password varchar [not null, note: 'Hashed password for authentication']
+  role enum('CLIENT', 'WORKER', 'ADMIN') [not null, note: 'User role']
+  first_name varchar(100) [not null, note: 'User’s first name']
+  last_name varchar(100) [not null, note: 'User’s last name']
+  middle_name varchar(100) [note: 'User’s middle name (optional)']
+  profile_picture varchar [note: 'Path to user’s profile picture (optional)']
+  location varchar [note: 'User’s location (optional)']
+  is_active boolean [default: true, note: 'Whether the user account is active']
+  is_frozen boolean [default: false, note: 'Whether the user account is frozen']
+  is_banned boolean [default: false, note: 'Whether the user account is banned']
+  is_deleted boolean [default: false, note: 'Whether the user account is deleted']
+  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+  updated_at timestamp [default: `now()`, note: 'Last update timestamp']
+}
+
+Table kyc {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the KYC record']
+  user_id uuid [unique, not null, ref: > users.id, note: 'Reference to the associated user']
+  document_type varchar(50) [not null, note: 'Type of identification document']
+  document_path varchar [not null, note: 'Path to the uploaded document']
+  selfie_path varchar [not null, note: 'Path to the uploaded selfie']
+  status enum('PENDING', 'APPROVED', 'REJECTED') [default: 'PENDING', not null, note: 'KYC status']
+  submitted_at timestamp [default: `now()`, note: 'Submission timestamp']
+  reviewed_at timestamp [note: 'Review timestamp (optional)']
+}
+
+// Client Module
+Table client_profiles {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the client profile']
+  user_id uuid [not null, ref: > users.id, note: 'Linked user ID (CLIENT role)']
+  profile_description varchar [note: 'Optional profile description']
+  address varchar [note: 'Optional client address']
+  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+}
+
+Table favorites {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the favorite relationship']
+  client_id uuid [not null, ref: > users.id, note: 'Client who favorited the worker']
+  worker_id uuid [not null, ref: > users.id, note: 'Worker who was favorited']
+  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+  updated_at timestamp [default: `now()`, note: 'Last update timestamp']
+}
+
+// Worker Module
+Table worker_profiles {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the worker profile']
+  user_id uuid [not null, ref: > users.id, note: 'Reference to the associated user (WORKER role)']
+  professional_skills varchar [note: 'Comma-separated list of skills']
+  work_experience varchar [note: 'Summary of worker’s experience']
+  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+}
+
+Table services {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the service']
+  worker_id uuid [not null, ref: > users.id, note: 'Worker offering this service']
+  title varchar(100) [not null, note: 'Service title']
+  description text [note: 'Detailed service description']
+  location varchar(100) [note: 'Service location']
+  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+  updated_at timestamp [default: `now()`, note: 'Last update timestamp']
+}
+
+// Job Module
+Table jobs {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the job']
+  client_id uuid [not null, ref: > users.id, note: 'Client who created the job']
+  worker_id uuid [ref: > users.id, note: 'Worker assigned to the job (optional)']
+  service_id uuid [ref: > services.id, note: 'Service associated with the job (optional)']
+  thread_id uuid [unique, ref: > message_threads.id, note: 'Messaging thread for the job (optional)']
+  review_id uuid [unique, ref: > reviews.id, note: 'Review for this job (optional, one-to-one)']
+  status enum('NEGOTIATING', 'ACCEPTED', 'COMPLETED', 'FINALIZED', 'CANCELLED') [default: 'NEGOTIATING', not null, note: 'Job status']
+  started_at timestamp with time zone [note: 'Start timestamp']
+  completed_at timestamp with time zone [note: 'Completion timestamp']
+  cancelled_at timestamp with time zone [note: 'Cancellation timestamp']
+  cancel_reason text [note: 'Reason for cancellation']
+}
+
+// Messaging Module
+Table message_threads {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the message thread']
+  created_at timestamp with time zone [default: `now()`, note: 'Creation timestamp']
+  is_closed boolean [default: false, note: 'Whether the thread is closed']
+}
+
+Table thread_participants {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the thread participant']
+  thread_id uuid [not null, ref: > message_threads.id, note: 'Message thread']
+  user_id uuid [not null, ref: > users.id, note: 'User in the thread']
+}
+
+Table messages {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the message']
+  thread_id uuid [not null, ref: > message_threads.id, note: 'Thread this message belongs to']
+  sender_id uuid [not null, ref: > users.id, note: 'User who sent the message']
+  content text [not null, note: 'Message content']
+  timestamp timestamp [default: `now()`, note: 'Send timestamp']
+}
+
+// Review Module
+Table reviews {
+  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the review']
+  client_id uuid [not null, ref: > users.id, note: 'Client who submitted the review']
+  worker_id uuid [not null, ref: > users.id, note: 'Worker being reviewed']
+  job_id uuid [not null, ref: > jobs.id, note: 'Job associated with the review']
+  review_text varchar [note: 'Optional review text']
+  rating integer [not null, note: 'Star rating (1-5)']
+  is_flagged boolean [default: false, note: 'Whether the review is flagged']
+  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+}

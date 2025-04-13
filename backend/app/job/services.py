@@ -11,59 +11,84 @@ from uuid import UUID
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.models import User
 from app.job import models
 from app.job.models import JobStatus
+from app.job.schemas import JobCreate
 
 logger = logging.getLogger(__name__)
 
 
 class JobService:
     """
-    Handles operations related to jobs:
-    - Accepting and assigning jobs
-    - Updating job status
-    - Retrieving job data for clients and workers
+    Service class for job-related actions including accept, complete, cancel,
+    fetch job list and details. Acts as the business logic layer.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    # ---------------------------------------
-    # Accept Job
-    # ---------------------------------------
-    def accept_job(self, client_id: UUID, worker_id: UUID, service_id: UUID) -> models.Job:
+    async def create_job(self, client_id: UUID, worker_id: UUID, service_id: UUID, thread_id: UUID) -> models.Job:
         """
-        Client assigns a job to a specific worker for a given service.
+        Client initiates a new job request with a specific worker, service, and conversation thread.
+        The job status is set to 'NEGOTIATING' while waiting for the worker to accept it.
         """
-        logger.info(f"[ACCEPT] Client {client_id} initiating job with worker {worker_id}")
+        logger.info(f"[CREATE] Client {client_id} creating job with worker {worker_id} via thread {thread_id}")
 
         job = models.Job(
             client_id=client_id,
             worker_id=worker_id,
             service_id=service_id,
-            status=JobStatus.ACCEPTED,
-            started_at=datetime.now(timezone.utc)
+            status=JobStatus.NEGOTIATING,
+            thread_id=thread_id,  # Thread ID is now required
+            started_at=None,  # Not started yet
         )
         self.db.add(job)
-        self.db.commit()
-        self.db.refresh(job)
+        await self.db.commit()
+        await self.db.refresh(job)
 
-        logger.info(f"[ACCEPT] Job created: job_id={job.id}")
+        logger.info(f"[CREATE] Job created: job_id={job.id}")
         return job
 
-    # ---------------------------------------
-    # Complete Job
-    # ---------------------------------------
-    def complete_job(self, user_id: UUID, job_id: UUID) -> models.Job:
+    async def accept_job(self, worker_id: UUID, job_id: UUID) -> models.Job:
         """
-        Marks a job as completed by the assigned client.
+        Worker accepts the job. The job status is updated to 'ACCEPTED'.
+        """
+        logger.info(f"[ACCEPT] Worker {worker_id} accepting job {job_id}")
+
+        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
+        job = result.scalars().first()
+
+        if not job:
+            logger.error(f"[ACCEPT] Job not found: job_id={job_id}")
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        if job.status != JobStatus.NEGOTIATING:
+            logger.warning(f"[ACCEPT] Invalid status for acceptance: job_id={job_id}, current_status={job.status}")
+            raise HTTPException(status_code=400, detail="Only jobs in 'NEGOTIATING' status can be accepted")
+
+        job.status = JobStatus.ACCEPTED
+        job.started_at = datetime.now(timezone.utc)
+
+        await self.db.commit()
+        await self.db.refresh(job)
+
+        logger.info(f"[ACCEPT] Job accepted: job_id={job.id}")
+        return job
+
+    async def complete_job(self, user_id: UUID, job_id: UUID) -> models.Job:
+        """
+        Marks an accepted job as completed.
         """
         logger.info(f"[COMPLETE] User {user_id} attempting to complete job {job_id}")
 
-        job = self.db.query(models.Job).filter_by(id=job_id).first()
+        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
+        job = result.scalars().first()
+
         if not job:
             logger.error(f"[COMPLETE] Job not found: job_id={job_id}")
             raise HTTPException(status_code=404, detail="Job not found")
@@ -74,22 +99,22 @@ class JobService:
 
         job.status = JobStatus.COMPLETED
         job.completed_at = datetime.now(timezone.utc)
-        self.db.commit()
-        self.db.refresh(job)
+
+        await self.db.commit()
+        await self.db.refresh(job)
 
         logger.info(f"[COMPLETE] Job marked completed: job_id={job.id}")
         return job
 
-    # ---------------------------------------
-    # Cancel Job
-    # ---------------------------------------
-    def cancel_job(self, user_id: UUID, job_id: UUID, cancel_reason: str) -> models.Job:
+    async def cancel_job(self, user_id: UUID, job_id: UUID, cancel_reason: str) -> models.Job:
         """
-        Cancels a job with a reason. Only non-completed/cancelled jobs are valid.
+        Cancels an ongoing job and records the cancellation reason.
         """
         logger.info(f"[CANCEL] User {user_id} attempting to cancel job {job_id}")
 
-        job = self.db.query(models.Job).filter_by(id=job_id).first()
+        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
+        job = result.scalars().first()
+
         if not job:
             logger.error(f"[CANCEL] Job not found: job_id={job_id}")
             raise HTTPException(status_code=404, detail="Job not found")
@@ -101,39 +126,39 @@ class JobService:
         job.status = JobStatus.CANCELLED
         job.cancelled_at = datetime.now(timezone.utc)
         job.cancel_reason = cancel_reason
-        self.db.commit()
-        self.db.refresh(job)
+
+        await self.db.commit()
+        await self.db.refresh(job)
 
         logger.info(f"[CANCEL] Job cancelled: job_id={job.id}")
         return job
 
-    # ---------------------------------------
-    # List All Jobs for a User
-    # ---------------------------------------
-    def get_all_jobs_for_user(self, user_id: UUID) -> List[models.Job]:
+    async def get_all_jobs_for_user(self, user_id: UUID) -> List[models.Job]:
         """
-        Retrieves all jobs where the user is either a client or a worker.
+        Returns all jobs where the user is either a client or worker.
         """
         logger.info(f"[FETCH] Retrieving job list for user_id={user_id}")
 
-        jobs = self.db.query(models.Job).filter(
-            (models.Job.client_id == user_id) |
-            (models.Job.worker_id == user_id)
-        ).all()
+        result = await self.db.execute(
+            select(models.Job).filter(
+                (models.Job.client_id == user_id) |
+                (models.Job.worker_id == user_id)
+            )
+        )
+        jobs = result.scalars().all()
 
         logger.info(f"[FETCH] {len(jobs)} jobs found for user_id={user_id}")
         return jobs
 
-    # ---------------------------------------
-    # Retrieve a Specific Job
-    # ---------------------------------------
-    def get_job_detail(self, user_id: UUID, job_id: UUID) -> models.Job:
+    async def get_job_detail(self, user_id: UUID, job_id: UUID) -> models.Job:
         """
-        Retrieves a job by ID if the current user is involved.
+        Retrieves detailed information about a specific job, ensuring user has access.
         """
         logger.info(f"[DETAIL] Fetching job {job_id} for user_id={user_id}")
 
-        job = self.db.query(models.Job).filter_by(id=job_id).first()
+        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
+        job = result.scalars().first()
+
         if not job:
             logger.error(f"[DETAIL] Job not found: job_id={job_id}")
             raise HTTPException(status_code=404, detail="Job not found")

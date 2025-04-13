@@ -89,7 +89,7 @@ async def async_client(setup_database):
 
 
 @pytest_asyncio.fixture
-async def client_user(db_session):
+async def client_user(db_session) -> User:
     """Create a test client user."""
     user = User(
         id=uuid4(),
@@ -108,7 +108,7 @@ async def client_user(db_session):
 
 
 @pytest_asyncio.fixture
-async def worker_user(db_session):
+async def worker_user(db_session) -> User:
     """Create a test worker user."""
     user = User(
         id=uuid4(),
@@ -127,7 +127,7 @@ async def worker_user(db_session):
 
 
 @pytest_asyncio.fixture
-async def admin_user(db_session):
+async def admin_user(db_session) -> User:
     """Create a test admin user."""
     user = User(
         id=uuid4(),
@@ -146,18 +146,18 @@ async def admin_user(db_session):
 
 
 @pytest_asyncio.fixture
-def client_token(client_user):
+async def client_token(client_user) -> str:
     """Generate a JWT token for a client user."""
     return create_access_token({"sub": str(client_user.id), "role": "CLIENT"})
 
 
 @pytest_asyncio.fixture
-def worker_token(worker_user):
+async def worker_token(worker_user) -> str:
     """Generate a JWT token for a worker user."""
     return create_access_token({"sub": str(worker_user.id), "role": "WORKER"})
 
 
 @pytest_asyncio.fixture
-def admin_token(admin_user):
+async def admin_token(admin_user) -> str:
     """Generate a JWT token for an admin user."""
     return create_access_token({"sub": str(admin_user.id), "role": "ADMIN"})

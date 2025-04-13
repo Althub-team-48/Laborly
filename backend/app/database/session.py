@@ -15,7 +15,7 @@ from app.core.config import settings
 # --------------------------------------
 # SQLAlchemy Async Engine Initialization
 # --------------------------------------
-engine = create_async_engine(settings.DATABASE_URL, echo=False)
+engine = create_async_engine(settings.db_url, echo=False)
 
 # --------------------------------------
 # Session Factory for Async DB Access

@@ -19,7 +19,7 @@ from app.worker.services import WorkerService
 from app.worker import schemas
 from app.core.dependencies import get_db, require_roles
 from app.database.models import User, UserRole
-from app.core.upload import save_upload_file
+from app.core.upload import upload_file_to_s3
 
 router = APIRouter(prefix="/worker", tags=["Worker"])
 
@@ -95,8 +95,8 @@ async def submit_worker_kyc(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
 ):
-    document_path = save_upload_file(document_file, subfolder="kyc")
-    selfie_path = save_upload_file(selfie_file, subfolder="kyc")
+    document_path = upload_file_to_s3(document_file, subfolder="kyc")
+    selfie_path = upload_file_to_s3(selfie_file, subfolder="kyc")
     return await WorkerService(db).submit_kyc(
         user_id=current_user.id,
         document_type=document_type,

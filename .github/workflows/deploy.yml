@@ -35,7 +35,7 @@ jobs:
         run: docker-compose up -d --build
 
       - name: Run Certbot for SSL (first time only)
-        run: docker compose run --rm certbot || true
+        run: docker-compose run --rm certbot || true
 
       - name: Restart NGINX to apply HTTPS
         run: docker-compose restart nginx

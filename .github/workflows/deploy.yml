@@ -38,4 +38,4 @@ jobs:
         run: docker compose run --rm certbot || true
 
       - name: Restart NGINX to apply HTTPS
-        run: docker compose restart nginx
+        run: docker-compose restart nginx

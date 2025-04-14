@@ -15,7 +15,7 @@ jobs:
         run: docker compose down || true
 
       - name: Build and start new containers
-        run: docker compose up -d --build
+        run: docker-compose up -d --build
 
       - name: Run Certbot for SSL (first time only)
         run: docker compose run --rm certbot || true

@@ -47,6 +47,7 @@ class JobAccept(BaseModel):
     """
     Payload for worker to accept a job by ID.
     """
+    worker_id: UUID = Field(None, description="UUID of the worker accepting the job")
     job_id: UUID = Field(..., description="ID of the job to accept")
 
 

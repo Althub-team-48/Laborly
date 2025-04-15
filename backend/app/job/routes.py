@@ -30,7 +30,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 # Create Job (Client)
 # ---------------------------
 @router.post(
-    "",
+    "/create",
     response_model=schemas.JobRead,
     status_code=status.HTTP_201_CREATED,
     summary="Create Job",
@@ -43,7 +43,8 @@ async def create_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return await JobService(db).create_job(client_id=current_user.id, payload=payload)
+    client_id = current_user.id
+    return await JobService(db).create_job(client_id=client_id, payload=payload)
 
 # ---------------------------
 # Accept Job (Worker)
@@ -62,7 +63,8 @@ async def accept_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return await JobService(db).accept_job(worker_id=current_user.id, job_id=payload.job_id)
+    payload.worker_id = current_user.id
+    return await JobService(db).accept_job(payload=payload)
 
 
 # ---------------------------

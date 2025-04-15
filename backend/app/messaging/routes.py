@@ -50,7 +50,7 @@ async def initiate_message(
         message_data=schemas.MessageCreate(
             content=message_data.content,
             receiver_id=worker_id,
-            job_id=message_data.job_id
+            service_id=message_data.service_id
         ),
         sender_role=current_user.role
     )

@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
-    String, Text, DateTime, Enum, ForeignKey
+    String, Text, DateTime, Enum, ForeignKey, func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -122,6 +122,21 @@ class Job(Base):
         Text,
         nullable=True,
         comment="Reason provided for job cancellation"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Timestamp when the job was created"
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Timestamp when the job was last updated"
     )
 
     # -------------------------------------

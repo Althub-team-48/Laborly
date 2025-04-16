@@ -178,7 +178,12 @@ class Seeder:
             profile = WorkerProfile(
                 user_id=user.id,
                 professional_skills=", ".join(self.faker.words(nb=3)),
-                work_experience=self.faker.sentence(nb_words=10)
+                work_experience=self.faker.sentence(nb_words=10),
+                is_verified=True,
+                is_available=True,
+                years_experience=random.randint(1, 10),
+                availability_note=self.faker.sentence(nb_words=5),
+                bio=self.faker.sentence(nb_words=10),
             )
             self.db.add(profile)
         self.db.commit()

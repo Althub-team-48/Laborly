@@ -11,14 +11,17 @@ from uuid import UUID
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.job import models
+from app.job import schemas
 from app.job.models import JobStatus
 from app.job.schemas import JobCreate
+from app.messaging.models import MessageThread
+from app.service.models import Service
 
 logger = logging.getLogger(__name__)
 
@@ -32,21 +35,55 @@ class JobService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_job(self, client_id: UUID, worker_id: UUID, service_id: UUID, thread_id: UUID) -> models.Job:
+    async def create_job(self, client_id: UUID, payload: schemas.JobCreate) -> models.Job:
         """
         Client initiates a new job request with a specific worker, service, and conversation thread.
         The job status is set to 'NEGOTIATING' while waiting for the worker to accept it.
         """
-        logger.info(f"[CREATE] Client {client_id} creating job with worker {worker_id} via thread {thread_id}")
+        logger.info(f"[CREATE] Client { client_id} creating job with worker {payload.worker_id} via thread {payload.thread_id}")
+
+        # Validate that worker_id exists
+        worker = await self.db.execute(
+            select(User).filter_by(id=payload.worker_id)
+        )
+        worker = worker.scalars().first()
+        if not worker:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Worker with ID {payload.worker_id} does not exist."
+            )
+
+        # Validate that service_id exists
+        service = await self.db.execute(
+            select(Service).filter_by(id=payload.service_id)
+        )
+        service = service.scalars().first()
+        if not service:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Service with ID {payload.service_id} does not exist."
+            )
+
+        # Validate that thread_id exists
+        thread = await self.db.execute(
+            select(MessageThread).filter_by(id=payload.thread_id)
+        )
+        thread = thread.scalars().first()
+        if not thread:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Message thread with ID {payload.thread_id} does not exist."
+            )
 
         job = models.Job(
-            client_id=client_id,
-            worker_id=worker_id,
-            service_id=service_id,
+            client_id= client_id,
+            worker_id=payload.worker_id,
+            service_id=payload.service_id,
             status=JobStatus.NEGOTIATING,
-            thread_id=thread_id,  # Thread ID is now required
+            thread_id=payload.thread_id,  # Thread ID is now required
             started_at=None,  # Not started yet
         )
+        
         self.db.add(job)
         await self.db.commit()
         await self.db.refresh(job)
@@ -54,21 +91,21 @@ class JobService:
         logger.info(f"[CREATE] Job created: job_id={job.id}")
         return job
 
-    async def accept_job(self, worker_id: UUID, job_id: UUID) -> models.Job:
+    async def accept_job(self, payload: schemas.JobAccept) -> models.Job:
         """
         Worker accepts the job. The job status is updated to 'ACCEPTED'.
         """
-        logger.info(f"[ACCEPT] Worker {worker_id} accepting job {job_id}")
+        logger.info(f"[ACCEPT] Worker {payload.worker_id} accepting job {payload.job_id}")
 
-        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
+        result = await self.db.execute(select(models.Job).filter_by(id=payload.job_id))
         job = result.scalars().first()
 
         if not job:
-            logger.error(f"[ACCEPT] Job not found: job_id={job_id}")
+            logger.error(f"[ACCEPT] Job not found: job_id={payload.job_id}")
             raise HTTPException(status_code=404, detail="Job not found")
 
         if job.status != JobStatus.NEGOTIATING:
-            logger.warning(f"[ACCEPT] Invalid status for acceptance: job_id={job_id}, current_status={job.status}")
+            logger.warning(f"[ACCEPT] Invalid status for acceptance: job_id={payload.job_id}, current_status={job.status}")
             raise HTTPException(status_code=400, detail="Only jobs in 'NEGOTIATING' status can be accepted")
 
         job.status = JobStatus.ACCEPTED

@@ -35,6 +35,7 @@ class MessageCreate(MessageBase):
 class MessageRead(MessageBase):
     id: UUID = Field(..., description="Unique identifier for the message")
     sender_id: UUID = Field(..., description="User ID of the message sender")
+    thread_id: UUID = Field(..., description="Thread ID the message belongs to")
     timestamp: datetime = Field(..., description="Timestamp when the message was sent")
 
     model_config = ConfigDict(from_attributes=True)

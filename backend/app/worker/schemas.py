@@ -58,6 +58,9 @@ class WorkerProfileRead(WorkerProfileBase):
     is_available: bool = Field(..., description="Availability status for job assignments")
     created_at: datetime = Field(..., description="Profile creation timestamp")
     updated_at: datetime = Field(..., description="Profile last update timestamp")
+    is_verified: bool = Field(..., description="KYC verification status")
+    professional_skills: Optional[str] = Field(default=None, description="Comma-separated list of skills")
+    work_experience: Optional[str] = Field(default=None, description="Summary of work experience")
 
     # Related user fields
     email: str = Field(..., description="Worker's email address")

@@ -61,6 +61,25 @@ class WorkerProfile(Base):
         comment="Timestamp when the profile was created"
     )
 
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Timestamp when the profile was last updated"
+    )
+
+    is_available: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        comment="Availability status for job assignments"
+    )
+
+    is_verified: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        comment="KYC verification status"
+    )
+    
     # -------------------------------------
     # Relationships
     # -------------------------------------

@@ -1,163 +1,113 @@
 """
 tests/conftest.py
 
-Test fixtures for async database setup, client authentication, and test users.
-Used across all test modules in the Laborly backend.
+Test fixtures for:
+- Fake users (Admin, Client, Worker)
+- Dependency overrides (auth, DB)
+- AsyncClient for HTTPX tests
 """
-
-import asyncio
-import os
-from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from dotenv import load_dotenv
+from uuid import uuid4
+from unittest.mock import AsyncMock
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
 
+from app.auth.schemas import AuthSuccessResponse, AuthUserResponse
 from main import app
-from app.database.session import get_db
-from app.database.base import Base
-from app.database.models import User, UserRole
-from app.auth.services import get_password_hash, create_access_token
-
-# Load environment variables
-load_dotenv()
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-
-# Create async engine and session factory
-engine = create_async_engine(TEST_DATABASE_URL, echo=True)
-TestSessionLocal = sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
+from app.database.enums import UserRole
+from app.core.dependencies import get_db
+from app.admin.routes import admin_user_dependency
+from app.client.routes import client_user_dependency
+from app.worker.routes import require_roles
 
 
-async def drop_all_tables(conn):
-    """
-    Drop all tables in reverse order of dependencies to avoid issues.
-    """
-    for table in reversed(Base.metadata.sorted_tables):
-        await conn.run_sync(table.drop, checkfirst=True)
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
+# -----------------------
+# Fake Users
+# -----------------------
 
 @pytest_asyncio.fixture
-async def setup_database():
-    """Create and tear down the test database schema per test function."""
-    async with engine.begin() as conn:
-        await drop_all_tables(conn)
-        await conn.run_sync(Base.metadata.create_all)
+def fake_admin_user():
+    class FakeAdminUser:
+        id = uuid4()
+        role = UserRole.ADMIN
+    return FakeAdminUser()
+
+@pytest_asyncio.fixture
+def fake_client_user():
+    class FakeClientUser:
+        id = uuid4()
+        role = UserRole.CLIENT
+    return FakeClientUser()
+
+@pytest_asyncio.fixture
+def fake_worker_user():
+    class FakeWorkerUser:
+        id = uuid4()
+        role = UserRole.WORKER
+    return FakeWorkerUser()
+
+@pytest.fixture
+def fake_user():
+    return AuthUserResponse(
+        id="f4c7768e-3e5c-4c88-90d0-71a4fd74b127",
+        email="user@example.com",
+        phone_number="1234567890",
+        first_name="John",
+        last_name="Doe",
+        role="CLIENT",
+        created_at="2024-01-01T00:00:00",
+        updated_at="2024-01-01T00:00:00"
+    )
+
+# -----------------------
+# Dependency Overrides
+# -----------------------
+
+@pytest_asyncio.fixture
+def override_admin_user(fake_admin_user):
+    app.dependency_overrides[admin_user_dependency] = lambda: fake_admin_user
     yield
-    async with engine.begin() as conn:
-        await drop_all_tables(conn)
-
+    app.dependency_overrides.clear()
 
 @pytest_asyncio.fixture
-async def db_session(setup_database):
-    """Provide a database session for each test."""
-    async with TestSessionLocal() as session:
-        yield session
-        await session.rollback()
-
+def override_client_user(fake_client_user):
+    app.dependency_overrides[client_user_dependency] = lambda: fake_client_user
+    yield
+    app.dependency_overrides.clear()
 
 @pytest_asyncio.fixture
-async def async_client(setup_database):
-    """Provide an async HTTP client with overridden DB dependency."""
-    async def override_get_db():
-        async with TestSessionLocal() as session:
-            yield session
-            await session.rollback()
+def override_worker_user(fake_worker_user):
+    app.dependency_overrides[require_roles] = lambda *roles: fake_worker_user
+    yield
+    app.dependency_overrides.clear()
 
-    app.dependency_overrides[get_db] = override_get_db
-    transport = ASGITransport(app=app)
-
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
-
+@pytest_asyncio.fixture
+def override_get_db():
+    async def _override():
+        yield AsyncMock()
+    app.dependency_overrides[get_db] = _override
+    yield
     app.dependency_overrides.clear()
 
 
-@pytest_asyncio.fixture
-async def client_user(db_session) -> User:
-    """Create a test client user."""
-    user = User(
-        id=uuid4(),
-        email=f"client_{uuid4().hex[:8]}@test.com",
-        phone_number=f"0800{uuid4().int % 10000000:07}",
-        hashed_password=get_password_hash("testpassword"),
-        role=UserRole.CLIENT,
-        first_name="Test",
-        last_name="Client",
-        is_active=True
-    )
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
-    return user
-
+# -----------------------
+# Async Test Client
+# -----------------------
 
 @pytest_asyncio.fixture
-async def worker_user(db_session) -> User:
-    """Create a test worker user."""
-    user = User(
-        id=uuid4(),
-        email=f"worker_{uuid4().hex[:8]}@test.com",
-        phone_number=f"0801{uuid4().int % 10000000:07}",
-        hashed_password=get_password_hash("testpassword"),
-        role=UserRole.WORKER,
-        first_name="Worker",
-        last_name="User",
-        is_active=True
-    )
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
-    return user
+def async_client():
+    transport = ASGITransport(app=app)
+    return AsyncClient(transport=transport, base_url="http://test")
+
+# -----------------------
+# Fake Auth
+# -----------------------
+@pytest.fixture
+def fake_token():
+    return "fake-jwt-token"
 
 
-@pytest_asyncio.fixture
-async def admin_user(db_session) -> User:
-    """Create a test admin user."""
-    user = User(
-        id=uuid4(),
-        email=f"admin_{uuid4().hex[:8]}@test.com",
-        phone_number=f"0802{uuid4().int % 10000000:07}",
-        hashed_password=get_password_hash("testpassword"),
-        role=UserRole.ADMIN,
-        first_name="Admin",
-        last_name="User",
-        is_active=True
-    )
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
-    return user
-
-
-@pytest_asyncio.fixture
-async def client_token(client_user) -> str:
-    """Generate a JWT token for a client user."""
-    return create_access_token({"sub": str(client_user.id), "role": "CLIENT"})
-
-
-@pytest_asyncio.fixture
-async def worker_token(worker_user) -> str:
-    """Generate a JWT token for a worker user."""
-    return create_access_token({"sub": str(worker_user.id), "role": "WORKER"})
-
-
-@pytest_asyncio.fixture
-async def admin_token(admin_user) -> str:
-    """Generate a JWT token for an admin user."""
-    return create_access_token({"sub": str(admin_user.id), "role": "ADMIN"})
+@pytest.fixture
+def fake_auth_response(fake_user, fake_token):
+    return AuthSuccessResponse(access_token=fake_token, user=fake_user)

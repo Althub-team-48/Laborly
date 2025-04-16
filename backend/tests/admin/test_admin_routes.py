@@ -26,14 +26,16 @@ import pytest_asyncio
 
 client = TestClient(app)
 
+
 # ---------------------------
-# Test for get_pending_kyc_list
-# --------------------------- 
+# Test the get_pending_kyc_list endpoint
+# ---------------------------  
+ 
 
 @pytest.mark.asyncio
 @patch.object(AdminService, 'list_pending_kyc', new_callable=AsyncMock)
 async def test_get_pending_kyc_list(mock_list_pending_kyc):
-    # --- Mock Data ---
+    """Mock Data"""
     fake_kyc_response = [
         KYCReviewResponse(
             user_id=uuid4(),
@@ -42,7 +44,7 @@ async def test_get_pending_kyc_list(mock_list_pending_kyc):
         )
 ]
     mock_list_pending_kyc.return_value = fake_kyc_response
-    # Override the admin_user_dependency to return a fake admin
+    """Override the admin_user_dependency to return a fake admin"""
     async def override_get_current_user():
         class FakeAdminUser:
             id = uuid4()
@@ -63,18 +65,18 @@ async def test_get_pending_kyc_list(mock_list_pending_kyc):
     assert "status" in data[0]
     assert "reviewed_at" in data[0]
 
-    # Clean up overrides after the test
+    """Clean up overrides after the test"""
     app.dependency_overrides = {}
 
 
 # ---------------------------
-# Test for approve_user_kyc
+# Test the approve_user_kyc endpoint
 # ---------------------------  
 
 @pytest.mark.asyncio
 @patch.object(AdminService, 'approve_kyc', new_callable=AsyncMock)
 async def test_approve_user_kyc_success(mock_approve_kyc):
-     # Create a fake user ID and response
+    """Create a fake user ID and response"""
     test_user_id = uuid4()
     fake_response = KYCReviewResponse(
         user_id=test_user_id,
@@ -84,7 +86,7 @@ async def test_approve_user_kyc_success(mock_approve_kyc):
 
     mock_approve_kyc.return_value = fake_response
 
-    # Override the admin_user_dependency to return a fake admin
+    """Override the admin_user_dependency to return a fake admin"""
     async def override_get_current_user():
         class FakeAdminUser:
             id = uuid4()
@@ -93,7 +95,7 @@ async def test_approve_user_kyc_success(mock_approve_kyc):
 
     app.dependency_overrides[admin_user_dependency] = override_get_current_user
 
-    # Override the get_db dependency to return a mock session
+    """Override the get_db dependency to return a mock session"""
     async def override_get_db():
         yield AsyncMock()
 
@@ -109,17 +111,20 @@ async def test_approve_user_kyc_success(mock_approve_kyc):
     assert data["status"] == "approved"
     assert "reviewed_at" in data
 
-    # Clean up overrides after the test
+    """Clean up overrides after the test"""
     app.dependency_overrides = {}
 
 # ---------------------------
-# Test for kyc_not_found
+# Test for kyc_not_found edge case
 # ---------------------------  
 @pytest.mark.asyncio
 @patch.object(AdminService, 'approve_kyc', new_callable=AsyncMock)
-async def test_approve_kyc_user_not_found(mock_approve_kyc):
+async def test_kyc_user_not_found(mock_approve_kyc):
+    """Create a fake user ID and response"""
     test_user_id = uuid4()
     mock_approve_kyc.side_effect = HTTPException(status_code=404, detail="KYC not found")
+
+    """Override the admin_user_dependency to return a fake admin"""
 
     async def override_get_current_user():
         class FakeAdminUser:
@@ -128,6 +133,8 @@ async def test_approve_kyc_user_not_found(mock_approve_kyc):
         return FakeAdminUser()
     
     app.dependency_overrides[admin_user_dependency] = override_get_current_user
+
+    """Override the get_db dependency to return a mock session"""
 
     async def override_get_db():
         yield AsyncMock()
@@ -141,16 +148,17 @@ async def test_approve_kyc_user_not_found(mock_approve_kyc):
     assert response.status_code == 404
     assert response.json()["detail"] == "KYC not found"
 
+    """Clean up overrides after the test"""
     app.dependency_overrides = {}    
 
 # ---------------------------
-# Test for reject_user_kyc
+# Test the reject_user_kyc endpoint
 # ---------------------------  
 
 @pytest.mark.asyncio
 @patch.object(AdminService, 'reject_kyc', new_callable=AsyncMock)
 async def test_reject_user_kyc_success(mock_reject_kyc):
-     # Create a fake user ID and response
+    """Create a fake user ID and response"""
     test_user_id = uuid4()
     fake_response = KYCReviewResponse(
         user_id=test_user_id,
@@ -160,7 +168,7 @@ async def test_reject_user_kyc_success(mock_reject_kyc):
 
     mock_reject_kyc.return_value = fake_response
 
-    # Override the admin_user_dependency to return a fake admin
+    """Override the admin_user_dependency to return a fake admin"""
     async def override_get_current_user():
         class FakeAdminUser:
             id = uuid4()
@@ -169,7 +177,7 @@ async def test_reject_user_kyc_success(mock_reject_kyc):
 
     app.dependency_overrides[admin_user_dependency] = override_get_current_user
 
-    # Override the get_db dependency to return a mock session
+    """Override the get_db dependency to return a mock session"""
     async def override_get_db():
         yield AsyncMock()
 
@@ -185,17 +193,17 @@ async def test_reject_user_kyc_success(mock_reject_kyc):
     assert data["status"] == "rejected"
     assert "reviewed_at" in data
 
-    # Clean up overrides after the test
+    """Clean up overrides after the test"""
     app.dependency_overrides = {}
 
 # ---------------------------
-# Test for freeze_user_account
+# Test the freeze_user_account endpoint
 # ---------------------------    
 
 @pytest.mark.asyncio
 @patch.object(AdminService, 'freeze_user', new_callable=AsyncMock)
 async def test_freeze_user_account(mock_freeze_user):
-     # Create a fake user ID and response
+    """Create a fake user ID and response"""
     test_user_id = uuid4()
     fake_response = UserStatusUpdateResponse(
         user_id=test_user_id,
@@ -206,6 +214,7 @@ async def test_freeze_user_account(mock_freeze_user):
 
     mock_freeze_user.return_value = fake_response
 
+    """Override the admin_user_dependency to return a fake admin"""
     async def override_get_current_user():
         class FakeAdminUser:
             id = uuid4()
@@ -214,7 +223,7 @@ async def test_freeze_user_account(mock_freeze_user):
 
     app.dependency_overrides[admin_user_dependency] = override_get_current_user
 
-    # Override the get_db dependency to return a mock session
+    """Override the get_db dependency to return a mock session"""
     async def override_get_db():
         yield AsyncMock()
 
@@ -231,17 +240,17 @@ async def test_freeze_user_account(mock_freeze_user):
     assert data["success"] is True
     assert "timestamp" in data
 
-    # Clean up overrides after the test
+    """Clean up overrides after the test"""
     app.dependency_overrides = {}
 
 # ---------------------------
-# Test for unfreeze_user_account
+# Test the unfreeze_user_account endpoint
 # ---------------------------    
 
 @pytest.mark.asyncio
 @patch.object(AdminService, 'unfreeze_user', new_callable=AsyncMock)
 async def test_unfreeze_user_account(mock_unfreeze_user):
-     # Create a fake user ID and response
+    """Create a fake user ID and response"""
     test_user_id = uuid4()
     fake_response = UserStatusUpdateResponse(
         user_id=test_user_id,
@@ -260,7 +269,7 @@ async def test_unfreeze_user_account(mock_unfreeze_user):
 
     app.dependency_overrides[admin_user_dependency] = override_get_current_user
 
-    # Override the get_db dependency to return a mock session
+    """Override the get_db dependency to return a mock session"""
     async def override_get_db():
         yield AsyncMock()
 
@@ -277,54 +286,9 @@ async def test_unfreeze_user_account(mock_unfreeze_user):
     assert data["success"] is True
     assert "timestamp" in data
 
-    # Clean up overrides after the test
+    """Clean up overrides after the test"""
     app.dependency_overrides = {}
 
-# ---------------------------
-# Test for unfreeze_user_account
-# ---------------------------    
-
-@pytest.mark.asyncio
-@patch.object(AdminService, 'unfreeze_user', new_callable=AsyncMock)
-async def test_unfreeze_user_account(mock_unfreeze_user):
-     # Create a fake user ID and response
-    test_user_id = uuid4()
-    fake_response = UserStatusUpdateResponse(
-        user_id=test_user_id,
-        action='unfrozen',
-        success=True,
-        timestamp=datetime.now(timezone.utc)
-    )
-
-    mock_unfreeze_user.return_value = fake_response
-
-    async def override_get_current_user():
-        class FakeAdminUser:
-            id = uuid4()
-            role = UserRole.ADMIN
-        return FakeAdminUser()
-
-    app.dependency_overrides[admin_user_dependency] = override_get_current_user
-
-    # Override the get_db dependency to return a mock session
-    async def override_get_db():
-        yield AsyncMock()
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:  
-        response = await ac.put(f"/admin/users/{test_user_id}/unfreeze")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["user_id"] == str(test_user_id)
-    assert data["action"] == "unfrozen"
-    assert data["success"] is True
-    assert "timestamp" in data
-
-    # Clean up overrides after the test
-    app.dependency_overrides = {}
 # ---------------------------
 # Test for ban_user_account
 # ---------------------------    
@@ -417,51 +381,6 @@ async def test_unban_user_account(mock_unban_user):
     # Clean up overrides after the test
     app.dependency_overrides = {}
 
-# ---------------------------
-# Test for unfreeze_user_account
-# ---------------------------    
-
-@pytest.mark.asyncio
-@patch.object(AdminService, 'unfreeze_user', new_callable=AsyncMock)
-async def test_unfreeze_user_account(mock_unfreeze_user):
-     # Create a fake user ID and response
-    test_user_id = uuid4()
-    fake_response = UserStatusUpdateResponse(
-        user_id=test_user_id,
-        action='unfrozen',
-        success=True,
-        timestamp=datetime.now(timezone.utc)
-    )
-
-    mock_unfreeze_user.return_value = fake_response
-
-    async def override_get_current_user():
-        class FakeAdminUser:
-            id = uuid4()
-            role = UserRole.ADMIN
-        return FakeAdminUser()
-
-    app.dependency_overrides[admin_user_dependency] = override_get_current_user
-
-    # Override the get_db dependency to return a mock session
-    async def override_get_db():
-        yield AsyncMock()
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:  
-        response = await ac.put(f"/admin/users/{test_user_id}/unfreeze")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["user_id"] == str(test_user_id)
-    assert data["action"] == "unfrozen"
-    assert data["success"] is True
-    assert "timestamp" in data
-
-    # Clean up overrides after the test
-    app.dependency_overrides = {}
 
 # ---------------------------
 # Test for delete_user_account and user not found (by trying to find a deleted user)

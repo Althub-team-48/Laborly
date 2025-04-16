@@ -55,6 +55,23 @@ class WorkerProfile(Base):
         comment="Brief summary of the worker's experience or background"
     )
 
+    years_experience: Mapped[int] = mapped_column(
+        nullable=True,
+        comment="Number of years of experience"
+    )
+
+    availability_note: Mapped[str] = mapped_column(
+        String,
+        nullable=True,
+        comment="Custom note about availability"
+    )
+
+    bio: Mapped[str] = mapped_column(
+        String,
+        nullable=True,
+        comment="Short biography of the worker"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

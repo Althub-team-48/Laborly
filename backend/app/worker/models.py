@@ -55,12 +55,48 @@ class WorkerProfile(Base):
         comment="Brief summary of the worker's experience or background"
     )
 
+    years_experience: Mapped[int] = mapped_column(
+        nullable=True,
+        comment="Number of years of experience"
+    )
+
+    availability_note: Mapped[str] = mapped_column(
+        String,
+        nullable=True,
+        comment="Custom note about availability"
+    )
+
+    bio: Mapped[str] = mapped_column(
+        String,
+        nullable=True,
+        comment="Short biography of the worker"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         comment="Timestamp when the profile was created"
     )
 
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Timestamp when the profile was last updated"
+    )
+
+    is_available: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        comment="Availability status for job assignments"
+    )
+
+    is_verified: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        comment="KYC verification status"
+    )
+    
     # -------------------------------------
     # Relationships
     # -------------------------------------

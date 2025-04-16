@@ -106,9 +106,9 @@ async def cancel_job(
     current_user: User = Depends(get_current_user)
 ):
     return await JobService(db).cancel_job(
-        client_id=current_user.id,
+        user_id=current_user.id,
         job_id=job_id,
-        reason=payload.cancel_reason
+        cancel_reason=payload.cancel_reason
     )
 
 

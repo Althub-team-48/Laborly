@@ -39,11 +39,25 @@ class WorkerProfileUpdate(WorkerProfileBase):
     Schema for updating a worker profile and basic user fields.
     """
     is_available: Optional[bool] = Field(default=None, description="Availability status for job assignments")
+
+    is_verified: Optional[bool] = Field(default=None, description="KYC verification status")
+
+    professional_skills: Optional[str] = Field(default=None, description="Comma-separated list of skills")
+
+    work_experience: Optional[str] = Field(default=None, description="Summary of work experience")
+
+    email: Optional[str] = Field(default=None, description="Worker's email address")
+
     first_name: Optional[str] = Field(default=None, description="First name of the worker")
+
     last_name: Optional[str] = Field(default=None, description="Last name of the worker")
+
     phone_number: Optional[str] = Field(default=None, description="Worker's phone number")
+
     location: Optional[str] = Field(default=None, description="Worker's location")
+    
     profile_picture: Optional[str] = Field(default=None, description="URL to profile picture")
+
 
 
 # -------------------------------------
@@ -58,6 +72,9 @@ class WorkerProfileRead(WorkerProfileBase):
     is_available: bool = Field(..., description="Availability status for job assignments")
     created_at: datetime = Field(..., description="Profile creation timestamp")
     updated_at: datetime = Field(..., description="Profile last update timestamp")
+    is_verified: bool = Field(..., description="KYC verification status")
+    professional_skills: Optional[str] = Field(default=None, description="Comma-separated list of skills")
+    work_experience: Optional[str] = Field(default=None, description="Summary of work experience")
 
     # Related user fields
     email: str = Field(..., description="Worker's email address")

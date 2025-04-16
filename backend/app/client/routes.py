@@ -24,6 +24,8 @@ router = APIRouter(prefix="/client", tags=["Client"])
 # Client Profile Endpoints
 # ----------------------------------------
 
+client_user_dependency=require_roles(UserRole.CLIENT, UserRole.ADMIN)
+
 @router.get(
     "/get/profile",
     response_model=schemas.ClientProfileRead,
@@ -35,7 +37,7 @@ router = APIRouter(prefix="/client", tags=["Client"])
 async def get_client_profile(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
+    current_user: User = Depends(client_user_dependency),
 ):
     return await ClientService(db).get_profile(current_user.id)
 
@@ -52,7 +54,7 @@ async def update_client_profile(
     request: Request,
     data: schemas.ClientProfileUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
+    current_user: User = Depends(client_user_dependency),
 ):
     return await ClientService(db).update_profile(current_user.id, data)
 
@@ -72,7 +74,7 @@ async def update_client_profile(
 async def list_favorite_workers(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
+    current_user: User = Depends(client_user_dependency),
 ):
     return await ClientService(db).list_favorites(current_user.id)
 
@@ -89,7 +91,7 @@ async def add_favorite_worker(
     request: Request,
     worker_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
+    current_user: User = Depends(client_user_dependency),
 ):
     return await ClientService(db).add_favorite(current_user.id, worker_id)
 
@@ -105,7 +107,7 @@ async def remove_favorite_worker(
     request: Request,
     worker_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
+    current_user: User = Depends(client_user_dependency),
 ):
     await ClientService(db).remove_favorite(current_user.id, worker_id)
     return
@@ -126,7 +128,7 @@ async def remove_favorite_worker(
 async def list_client_jobs(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
+    current_user: User = Depends(client_user_dependency),
 ):
     return await ClientService(db).get_jobs(current_user.id)
 
@@ -143,6 +145,6 @@ async def get_client_job_detail(
     request: Request,
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.CLIENT, UserRole.ADMIN)),
+    current_user: User = Depends(client_user_dependency),
 ):
     return await ClientService(db).get_job_detail(current_user.id, job_id)

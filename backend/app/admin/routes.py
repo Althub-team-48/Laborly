@@ -27,12 +27,14 @@ logger = logging.getLogger(__name__)
 # KYC Approval/Moderation
 # ---------------------------
 
+admin_user_dependency = get_current_user_with_role(UserRole.ADMIN)
+
 @router.get("/kyc/pending", response_model=list[KYCReviewResponse], status_code=status.HTTP_200_OK)
 @limiter.limit("10/minute")
 async def get_pending_kyc_list(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Retrieve all KYC submissions currently pending approval.
@@ -47,7 +49,7 @@ async def approve_user_kyc(
     request: Request,
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Approve a user's submitted KYC documentation.
@@ -62,7 +64,7 @@ async def reject_user_kyc(
     request: Request,
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Reject a user's submitted KYC documentation.
@@ -75,13 +77,13 @@ async def reject_user_kyc(
 # User Moderation
 # ---------------------------
 
-@router.put("/users/{user_id}/freeze", response_model=UserStatusUpdateResponse)
+@router.put("/users/{user_id}/freeze", response_model=UserStatusUpdateResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def freeze_user_account(
     request: Request,
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Freeze a user's account (disabling access).
@@ -96,7 +98,7 @@ async def unfreeze_user_account(
     request: Request,
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Unfreeze a previously frozen user account.
@@ -111,7 +113,7 @@ async def ban_user_account(
     request: Request,
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Ban a user from the platform (disable and mark as banned).
@@ -126,7 +128,7 @@ async def unban_user_account(
     request: Request,
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Unban a previously banned user account.
@@ -141,7 +143,7 @@ async def delete_user_account(
     request: Request,
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Permanently delete a user account from the system.
@@ -160,7 +162,7 @@ async def delete_user_account(
 async def get_flagged_reviews(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Get all reviews that were flagged for admin moderation.
@@ -175,7 +177,7 @@ async def delete_flagged_review(
     request: Request,
     review_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.ADMIN)),
+    current_user: User = Depends(admin_user_dependency),
 ):
     """
     Delete a flagged review from the system.

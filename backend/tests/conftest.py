@@ -18,11 +18,13 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
 from app.messaging.schemas import MessageRead, ThreadParticipantRead,ThreadRead
+from app.review.schemas import ReviewRead, WorkerReviewSummary
 from main import app
 from app.database.enums import UserRole
 from app.core.dependencies import get_current_user, get_db
 from app.admin.routes import admin_user_dependency
 from app.client.routes import client_user_dependency
+from app.review.routes import client_dependency
 from app.worker.routes import require_roles
 from app.auth.schemas import AuthSuccessResponse, AuthUserResponse
 from app.job.schemas import JobRead
@@ -69,6 +71,13 @@ def override_client_user(fake_client_user):
     app.dependency_overrides[client_user_dependency] = lambda: fake_client_user
     yield
     app.dependency_overrides.clear()
+
+@pytest.fixture
+def override_client(fake_client_user):
+    app.dependency_overrides[client_dependency] = lambda: fake_client_user
+    yield
+    app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def override_worker_user(fake_worker_user):
@@ -185,6 +194,31 @@ def fake_message_read():
         timestamp=datetime.now(timezone.utc),
         content="Hi,can you fix my dishwasher?"
     )
+
+# ----------------------------------------------------------------------
+# Fake Review Object
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def fake_review_read():
+    return ReviewRead(
+        id=uuid4(),
+        reviewer_id=uuid4(),
+        worker_id=uuid4(),
+        job_id=uuid4(),
+        rating=5,
+        text="Suraju did a perfect job",
+        is_flagged=False,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
+    )
+
+@pytest.fixture
+def fake_review_summary():
+    return WorkerReviewSummary(
+       average_rating=4.8,
+       total_reviews=3
+    )   
 
 # ----------------------------------------------------------------------
 # HTTPX Async Client (ASGI)

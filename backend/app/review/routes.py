@@ -20,7 +20,7 @@ from app.review.services import ReviewService
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
-
+client_dependency = get_current_user_with_role(UserRole.CLIENT)
 # -------------------------------
 # Submit Review for a Completed Job
 # -------------------------------
@@ -37,7 +37,7 @@ async def submit_review(
     job_id: UUID,
     payload: schemas.ReviewWrite,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.CLIENT)),
+    current_user: User = Depends(client_dependency),
 ):
     return await ReviewService(db).submit_review(
         job_id=job_id,
@@ -79,7 +79,7 @@ async def get_worker_reviews(
 async def get_my_reviews(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_with_role(UserRole.CLIENT)),
+    current_user: User = Depends(client_dependency),
 ):
     return await ReviewService(db).get_reviews_by_client(client_id=current_user.id)
 

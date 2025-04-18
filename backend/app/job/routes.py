@@ -26,6 +26,7 @@ from app.core.limiter import limiter
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
+current_user= get_current_user
 # ---------------------------
 # Create Job (Client)
 # ---------------------------
@@ -41,7 +42,7 @@ async def create_job(
     request: Request,
     payload: schemas.JobCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(current_user)
 ):
     client_id = current_user.id
     return await JobService(db).create_job(client_id=client_id, payload=payload)
@@ -61,7 +62,7 @@ async def accept_job(
     request: Request,
     payload: schemas.JobAccept,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(current_user)
 ):
     payload.worker_id = current_user.id
     return await JobService(db).accept_job(payload=payload)
@@ -82,7 +83,7 @@ async def complete_job(
     request: Request,
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(current_user)
 ):
     return await JobService(db).complete_job(current_user.id, job_id)
 
@@ -103,7 +104,7 @@ async def cancel_job(
     job_id: UUID,
     payload: schemas.CancelJobRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(current_user)
 ):
     return await JobService(db).cancel_job(
         user_id=current_user.id,
@@ -126,7 +127,7 @@ async def cancel_job(
 async def get_jobs_for_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(current_user)
 ):
     return await JobService(db).get_all_jobs_for_user(current_user.id)
 
@@ -146,6 +147,6 @@ async def get_job_detail(
     request: Request,
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(current_user)
 ):
     return await JobService(db).get_job_detail(current_user.id, job_id)

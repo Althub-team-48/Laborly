@@ -9,7 +9,7 @@ Provides authentication and role-based access control (RBAC) dependencies for Fa
 """
 
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Callable
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -44,8 +44,17 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """
-    Extract the user from the JWT token.
-    Validate token, check blacklist, and retrieve user from the DB.
+    Authenticate the current user based on the JWT access token.
+
+    - Decodes the JWT token using the configured secret and algorithm.
+    - Validates the token payload and checks if the token has been blacklisted.
+    - Retrieves the user from the database using the user ID (sub) in the token.
+    
+    Raises:
+        HTTPException: If the token is invalid, blacklisted, or the user is not found.
+
+    Returns:
+        User: The authenticated user object from the database.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,9 +86,21 @@ async def get_current_user(
     return user
 
 
-def get_current_user_with_role(required_role: UserRole):
+def get_current_user_with_role(required_role: UserRole) -> Callable[[User], User]:
     """
-    Restrict access to users with an exact required role.
+    Restrict access to users with a specific role.
+
+    - Wraps the `get_current_user` dependency to enforce role-based access control.
+    - Verifies that the authenticated user has the required role.
+
+    Args:
+        required_role (UserRole): The exact role required to access the route.
+
+    Returns:
+        Callable: A dependency function that checks the user's role and returns the user if authorized.
+
+    Raises:
+        HTTPException: If the user does not have the required role.
     """
 
     async def role_dependency(user: User = Depends(get_current_user)) -> User:
@@ -96,15 +117,33 @@ def get_current_user_with_role(required_role: UserRole):
     return role_dependency
 
 
-def require_roles(*roles: UserRole):
+def require_roles(*roles: UserRole) -> Callable[[User], User]:
     """
-    Restrict access to users with any one of the specified roles.
+    Dependency that restricts access to users with any of the specified roles.
+
+    This is a flexible role-based access control (RBAC) utility.
+    Use in route dependencies to allow access only to users with certain roles.
+
+    Example:
+        @app.get("/admin-or-manager")
+        async def secure_route(user: User = Depends(require_roles(UserRole.ADMIN, UserRole.MANAGER))):
+            ...
+
+    Args:
+        *roles (UserRole): One or more allowed roles.
+
+    Raises:
+        HTTPException: 403 Forbidden if user does not have one of the allowed roles.
+
+    Returns:
+        Callable: A FastAPI dependency that returns the authenticated user if role is allowed.
     """
 
     async def checker(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
             logger.warning(
-                f"Access denied: User {user.id} with role {user.role} attempted to access restricted area (allowed: {roles})"
+                f"Access denied: User {user.id} with role {user.role} "
+                f"attempted to access restricted area (allowed: {roles})"
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

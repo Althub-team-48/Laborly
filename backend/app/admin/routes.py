@@ -40,8 +40,7 @@ def build_kyc_response(user_id: UUID, status_str: str) -> KYCReviewResponse:
     return KYCReviewResponse(
         user_id=user_id,
         status=status_str,
-        success=True,
-        timestamp=datetime.now(timezone.utc)
+        reviewed_at=datetime.now(timezone.utc)
     )
 
 

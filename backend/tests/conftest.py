@@ -17,6 +17,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
+from app.messaging.schemas import MessageRead, ThreadParticipantRead,ThreadRead
 from main import app
 from app.database.enums import UserRole
 from app.core.dependencies import get_current_user, get_db
@@ -139,6 +140,51 @@ def fake_job_read():
         updated_at=datetime.now(timezone.utc)
     )
 
+# ----------------------------------------------------------------------
+# Fake Message Objects
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def fake_thread_read():
+    participants = [
+        ThreadParticipantRead(user_id=uuid4()),
+        ThreadParticipantRead(user_id=uuid4())
+    ]
+
+    messages = [
+        MessageRead(
+            id=uuid4(),
+            content="Hello, this is a test message",
+            sender_id=uuid4(),
+            thread_id=uuid4(),
+            timestamp=datetime.now(timezone.utc)
+        ),
+        MessageRead(
+            id=uuid4(),
+            content="Another message",
+            sender_id=uuid4(),
+            thread_id=uuid4(),
+            timestamp=datetime.now(timezone.utc)
+        ),
+    ]
+    return ThreadRead(
+        id=uuid4(),
+        created_at=datetime.now(timezone.utc),
+        job_id=uuid4(),
+        is_closed=False,
+        participants=participants,
+        messages=messages    
+    )
+
+@pytest.fixture
+def fake_message_read():
+    return MessageRead(
+        id=uuid4(),
+        sender_id=uuid4(),
+        thread_id=uuid4(),
+        timestamp=datetime.now(timezone.utc),
+        content="Hi,can you fix my dishwasher?"
+    )
 
 # ----------------------------------------------------------------------
 # HTTPX Async Client (ASGI)

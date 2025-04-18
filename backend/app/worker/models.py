@@ -38,7 +38,7 @@ class WorkerProfile(Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_worker_profiles_user_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="Reference to the associated user"
     )

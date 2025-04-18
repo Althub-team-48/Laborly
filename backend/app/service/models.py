@@ -36,7 +36,7 @@ class Service(Base):
 
     worker_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", use_alter=True, name="fk_services_worker_id", ondelete="CASCADE", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="Worker (user) offering this service"
     )

@@ -41,7 +41,7 @@ async def test_approve_user_kyc_success(mock_approve_kyc, override_admin_user, o
     test_user_id = uuid4()
     mock_approve_kyc.return_value = KYCReviewResponse(
         user_id=test_user_id,
-        status="approved",
+        status="APPROVED",
         reviewed_at=datetime.now(timezone.utc)
     )
     async with async_client as ac:
@@ -49,7 +49,7 @@ async def test_approve_user_kyc_success(mock_approve_kyc, override_admin_user, o
     data = response.json()
     assert response.status_code == 200
     assert data["user_id"] == str(test_user_id)
-    assert data["status"] == "approved"
+    assert data["status"] == "APPROVED"
 
 
 @patch.object(AdminService, 'approve_kyc', new_callable=AsyncMock)
@@ -71,7 +71,7 @@ async def test_reject_user_kyc_success(mock_reject_kyc, override_admin_user, ove
     test_user_id = uuid4()
     mock_reject_kyc.return_value = KYCReviewResponse(
         user_id=test_user_id,
-        status="rejected",
+        status="REJECTED",
         reviewed_at=datetime.now(timezone.utc)
     )
     async with async_client as ac:
@@ -79,7 +79,7 @@ async def test_reject_user_kyc_success(mock_reject_kyc, override_admin_user, ove
     data = response.json()
     assert response.status_code == 200
     assert data["user_id"] == str(test_user_id)
-    assert data["status"] == "rejected"
+    assert data["status"] == "REJECTED"
 
 
 # ----------------------------
@@ -168,7 +168,9 @@ async def test_delete_user_account(mock_delete_user, override_admin_user, overri
     async with async_client as ac:
         response1 = await ac.delete(f"/admin/users/{test_user_id}")
         assert response1.status_code == 200
-        assert response1.json()["detail"] == "User deleted successfully."
+        assert response1.json()["action"] == "deleted"
+        assert response1.json()["success"] is True
+
         response2 = await ac.delete(f"/admin/users/{test_user_id}")
         assert response2.status_code == 404
         assert response2.json()["detail"] == "User not found"
@@ -183,10 +185,11 @@ async def test_delete_user_account(mock_delete_user, override_admin_user, overri
 async def test_get_flagged_reviews(mock_list_flagged_reviews, override_admin_user, override_get_db, async_client):
     """Test retrieving list of flagged reviews."""
     fake_review = FlaggedReviewRead(
-        review_id=uuid4(),
-        user_id=uuid4(),
+        id=uuid4(),
+        client_id=uuid4(),
         job_id=uuid4(),
-        content="Inappropriate review",
+        rating=1,
+        review_text="Inappropriate review",
         is_flagged=True,
         created_at=datetime.now(timezone.utc)
     )
@@ -195,7 +198,8 @@ async def test_get_flagged_reviews(mock_list_flagged_reviews, override_admin_use
         response = await ac.get("/admin/reviews/flagged")
     data = response.json()
     assert response.status_code == 200
-    assert data[0]["review_id"] == str(fake_review.review_id)
+    assert data[0]["review_id"] == str(fake_review.id)
+
 
 
 @patch.object(AdminService, 'delete_review', new_callable=AsyncMock)

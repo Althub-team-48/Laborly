@@ -8,6 +8,7 @@ Defines response schemas for admin operations:
 """
 
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -42,14 +43,22 @@ class UserStatusUpdateResponse(BaseModel):
 # Flagged Review Read Schema
 # -----------------------------------------------------
 class FlaggedReviewRead(BaseModel):
-    """
-    Schema used when returning reviews flagged for moderation.
-    """
-    review_id: UUID = Field(..., description="Unique ID of the flagged review")
-    user_id: UUID = Field(..., description="ID of the user who wrote the review")
+    id: UUID = Field(..., alias="review_id", description="Unique ID of the flagged review")
+    client_id: UUID = Field(..., alias="user_id", description="ID of the user who wrote the review")
     job_id: UUID = Field(..., description="ID of the job associated with the review")
-    content: str = Field(..., description="Text content of the review")
+    rating: Optional[int] = Field(None, description="Star rating given in the review")
+    review_text: Optional[str] = Field(None, alias="content", description="Text content of the review")
     is_flagged: bool = Field(..., description="Indicates whether the review is flagged")
     created_at: datetime = Field(..., description="Date and time the review was created")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+# -----------------------------------------------------
+# Generic Message Response Schema
+# -----------------------------------------------------
+class MessageResponse(BaseModel):
+    """
+    Generic response schema for simple success or info messages.
+    """
+    detail: str = Field(..., description="Description of the operation result")

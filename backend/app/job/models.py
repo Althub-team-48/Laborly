@@ -58,40 +58,33 @@ class Job(Base):
 
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_jobs_client_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="Client who created the job"
     )
 
     worker_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_jobs_worker_id", deferrable=True, initially="DEFERRED"),
         nullable=True,
         comment="Worker assigned to the job"
     )
 
     service_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("services.id"),
+        ForeignKey("services.id", use_alter=True, name="fk_jobs_service_id", deferrable=True, initially="DEFERRED"),
         nullable=True,
         comment="Optional service associated with the job"
     )
 
     thread_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("message_threads.id"),
+        ForeignKey("message_threads.id", use_alter=True, name="fk_jobs_thread_id", deferrable=True, initially="DEFERRED"),
         nullable=True,
         unique=True,
         comment="Thread ID for messaging related to the job"
     )
 
-    review_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("reviews.id"),
-        nullable=True,
-        unique=True,
-        comment="Review associated with this job (optional, one-to-one)"
-    )
 
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus),
@@ -172,7 +165,6 @@ class Job(Base):
     review: Mapped["Review"] = relationship(
         "Review",
         back_populates="job",
-        uselist=False,
-        foreign_keys=[review_id],
+        uselist=False
         # Relationship: One Job has one Review (unique constraint on review_id)
     )

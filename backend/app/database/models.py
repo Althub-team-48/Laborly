@@ -237,7 +237,7 @@ class KYC(Base):
     # Relationship to User
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_kyc_user_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         unique=True,
         comment="Reference to the associated user"

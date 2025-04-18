@@ -35,7 +35,7 @@ class ClientProfile(Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_client_profiles_user_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="Linked user ID for this client profile"
     )
@@ -85,14 +85,14 @@ class FavoriteWorker(Base):
 
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_favorite_client_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="User ID of the client who favorited the worker"
     )
 
     worker_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_client_profiles_worker_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="User ID of the worker who was favorited"
     )

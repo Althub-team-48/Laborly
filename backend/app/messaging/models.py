@@ -85,13 +85,13 @@ class ThreadParticipant(Base):
     )
     thread_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("message_threads.id"),
+        ForeignKey("message_threads.id", use_alter=True, name="fk_thread_participants_thread_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="The message thread this user is part of"
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_thread_participants_user_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="User participating in the thread"
     )
@@ -126,13 +126,13 @@ class Message(Base):
     )
     thread_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("message_threads.id"),
+        ForeignKey("message_threads.id", use_alter=True, name="fk_messages_thread_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="Thread this message belongs to"
     )
     sender_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_messages_sender_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="User who sent this message"
     )

@@ -54,15 +54,21 @@ class Review(Base):
     # Foreign Keys
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_reviews_client_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="User ID of the client who submitted the review"
     )
     worker_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey("users.id", use_alter=True, name="fk_reviews_worker_id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         comment="User ID of the worker being reviewed"
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("jobs.id", use_alter=True, name="fk_reviews_job_id", deferrable=True, initially="DEFERRED"),
+        nullable=False,
+        comment="ID of the related job"
     )
 
     # Admin moderation

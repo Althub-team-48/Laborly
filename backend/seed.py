@@ -319,7 +319,7 @@ class Seeder:
             review = Review(
                 client_id=job.client_id,
                 worker_id=job.worker_id,
-                job=job,  # Set the relationship to the job
+                job_id=job.id,
                 rating=rating,
                 review_text=review_text,
                 is_flagged=is_flagged,

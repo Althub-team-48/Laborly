@@ -19,12 +19,14 @@ from httpx import AsyncClient, ASGITransport
 
 from app.messaging.schemas import MessageRead, ThreadParticipantRead,ThreadRead
 from app.review.schemas import ReviewRead, WorkerReviewSummary
+from app.service.schemas import ServiceRead
 from main import app
 from app.database.enums import UserRole
 from app.core.dependencies import get_current_user, get_db
 from app.admin.routes import admin_user_dependency
 from app.client.routes import client_user_dependency
 from app.review.routes import client_dependency
+from app.service.routes import require_worker_admin_roles
 from app.worker.routes import require_roles
 from app.auth.schemas import AuthSuccessResponse, AuthUserResponse
 from app.job.schemas import JobRead
@@ -85,6 +87,13 @@ def override_worker_user(fake_worker_user):
     yield
     app.dependency_overrides.clear()
 
+@pytest.fixture
+def override_worker_admin_user(fake_worker_user):
+    app.dependency_overrides[require_worker_admin_roles] = lambda *roles: fake_worker_user
+    yield
+    app.dependency_overrides.clear()
+  
+       
 @pytest.fixture
 def override_current_user(fake_client_user):  # Override as needed
     app.dependency_overrides[get_current_user] = lambda: fake_client_user
@@ -220,6 +229,40 @@ def fake_review_summary():
        total_reviews=3
     )   
 
+# ----------------------------------------------------------------------
+# Fake Job Object
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def fake_job_read():
+    return JobRead(
+        id=uuid4(),
+        client_id=uuid4(),
+        worker_id=uuid4(),
+        service_id=uuid4(),
+        status="NEGOTIATING",
+        cancel_reason=None,
+        started_at=None,
+        completed_at=None,
+        cancelled_at=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
+    )
+# ----------------------------------------------------------------------
+# Fake Service Object
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def fake_service_read():
+    return ServiceRead(
+        id=uuid4(),
+        worker_id=uuid4(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        title= "plumbing",
+        description= "Everything related to plumbing",
+        location= "Magodo"
+    )
 # ----------------------------------------------------------------------
 # HTTPX Async Client (ASGI)
 # ----------------------------------------------------------------------

@@ -21,6 +21,7 @@ from app.database.models import User, UserRole
 
 router = APIRouter(prefix="/services", tags=["Services"])
 
+require_worker_admin_roles = require_roles(UserRole.WORKER, UserRole.ADMIN)
 
 # ---------------------------
 # Create Service
@@ -36,7 +37,7 @@ async def create_service(
     request: Request,
     data: schemas.ServiceCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     return await ServiceListingService(db).create_service(current_user.id, data)
 
@@ -56,7 +57,7 @@ async def update_service(
     service_id: UUID,
     data: schemas.ServiceUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     return await ServiceListingService(db).update_service(current_user.id, service_id, data)
 
@@ -74,7 +75,7 @@ async def delete_service(
     request: Request,
     service_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     await ServiceListingService(db).delete_service(current_user.id, service_id)
     return {"detail": "Service deleted successfully"}
@@ -93,7 +94,7 @@ async def delete_service(
 async def list_my_services(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     return await ServiceListingService(db).get_my_services(current_user.id)
 

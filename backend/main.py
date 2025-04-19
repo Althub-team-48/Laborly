@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.logging import init_logging
 from app.core.config import settings
@@ -41,6 +42,23 @@ app.state.limiter = limiter
 app.add_exception_handler(429, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+
+# -----------------------------
+# CORSMiddleware Configuration
+# -----------------------------
+origins = [
+    "http://localhost5000",       # React dev server
+    "http://127.0.0.1:5000",       # Localhost alternative
+    "http://host.docker.internal", # Lets Docker access your host machine
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # -----------------------------
 # API Router Registration

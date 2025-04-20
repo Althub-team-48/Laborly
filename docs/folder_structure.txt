@@ -41,6 +41,7 @@ backend/
 │   │   ├── dependencies.py        # Common dependencies and RBAC enforcement
 │   │   ├── limiter.py             # Rate Limiter Config
 │   │   ├── logging.py             # Centralized logging configuration
+│   │   ├── validators.py          # validation logic for password and others
 │   │   └── upload.py              # Secure file upload handler
 
 │   ├── database/                  # Database models and session handling

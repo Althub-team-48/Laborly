@@ -4,6 +4,7 @@ Laborly Seeder Script (Fully Populated)
 - Truncates all tables using SQLAlchemy (sync)
 - Seeds Admins, Clients, Workers, Services, Messages, Jobs, Reviews with fake data
 - Uses realistic data via Faker
+- All users have the same password: String@123
 """
 
 import sys
@@ -84,7 +85,7 @@ class Seeder:
                 id=uuid4(),
                 email=email,
                 phone_number=phone,
-                hashed_password=hash_password("string"),
+                hashed_password=hash_password("String@123"),
                 role=UserRole.ADMIN,
                 first_name=first,
                 last_name=last,
@@ -117,7 +118,7 @@ class Seeder:
                 id=uuid4(),
                 email=email,
                 phone_number=phone,
-                hashed_password=hash_password("string"),
+                hashed_password=hash_password("String@123"),
                 role=UserRole.CLIENT,
                 first_name=first,
                 last_name=last,
@@ -158,7 +159,7 @@ class Seeder:
                 id=uuid4(),
                 email=email,
                 phone_number=phone,
-                hashed_password=hash_password("string"),
+                hashed_password=hash_password("String@123"),
                 role=UserRole.WORKER,
                 first_name=first,
                 last_name=last,
@@ -341,4 +342,4 @@ if __name__ == "__main__":
     seeder.seed_messages()
     seeder.seed_jobs()
     seeder.seed_reviews()
-    print("🎉 Seeding completed successfully!")
+    print("🎉 Seeding completed successfully, 🔑 Seed users use password: String@123")

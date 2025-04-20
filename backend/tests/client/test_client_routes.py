@@ -161,20 +161,27 @@ async def test_list_client_jobs(mock_get_jobs, override_client_user, async_clien
 
 @patch.object(ClientService, 'get_job_detail', new_callable=AsyncMock)
 @pytest.mark.asyncio
-async def test_get_client_job_detail(mock_get_job_detail, override_client_user, async_client):
-    job_id = uuid4()
-    fake_response = ClientJobRead(
-        id=job_id,
-        service_id=uuid4(),
-        worker_id=uuid4(),
-        status="completed",
-        started_at=datetime.now(timezone.utc),
-        completed_at=datetime.now(timezone.utc)
-    )
-    mock_get_job_detail.return_value = fake_response
+async def test_get_client_job_detail(mock_get_job_detail,fake_client_job_read, override_client_user, async_client):
+    job_id=uuid4()
+    mock_get_job_detail.return_value = fake_client_job_read
     async with async_client as ac:
         response = await ac.get(f"/client/get/jobs/{job_id}")
     data = response.json()
     assert response.status_code == 200
-    assert data["id"] == str(job_id)
-    assert data["status"] == fake_response.status
+    assert data["id"] == str(fake_client_job_read.id)
+    assert data["status"] == fake_client_job_read.status
+
+# ---------------------------
+# Error Handling
+# ---------------------------    
+@patch.object(ClientService, 'get_job_detail', new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_get_client_job_detail_failed(mock_get_job_detail,fake_client_job_read, override_client_user, async_client):
+    job_id=uuid4()
+    mock_get_job_detail.side_effect = HTTPException(status_code=404, detail="unauthorized access")
+    async with async_client as ac:
+        response = await ac.get(f"/client/get/jobs/{job_id}")
+    data = response.json()
+    assert response.status_code == 404
+    assert data["detail"] == "unauthorized access"
+    

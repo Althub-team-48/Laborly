@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.limiter import limiter
 from app.worker.services import WorkerService
 from app.worker import schemas
+from app.service.routes import require_worker_admin_roles
 from app.core.dependencies import get_db, require_roles
 from app.database.models import User, UserRole
 from app.core.upload import upload_file_to_s3
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/worker", tags=["Worker"])
 async def get_worker_profile(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     return await WorkerService(db).get_profile(current_user.id)
 
@@ -56,7 +57,7 @@ async def update_worker_profile(
     request: Request,
     data: schemas.WorkerProfileUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     return await WorkerService(db).update_profile(current_user.id, data)
 
@@ -75,7 +76,7 @@ async def update_worker_profile(
 async def get_worker_kyc(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     return await WorkerService(db).get_kyc(current_user.id)
 
@@ -93,7 +94,7 @@ async def submit_worker_kyc(
     document_file: UploadFile = File(...),
     selfie_file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     document_path = upload_file_to_s3(document_file, subfolder="kyc")
     selfie_path = upload_file_to_s3(selfie_file, subfolder="kyc")
@@ -119,7 +120,7 @@ async def submit_worker_kyc(
 async def list_worker_jobs(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     return await WorkerService(db).get_jobs(current_user.id)
 
@@ -135,6 +136,6 @@ async def get_worker_job_detail(
     request: Request,
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.WORKER, UserRole.ADMIN)),
+    current_user: User = Depends(require_worker_admin_roles),
 ):
     return await WorkerService(db).get_job_detail(current_user.id, job_id)

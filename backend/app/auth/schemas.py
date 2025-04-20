@@ -9,11 +9,29 @@ Defines Pydantic models for authentication flows:
 """
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    AfterValidator,
+)
 
+from app.core.validators import password_validator
 from app.database.enums import UserRole
+
+
+# --------------------------------------------------
+# Custom Types
+# --------------------------------------------------
+
+PasswordStr = Annotated[
+    str,
+    AfterValidator(password_validator)
+]
 
 
 # --------------------------------------------------
@@ -25,7 +43,12 @@ class LoginRequest(BaseModel):
     Request schema for user login using JSON payload.
     """
     email: EmailStr = Field(..., description="User email address")
-    password: str = Field(..., min_length=6, max_length=64, description="User password (6–64 characters)")
+    password: PasswordStr = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+        description="Password must include uppercase, lowercase, digit, special character, and only ASCII characters."
+    )
 
 
 class SignupRequest(BaseModel):
@@ -34,7 +57,12 @@ class SignupRequest(BaseModel):
     """
     email: EmailStr = Field(..., description="Email address for new account")
     phone_number: str = Field(..., min_length=10, max_length=15, description="Phone number for the new account")
-    password: str = Field(..., min_length=6, max_length=64, description="Password for the account (6–64 characters)")
+    password: PasswordStr = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+        description="Password must include uppercase, lowercase, digit, special character, and only ASCII characters."
+    )
     first_name: str = Field(..., max_length=50, description="User's first name")
     last_name: str = Field(..., max_length=50, description="User's last name")
     role: UserRole = Field(..., description="User role: CLIENT, WORKER, or ADMIN")
@@ -114,7 +142,7 @@ class UserCreate(BaseModel):
             email=user_info.get("email"),
             first_name=user_info.get("given_name"),
             last_name=user_info.get("family_name"),
-            phone_number=user_info.get("phone_number") or "0000000000",  # Fallback for missing phone
+            phone_number=user_info.get("phone_number") or "0000000000",
             hashed_password=hashed_password,
             role=getattr(UserRole, default_role.upper(), UserRole.CLIENT)
         )

@@ -11,10 +11,13 @@ Handles authentication-related business logic:
 import logging
 import uuid
 import os
+import random
+import string
 from datetime import datetime, timedelta, timezone
+import string
 from typing import Union
 
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 from jose import jwt
 from passlib.context import CryptContext
@@ -32,7 +35,6 @@ from app.auth.schemas import (
     UserCreate,
 )
 from app.database.models import User
-from app.database.enums import UserRole
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,34 @@ def get_password_hash(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify if the plain password matches the hashed one."""
     return pwd_context.verify(plain_password, hashed_password)
+
+def generate_strong_password(length: int = 12) -> str:
+    """
+    Generate a strong random password that includes:
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    - At least one special character
+    - Only ASCII characters
+    """
+    if length < 8:
+        raise ValueError("Password length must be at least 8 characters")
+
+    # Required character categories
+    uppercase = random.choice(string.ascii_uppercase)
+    lowercase = random.choice(string.ascii_lowercase)
+    digit = random.choice(string.digits)
+    special = random.choice(string.punctuation)
+
+    # Fill the rest with a mix of allowed characters
+    remaining_length = length - 4
+    allowed_chars = string.ascii_letters + string.digits + string.punctuation
+    remaining_chars = random.choices(allowed_chars, k=remaining_length)
+
+    # Combine and shuffle
+    password_list = [uppercase, lowercase, digit, special] + remaining_chars
+    random.shuffle(password_list)
+    return ''.join(password_list)
 
 # -------------------------------
 # JWT Access Token
@@ -165,8 +195,8 @@ async def handle_google_callback(request: Request, db: AsyncSession):
 
     if not user:
         # New user - create one
-        uuid_password = str(uuid.uuid4())
-        hashed_password = get_password_hash(uuid_password)
+        password = generate_strong_password()
+        hashed_password = get_password_hash(password)
         user_obj = UserCreate.from_google(user_info, hashed_password=hashed_password)
 
         user_fields = {c.key for c in inspect(User).mapper.column_attrs}

@@ -39,6 +39,7 @@ async def create_service(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_worker_admin_roles),
 ):
+
     return await ServiceListingService(db).create_service(current_user.id, data)
 
 

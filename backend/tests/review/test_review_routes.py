@@ -65,4 +65,24 @@ async def test_get_worker_review_summary(mock_get_review_summary, fake_review_su
     async with async_client as ac:
         response = await ac.get(f"/reviews/summary/{worker}")
     assert response.status_code == status.HTTP_200_OK
-    assert response.json()["total_reviews"]==fake_review_summary.total_reviews         
+    assert response.json()["total_reviews"]==fake_review_summary.total_reviews 
+
+
+# ---------------------------
+#Error Handling
+# ---------------------------
+@patch.object(ReviewService, "submit_review", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_submit_review_failed(mock_submit_review, fake_review_read, override_client, override_get_db, transport):
+    mock_submit_review.side_effect = HTTPException(status_code=404, detail="job not found")
+    job_id = uuid4()
+    payload = {
+        "rating": 5,
+        "text": "Suraju did a perfect job"  
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(f"/reviews/{job_id}", json=payload)
+    assert response.status_code == 404
+    assert response.json()["detail"] == "job not found"
+       
+

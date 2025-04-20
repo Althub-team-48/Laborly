@@ -20,6 +20,8 @@ from httpx import AsyncClient, ASGITransport
 from app.messaging.schemas import MessageRead, ThreadParticipantRead,ThreadRead
 from app.review.schemas import ReviewRead, WorkerReviewSummary
 from app.service.schemas import ServiceRead
+from backend.app.client.schemas import ClientJobRead
+from backend.app.worker.schemas import WorkerProfileRead
 from main import app
 from app.database.enums import UserRole
 from app.core.dependencies import get_current_user, get_db
@@ -89,7 +91,7 @@ def override_worker_user(fake_worker_user):
 
 @pytest.fixture
 def override_worker_admin_user(fake_worker_user):
-    app.dependency_overrides[require_worker_admin_roles] = lambda *roles: fake_worker_user
+    app.dependency_overrides[require_worker_admin_roles] = lambda: fake_worker_user
     yield
     app.dependency_overrides.clear()
   
@@ -137,6 +139,20 @@ def fake_auth_response(fake_user, fake_token):
         user=fake_user
     )
 
+# ----------------------------------------------------------------------
+# Fake Client Object
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def fake_client_job_read():
+    return ClientJobRead(
+        id=uuid4(),
+        service_id=uuid4(),
+        worker_id=uuid4(),
+        status="completed",
+        started_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(timezone.utc)
+    )
 
 # ----------------------------------------------------------------------
 # Fake Job Object
@@ -230,25 +246,6 @@ def fake_review_summary():
     )   
 
 # ----------------------------------------------------------------------
-# Fake Job Object
-# ----------------------------------------------------------------------
-
-@pytest.fixture
-def fake_job_read():
-    return JobRead(
-        id=uuid4(),
-        client_id=uuid4(),
-        worker_id=uuid4(),
-        service_id=uuid4(),
-        status="NEGOTIATING",
-        cancel_reason=None,
-        started_at=None,
-        completed_at=None,
-        cancelled_at=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc)
-    )
-# ----------------------------------------------------------------------
 # Fake Service Object
 # ----------------------------------------------------------------------
 
@@ -262,6 +259,31 @@ def fake_service_read():
         title= "plumbing",
         description= "Everything related to plumbing",
         location= "Magodo"
+    )
+# ----------------------------------------------------------------------
+# Fake Worker Object
+# ----------------------------------------------------------------------
+
+@pytest.fixture
+def fake_worker_profile_read():
+    return WorkerProfileRead(
+        id=uuid4(),
+        user_id=uuid4(),
+        is_available=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        is_verified=True,
+        professional_skills="Plumbing, Electrical, Carpentry",
+        work_experience="Over 10 years in home maintenance services",
+        email="worker@example.com",
+        first_name="John",
+        last_name="Doe",
+        phone_number="+2348012345678",
+        location="Ikeja, Lagos",
+        profile_picture="https://example.com/images/profile.jpg",
+        bio="Passionate about improving homes with quality workmanship.",
+        years_experience=12,
+        availability_note="Available weekdays from 9am to 5pm."
     )
 # ----------------------------------------------------------------------
 # HTTPX Async Client (ASGI)

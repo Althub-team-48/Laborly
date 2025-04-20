@@ -37,7 +37,8 @@ class ServiceListingService:
         await self.db.commit()
         await self.db.refresh(service)
         logger.info(f"Service created: id={service.id}")
-        return service
+        # return service
+        return schemas.ServiceRead.model_validate(service)
 
     async def update_service(self, worker_id: UUID, service_id: UUID, data: schemas.ServiceUpdate) -> models.Service:
         """

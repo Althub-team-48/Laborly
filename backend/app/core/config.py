@@ -7,10 +7,12 @@ Utilizes Pydantic BaseSettings for type validation and `.env` support.
 
 import logging
 import os
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 
 logger = logging.getLogger(__name__)
+load_dotenv()
 
 class Settings(BaseSettings):
     """
@@ -43,6 +45,21 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str
     AWS_S3_BUCKET: str
+
+    # Email Configuration
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: str
+    MAIL_FROM_NAME: str
+    MAIL_SERVER: str = "smtp.example.com"
+    MAIL_PORT: int = 587
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
+    MAIL_USE_CREDENTIALS: bool = True
+    MAIL_VALIDATE_CERTS: bool = True
+    MAIL_TEMPLATE_FOLDER: str = "templates/email"
+    SUPPORT_EMAIL: str
+    BASE_URL: str = "http://localhost:3000"
 
     model_config = ConfigDict(
             env_file=".env",    # Load variables from .env file

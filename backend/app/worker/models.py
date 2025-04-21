@@ -91,7 +91,7 @@ class WorkerProfile(Base):
         comment="Availability status for job assignments"
     )
 
-    is_verified: Mapped[bool] = mapped_column(
+    is_kyc_verified: Mapped[bool] = mapped_column(
         nullable=False,
         default=False,
         comment="KYC verification status"

@@ -47,7 +47,6 @@ app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 # CORSMiddleware Configuration
 # -----------------------------
 origins = [
-    "http://localhost:5000/",       # React dev server
     "http://localhost:5000",       # React dev server
     "http://127.0.0.1:5000",       # Localhost alternative
     "http://host.docker.internal", # Lets Docker access your host machine

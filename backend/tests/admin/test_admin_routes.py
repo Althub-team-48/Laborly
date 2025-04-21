@@ -217,6 +217,10 @@ async def test_delete_flagged_review_twice(mock_delete_review, override_admin_us
         assert response2.json()["detail"] == "Review not found"
 
 
+# ----------------------------
+# Error handling
+# ----------------------------
+
 @pytest.mark.asyncio
 async def test_non_admin_access_forbidden(override_get_db, async_client):
     """Test that a non-admin is denied access with 403."""

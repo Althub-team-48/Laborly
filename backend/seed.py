@@ -4,6 +4,7 @@ Laborly Seeder Script (Fully Populated)
 - Truncates all tables using SQLAlchemy (sync)
 - Seeds Admins, Clients, Workers, Services, Messages, Jobs, Reviews with fake data
 - Uses realistic data via Faker
+- All users have the same password: String@123
 """
 
 import sys
@@ -84,7 +85,7 @@ class Seeder:
                 id=uuid4(),
                 email=email,
                 phone_number=phone,
-                hashed_password=hash_password("string"),
+                hashed_password=hash_password("String@123"),
                 role=UserRole.ADMIN,
                 first_name=first,
                 last_name=last,
@@ -95,6 +96,7 @@ class Seeder:
                 is_frozen=False,
                 is_banned=False,
                 is_deleted=False,
+                is_verified=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
             )
@@ -117,7 +119,7 @@ class Seeder:
                 id=uuid4(),
                 email=email,
                 phone_number=phone,
-                hashed_password=hash_password("string"),
+                hashed_password=hash_password("String@123"),
                 role=UserRole.CLIENT,
                 first_name=first,
                 last_name=last,
@@ -128,6 +130,7 @@ class Seeder:
                 is_frozen=False,
                 is_banned=False,
                 is_deleted=False,
+                is_verified=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
             )
@@ -158,7 +161,7 @@ class Seeder:
                 id=uuid4(),
                 email=email,
                 phone_number=phone,
-                hashed_password=hash_password("string"),
+                hashed_password=hash_password("String@123"),
                 role=UserRole.WORKER,
                 first_name=first,
                 last_name=last,
@@ -169,6 +172,7 @@ class Seeder:
                 is_frozen=False,
                 is_banned=False,
                 is_deleted=False,
+                is_verified=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
             )
@@ -179,7 +183,7 @@ class Seeder:
                 user_id=user.id,
                 professional_skills=", ".join(self.faker.words(nb=3)),
                 work_experience=self.faker.sentence(nb_words=10),
-                is_verified=True,
+                is_kyc_verified=True,
                 is_available=True,
                 years_experience=random.randint(1, 10),
                 availability_note=self.faker.sentence(nb_words=5),
@@ -341,4 +345,4 @@ if __name__ == "__main__":
     seeder.seed_messages()
     seeder.seed_jobs()
     seeder.seed_reviews()
-    print("🎉 Seeding completed successfully!")
+    print("🎉 Seeding completed successfully, 🔑 Seed users use password: String@123")

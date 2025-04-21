@@ -36,7 +36,6 @@ class ClientProfileUpdate(ClientProfileBase):
     """
     Schema used when updating an existing client profile.
     """
-    email: Optional[str] = Field(default=None, description="Client's email address")
     phone_number: Optional[str] = Field(default=None, description="Client's phone number")
     first_name: Optional[str] = Field(default=None, description="Client's first name")
     last_name: Optional[str] = Field(default=None, description="Client's last name")

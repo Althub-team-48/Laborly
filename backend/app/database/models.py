@@ -129,6 +129,11 @@ class User(Base):
         default=False,
         comment="Whether the user account is marked as deleted"
     )
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        comment="Whether the user has verified their email"
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

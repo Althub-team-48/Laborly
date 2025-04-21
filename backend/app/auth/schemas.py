@@ -28,10 +28,7 @@ from app.database.enums import UserRole
 # Custom Types
 # --------------------------------------------------
 
-PasswordStr = Annotated[
-    str,
-    AfterValidator(password_validator)
-]
+PasswordStr = Annotated[str, AfterValidator(password_validator)]
 
 
 # --------------------------------------------------
@@ -116,6 +113,13 @@ class AuthSuccessResponse(BaseModel):
     """
     access_token: str = Field(..., description="JWT access token")
     user: AuthUserResponse = Field(..., description="Details of the authenticated user")
+
+
+class MessageResponse(BaseModel):
+    """
+    Generic message response schema.
+    """
+    detail: str = Field(..., description="Response message detail")
 
 
 # --------------------------------------------------

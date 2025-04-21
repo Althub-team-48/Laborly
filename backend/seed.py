@@ -96,6 +96,7 @@ class Seeder:
                 is_frozen=False,
                 is_banned=False,
                 is_deleted=False,
+                is_verified=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
             )
@@ -129,6 +130,7 @@ class Seeder:
                 is_frozen=False,
                 is_banned=False,
                 is_deleted=False,
+                is_verified=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
             )
@@ -170,6 +172,7 @@ class Seeder:
                 is_frozen=False,
                 is_banned=False,
                 is_deleted=False,
+                is_verified=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
             )
@@ -180,7 +183,7 @@ class Seeder:
                 user_id=user.id,
                 professional_skills=", ".join(self.faker.words(nb=3)),
                 work_experience=self.faker.sentence(nb_words=10),
-                is_verified=True,
+                is_kyc_verified=True,
                 is_available=True,
                 years_experience=random.randint(1, 10),
                 availability_note=self.faker.sentence(nb_words=5),

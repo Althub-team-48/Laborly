@@ -1,0 +1,61 @@
+[project]
+name = "laborly-backend"
+version = "0.1.0"
+description = "Laborly Backend API"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.3.0",
+    "mypy>=1.10.0",
+    "black>=24.3.0",
+    "pre-commit",
+    "types-python-dateutil",
+    "types-redis",  # mypy stub for Redis
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG"]
+ignore = [
+    "E501",  # allow long lines
+    "B008",  # allow function calls in default args
+    "B904",  # allow `raise ... from e`
+    "W191",  # ignore tabs
+    "ARG001",  # ignore unused test args
+    "ARG005",  # ignore unused lambda args
+    "I001",  # ignore isort enforcement if handled by black
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/env.py" = ["F401"]  # imported but unused (env script boilerplate)
+"seed.py" = ["E402"]  # allow late imports for script logic
+"app/core/logging.py" = ["F401"]  # conditional import: colorlog
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+force-single-line = false
+
+[tool.black]
+line-length = 100
+skip-string-normalization = true
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+check_untyped_defs = true
+warn_unused_configs = true
+warn_unreachable = true
+explicit_package_bases = true
+ignore_missing_imports = true

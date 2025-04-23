@@ -8,9 +8,9 @@ Handles business logic for worker service listings:
 
 import logging
 from uuid import UUID
-from typing import List, Optional
+from collections.abc import Sequence
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,10 +24,12 @@ class ServiceListingService:
     Service layer for managing service listings.
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def create_service(self, worker_id: UUID, data: schemas.ServiceCreate) -> models.Service:
+    async def create_service(
+        self, worker_id: UUID, data: schemas.ServiceCreate
+    ) -> schemas.ServiceRead:
         """
         Create a new service entry for a worker.
         """
@@ -37,10 +39,11 @@ class ServiceListingService:
         await self.db.commit()
         await self.db.refresh(service)
         logger.info(f"Service created: id={service.id}")
-        # return service
         return schemas.ServiceRead.model_validate(service)
 
-    async def update_service(self, worker_id: UUID, service_id: UUID, data: schemas.ServiceUpdate) -> models.Service:
+    async def update_service(
+        self, worker_id: UUID, service_id: UUID, data: schemas.ServiceUpdate
+    ) -> schemas.ServiceRead:
         """
         Update an existing service belonging to the worker.
         """
@@ -54,14 +57,13 @@ class ServiceListingService:
             logger.warning(f"Service not found or unauthorized: service_id={service_id}")
             raise HTTPException(status_code=404, detail="Service not found or unauthorized")
 
-        # Apply only provided fields
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(service, field, value)
 
         await self.db.commit()
         await self.db.refresh(service)
         logger.info(f"Service updated: id={service.id}")
-        return service
+        return schemas.ServiceRead.model_validate(service)
 
     async def delete_service(self, worker_id: UUID, service_id: UUID) -> None:
         """
@@ -77,21 +79,21 @@ class ServiceListingService:
             logger.warning(f"Service not found or unauthorized: service_id={service_id}")
             raise HTTPException(status_code=404, detail="Service not found or unauthorized")
 
-        self.db.delete(service)
+        await self.db.delete(service)
         await self.db.commit()
         logger.info(f"Service deleted successfully: id={service_id}")
 
-    async def get_my_services(self, worker_id: UUID) -> List[models.Service]:
+    async def get_my_services(self, worker_id: UUID) -> list[models.Service]:
         """
         Return all services listed by the authenticated worker.
         """
         logger.info(f"Fetching all services for worker_id={worker_id}")
-        result = await self.db.execute(
-            select(models.Service).filter_by(worker_id=worker_id)
-        )
-        return result.unique().scalars().all()
+        result = await self.db.execute(select(models.Service).filter_by(worker_id=worker_id))
+        return list(result.unique().scalars().all())
 
-    async def search_services(self, title: Optional[str] = None, location: Optional[str] = None) -> List[models.Service]:
+    async def search_services(
+        self, title: str | None = None, location: str | None = None
+    ) -> list[models.Service]:
         """
         Public search for services by title and/or location.
         """
@@ -105,6 +107,6 @@ class ServiceListingService:
             query = query.filter(models.Service.location.ilike(f"%{location}%"))
 
         result = await self.db.execute(query)
-        services = result.scalars().all()
+        services: Sequence[models.Service] = result.scalars().all()
         logger.info(f"{len(services)} service(s) found")
-        return services
+        return list(services)

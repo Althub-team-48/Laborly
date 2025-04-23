@@ -6,8 +6,9 @@ Handles JWT token blacklisting using Redis:
 - Used to invalidate tokens on logout or force-expire sessions
 """
 
-import redis
 import logging
+
+import redis
 
 from app.core.config import settings
 
@@ -16,16 +17,20 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------
 # Redis Client Initialization from .env Settings
 # ------------------------------------------------------
+redis_client: redis.Redis | None = None  # type: ignore[type-arg]
+
 try:
     redis_client = redis.Redis(
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
         db=settings.REDIS_DB,
-        decode_responses=True  # Ensures values are strings, not bytes
+        decode_responses=True,  # Ensures values are strings, not bytes
     )
     # Test connection at startup
     redis_client.ping()
-    logger.info(f"Connected to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}")
+    logger.info(
+        f"Connected to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+    )
 except redis.RedisError as e:
     logger.error(f"Redis connection failed: {e}")
     redis_client = None  # Fallback — avoid raising at import time
@@ -34,7 +39,7 @@ except redis.RedisError as e:
 BLACKLIST_PREFIX = "jwt_blacklist:"
 
 
-def blacklist_token(jti: str, expires_in: int):
+def blacklist_token(jti: str, expires_in: int) -> None:
     """
     Add a JWT token ID to Redis blacklist with TTL.
 

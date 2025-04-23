@@ -42,6 +42,7 @@ NUM_ADMINS = 5
 NUM_CLIENTS = 30
 NUM_WORKERS = 10
 
+
 class Seeder:
     def __init__(self):
         self.faker = Faker()
@@ -60,10 +61,14 @@ class Seeder:
         """Truncates all tables using SQLAlchemy."""
         print("🧹 Truncating all tables (sync)...")
         with self.sync_engine.connect() as conn:
-            result = conn.execute(text(""" 
-                SELECT table_name FROM information_schema.tables 
+            result = conn.execute(
+                text(
+                    """
+                SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-            """))
+            """
+                )
+            )
             tables = result.fetchall()
             for table in tables:
                 table_name = table[0]
@@ -98,7 +103,7 @@ class Seeder:
                 is_deleted=False,
                 is_verified=True,
                 created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc)
+                updated_at=datetime.now(timezone.utc),
             )
             self.db.add(user)
         self.db.commit()
@@ -132,7 +137,7 @@ class Seeder:
                 is_deleted=False,
                 is_verified=True,
                 created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc)
+                updated_at=datetime.now(timezone.utc),
             )
             self.db.add(user)
             self.db.flush()
@@ -140,7 +145,7 @@ class Seeder:
             profile = ClientProfile(
                 user_id=user.id,
                 profile_description=self.faker.sentence(nb_words=10),
-                address=self.faker.address()
+                address=self.faker.address(),
             )
             self.db.add(profile)
         self.db.commit()
@@ -174,7 +179,7 @@ class Seeder:
                 is_deleted=False,
                 is_verified=True,
                 created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc)
+                updated_at=datetime.now(timezone.utc),
             )
             self.db.add(user)
             self.db.flush()
@@ -201,8 +206,15 @@ class Seeder:
         worker_users = self.db.query(User).filter(User.role == UserRole.WORKER).all()
 
         service_titles = [
-            "Electrician", "Plumber", "House Cleaning", "Painting",
-            "Carpentry", "Laundry", "Gardening", "Cooking", "Driving"
+            "Electrician",
+            "Plumber",
+            "House Cleaning",
+            "Painting",
+            "Carpentry",
+            "Laundry",
+            "Gardening",
+            "Cooking",
+            "Driving",
         ]
 
         for worker in worker_users:
@@ -212,7 +224,7 @@ class Seeder:
                     worker_id=worker.id,
                     title=title,
                     description=self.faker.paragraph(nb_sentences=2),
-                    location=self.faker.city()
+                    location=self.faker.city(),
                 )
                 self.db.add(service)
 
@@ -221,12 +233,12 @@ class Seeder:
 
     def seed_messages(self):
         """Seeds message threads and messages between clients and workers."""
-        print(f"💬 Seeding message threads and messages...")
+        print("💬 Seeding message threads and messages...")
 
         # Fetch all jobs, clients, and workers
         jobs = self.db.query(Job).filter(Job.status == JobStatus.ACCEPTED).all()
-        client_users = self.db.query(User).filter(User.role == UserRole.CLIENT).all()
-        worker_users = self.db.query(User).filter(User.role == UserRole.WORKER).all()
+        self.db.query(User).filter(User.role == UserRole.CLIENT).all()
+        self.db.query(User).filter(User.role == UserRole.WORKER).all()
 
         for job in jobs:
             # Create a new message thread for each job
@@ -239,12 +251,10 @@ class Seeder:
 
             # Add participants to the thread (worker and client)
             thread_participant_client = ThreadParticipant(
-                thread_id=thread.id,
-                user_id=job.client_id
+                thread_id=thread.id, user_id=job.client_id
             )
             thread_participant_worker = ThreadParticipant(
-                thread_id=thread.id,
-                user_id=job.worker_id
+                thread_id=thread.id, user_id=job.worker_id
             )
 
             self.db.add(thread_participant_client)
@@ -255,12 +265,8 @@ class Seeder:
             for _ in range(random.randint(3, 5)):  # 3–5 messages per thread
                 sender = random.choice([job.client_id, job.worker_id])  # Random sender
                 message_content = self.faker.sentence(nb_words=8)
-                
-                message = Message(
-                    thread_id=thread.id,
-                    sender_id=sender,
-                    content=message_content
-                )
+
+                message = Message(thread_id=thread.id, sender_id=sender, content=message_content)
                 self.db.add(message)
 
         self.db.commit()
@@ -268,7 +274,7 @@ class Seeder:
 
     def seed_jobs(self):
         """Seeds jobs for clients and assigns them to workers."""
-        print(f"📝 Seeding jobs for clients...")
+        print("📝 Seeding jobs for clients...")
 
         # Fetch all clients and workers
         client_users = self.db.query(User).filter(User.role == UserRole.CLIENT).all()
@@ -291,7 +297,9 @@ class Seeder:
                     client_id=client.id,
                     worker_id=worker.id,
                     service_id=service.id if service else None,
-                    status=random.choice([JobStatus.NEGOTIATING, JobStatus.ACCEPTED, JobStatus.COMPLETED]),
+                    status=random.choice(
+                        [JobStatus.NEGOTIATING, JobStatus.ACCEPTED, JobStatus.COMPLETED]
+                    ),
                     thread_id=thread.id,  # Use the created thread's ID
                 )
 
@@ -309,7 +317,7 @@ class Seeder:
 
     def seed_reviews(self):
         """Seeds reviews for completed jobs."""
-        print(f"⭐ Seeding reviews for completed jobs...")
+        print("⭐ Seeding reviews for completed jobs...")
 
         # Fetch all completed jobs
         completed_jobs = self.db.query(Job).filter(Job.status == JobStatus.COMPLETED).all()

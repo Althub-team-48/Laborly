@@ -8,28 +8,25 @@ Handles file uploads securely by:
 """
 
 import uuid
-import filetype
-import boto3
-
-from fastapi import UploadFile, HTTPException
 from typing import Literal
+
+import boto3
+import filetype
+from fastapi import UploadFile, HTTPException
 
 from app.core.config import settings
 
 # Supported file types (safe for KYC and similar purposes)
-ALLOWED_MIME_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "application/pdf"
-}
+ALLOWED_MIME_TYPES: set[str] = {"image/jpeg", "image/png", "application/pdf"}
 
-# Init Boto3 S3 client
+# Initialize Boto3 S3 client
 s3_client = boto3.client(
     "s3",
     aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
     aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-    region_name=settings.AWS_REGION
+    region_name=settings.AWS_REGION,
 )
+
 
 def upload_file_to_s3(file: UploadFile, subfolder: Literal["kyc"] = "kyc") -> str:
     """
@@ -45,18 +42,20 @@ def upload_file_to_s3(file: UploadFile, subfolder: Literal["kyc"] = "kyc") -> st
     Raises:
         HTTPException: If file type is invalid or upload fails
     """
-    content = file.file.read()
+    try:
+        content: bytes = file.file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
 
-    # Use content-sniffing to validate MIME type
     kind = filetype.guess(content)
     if not kind or kind.mime not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=400,
-            detail="Unsupported or unsafe file type. Allowed: JPG, PNG, PDF"
+            detail="Unsupported or unsafe file type. Allowed: JPG, PNG, PDF",
         )
 
-    # Sanitize and generate unique filename
-    safe_filename = file.filename.replace(" ", "_").replace("/", "_")
+    # Generate safe and unique filename
+    safe_filename = (file.filename or "upload").replace(" ", "_").replace("/", "_")
     unique_name = f"{uuid.uuid4()}_{safe_filename}"
     s3_key = f"{subfolder}/{unique_name}"
 
@@ -65,10 +64,9 @@ def upload_file_to_s3(file: UploadFile, subfolder: Literal["kyc"] = "kyc") -> st
             Bucket=settings.AWS_S3_BUCKET,
             Key=s3_key,
             Body=content,
-            ContentType=kind.mime
+            ContentType=kind.mime,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload to S3: {str(e)}")
 
-    # Return full S3 URL
     return f"https://{settings.AWS_S3_BUCKET}.s3.{settings.AWS_REGION}.amazonaws.com/{s3_key}"

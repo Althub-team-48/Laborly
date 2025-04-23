@@ -9,17 +9,14 @@ Encapsulates all business logic for managing job lifecycle:
 import logging
 from uuid import UUID
 from datetime import datetime, timezone
-from typing import List
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
-from app.job import models
-from app.job import schemas
+from app.job import models, schemas
 from app.job.models import JobStatus
-from app.job.schemas import JobCreate
 from app.messaging.models import MessageThread
 from app.service.models import Service
 
@@ -32,7 +29,7 @@ class JobService:
     fetch job list and details. Acts as the business logic layer.
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def create_job(self, client_id: UUID, payload: schemas.JobCreate) -> models.Job:
@@ -40,50 +37,46 @@ class JobService:
         Client initiates a new job request with a specific worker, service, and conversation thread.
         The job status is set to 'NEGOTIATING' while waiting for the worker to accept it.
         """
-        logger.info(f"[CREATE] Client { client_id} creating job with worker {payload.worker_id} via thread {payload.thread_id}")
-
-        # Validate that worker_id exists
-        worker = await self.db.execute(
-            select(User).filter_by(id=payload.worker_id)
+        logger.info(
+            f"[CREATE] Client {client_id} creating job with worker {payload.worker_id} via thread {payload.thread_id}"
         )
-        worker = worker.scalars().first()
+
+        worker = (
+            await self.db.execute(select(User).filter_by(id=payload.worker_id))
+        ).scalar_one_or_none()
         if not worker:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Worker with ID {payload.worker_id} does not exist."
+                detail=f"Worker with ID {payload.worker_id} does not exist.",
             )
 
-        # Validate that service_id exists
-        service = await self.db.execute(
-            select(Service).filter_by(id=payload.service_id)
-        )
-        service = service.scalars().first()
+        service = (
+            await self.db.execute(select(Service).filter_by(id=payload.service_id))
+        ).scalar_one_or_none()
         if not service:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Service with ID {payload.service_id} does not exist."
+                detail=f"Service with ID {payload.service_id} does not exist.",
             )
 
-        # Validate that thread_id exists
-        thread = await self.db.execute(
-            select(MessageThread).filter_by(id=payload.thread_id)
-        )
-        thread = thread.scalars().first()
+        thread = (
+            await self.db.execute(select(MessageThread).filter_by(id=payload.thread_id))
+        ).scalar_one_or_none()
         if not thread:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Message thread with ID {payload.thread_id} does not exist."
+                detail=f"Message thread with ID {payload.thread_id} does not exist.",
             )
 
         job = models.Job(
-            client_id= client_id,
+            client_id=client_id,
             worker_id=payload.worker_id,
             service_id=payload.service_id,
             status=JobStatus.NEGOTIATING,
-            thread_id=payload.thread_id,  # Thread ID is now required
-            started_at=None,  # Not started yet
+            thread_id=payload.thread_id,
+            started_at=None,
         )
-        
+
         self.db.add(job)
         await self.db.commit()
         await self.db.refresh(job)
@@ -97,16 +90,16 @@ class JobService:
         """
         logger.info(f"[ACCEPT] Worker {payload.worker_id} accepting job {payload.job_id}")
 
-        result = await self.db.execute(select(models.Job).filter_by(id=payload.job_id))
-        job = result.scalars().first()
-
+        job = (
+            await self.db.execute(select(models.Job).filter_by(id=payload.job_id))
+        ).scalar_one_or_none()
         if not job:
-            logger.error(f"[ACCEPT] Job not found: job_id={payload.job_id}")
             raise HTTPException(status_code=404, detail="Job not found")
 
         if job.status != JobStatus.NEGOTIATING:
-            logger.warning(f"[ACCEPT] Invalid status for acceptance: job_id={payload.job_id}, current_status={job.status}")
-            raise HTTPException(status_code=400, detail="Only jobs in 'NEGOTIATING' status can be accepted")
+            raise HTTPException(
+                status_code=400, detail="Only jobs in 'NEGOTIATING' status can be accepted"
+            )
 
         job.status = JobStatus.ACCEPTED
         job.started_at = datetime.now(timezone.utc)
@@ -123,16 +116,14 @@ class JobService:
         """
         logger.info(f"[COMPLETE] User {user_id} attempting to complete job {job_id}")
 
-        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
-        job = result.scalars().first()
-
+        job = (await self.db.execute(select(models.Job).filter_by(id=job_id))).scalar_one_or_none()
         if not job:
-            logger.error(f"[COMPLETE] Job not found: job_id={job_id}")
             raise HTTPException(status_code=404, detail="Job not found")
 
         if job.status != JobStatus.ACCEPTED:
-            logger.warning(f"[COMPLETE] Invalid status: job_id={job_id}, current_status={job.status}")
-            raise HTTPException(status_code=400, detail="Only accepted jobs can be marked as completed")
+            raise HTTPException(
+                status_code=400, detail="Only accepted jobs can be marked as completed"
+            )
 
         job.status = JobStatus.COMPLETED
         job.completed_at = datetime.now(timezone.utc)
@@ -149,15 +140,11 @@ class JobService:
         """
         logger.info(f"[CANCEL] User {user_id} attempting to cancel job {job_id}")
 
-        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
-        job = result.scalars().first()
-
+        job = (await self.db.execute(select(models.Job).filter_by(id=job_id))).scalar_one_or_none()
         if not job:
-            logger.error(f"[CANCEL] Job not found: job_id={job_id}")
             raise HTTPException(status_code=404, detail="Job not found")
 
         if job.status in {JobStatus.COMPLETED, JobStatus.CANCELLED}:
-            logger.warning(f"[CANCEL] Invalid cancel: job_id={job_id}, status={job.status}")
             raise HTTPException(status_code=400, detail="This job cannot be cancelled")
 
         job.status = JobStatus.CANCELLED
@@ -170,7 +157,7 @@ class JobService:
         logger.info(f"[CANCEL] Job cancelled: job_id={job.id}")
         return job
 
-    async def get_all_jobs_for_user(self, user_id: UUID) -> List[models.Job]:
+    async def get_all_jobs_for_user(self, user_id: UUID) -> list[models.Job]:
         """
         Returns all jobs where the user is either a client or worker.
         """
@@ -178,14 +165,13 @@ class JobService:
 
         result = await self.db.execute(
             select(models.Job).filter(
-                (models.Job.client_id == user_id) |
-                (models.Job.worker_id == user_id)
+                (models.Job.client_id == user_id) | (models.Job.worker_id == user_id)
             )
         )
         jobs = result.scalars().all()
 
         logger.info(f"[FETCH] {len(jobs)} jobs found for user_id={user_id}")
-        return jobs
+        return list(jobs)
 
     async def get_job_detail(self, user_id: UUID, job_id: UUID) -> models.Job:
         """
@@ -193,16 +179,14 @@ class JobService:
         """
         logger.info(f"[DETAIL] Fetching job {job_id} for user_id={user_id}")
 
-        result = await self.db.execute(select(models.Job).filter_by(id=job_id))
-        job = result.scalars().first()
-
+        job = (await self.db.execute(select(models.Job).filter_by(id=job_id))).scalar_one_or_none()
         if not job:
-            logger.error(f"[DETAIL] Job not found: job_id={job_id}")
             raise HTTPException(status_code=404, detail="Job not found")
 
         if user_id not in {job.client_id, job.worker_id}:
-            logger.warning(f"[DETAIL] Unauthorized access: job_id={job_id}, user_id={user_id}")
-            raise HTTPException(status_code=403, detail="You do not have permission to access this job")
+            raise HTTPException(
+                status_code=403, detail="You do not have permission to access this job"
+            )
 
         logger.info(f"[DETAIL] Job retrieved: job_id={job.id}")
         return job

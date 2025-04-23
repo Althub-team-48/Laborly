@@ -1,0 +1,27 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.0
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        args: ["--ignore-missing-imports", "--follow-imports=silent"]
+        additional_dependencies: [types-redis]
+
+  - repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+      - id: black
+
+  - repo: local
+    hooks:
+      - id: update-requirements
+        name: Update requirements.txt from venv
+        entry: bash -c 'pip freeze > requirements.txt && git diff --quiet requirements.txt || (git add requirements.txt && echo "📝 requirements.txt updated and staged.")'
+        language: system
+        pass_filenames: false
+        always_run: true

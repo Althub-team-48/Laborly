@@ -5,10 +5,8 @@ Initializes the SQLAlchemy database engine and session factory.
 Provides a dependency-compatible AsyncGenerator for database sessions.
 """
 
-from typing import AsyncGenerator
-
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from collections.abc import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from app.core.config import settings
 
@@ -20,11 +18,11 @@ engine = create_async_engine(settings.db_url, echo=False)
 # --------------------------------------
 # Session Factory for Async DB Access
 # --------------------------------------
-AsyncSessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
-    autocommit=False,
     autoflush=False,
+    autocommit=False,
 )
 
 

@@ -19,6 +19,7 @@ from app.core.config import settings
 # Check for colorlog availability
 try:
     import colorlog
+
     COLORLOG_AVAILABLE = True
 except ImportError:
     COLORLOG_AVAILABLE = False
@@ -31,24 +32,26 @@ LOG_LEVEL = settings.LOG_LEVEL.upper()
 LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
-
     "formatters": {
         "default": {
             "format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
         },
-        "color": {
-            "()": "colorlog.ColoredFormatter",
-            "format": "%(log_color)s[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
-            "log_colors": {
-                "DEBUG": "cyan",
-                "INFO": "green",
-                "WARNING": "yellow",
-                "ERROR": "red",
-                "CRITICAL": "bold_red",
-            },
-        } if COLORLOG_AVAILABLE else {},
+        "color": (
+            {
+                "()": "colorlog.ColoredFormatter",
+                "format": "%(log_color)s[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
+                "log_colors": {
+                    "DEBUG": "cyan",
+                    "INFO": "green",
+                    "WARNING": "yellow",
+                    "ERROR": "red",
+                    "CRITICAL": "bold_red",
+                },
+            }
+            if COLORLOG_AVAILABLE
+            else {}
+        ),
     },
-
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
@@ -70,7 +73,6 @@ LOGGING_CONFIG = {
             "encoding": "utf-8",
         },
     },
-
     "root": {
         "level": LOG_LEVEL,
         "handlers": ["console", "file", "error_file"],

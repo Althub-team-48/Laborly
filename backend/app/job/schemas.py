@@ -1,31 +1,30 @@
 """
 job/schemas.py
 
-Pydantic schemas for job-related operations, including:
-- Job acceptance
-- Job completion
-- Job cancellation
-- Reading job details and listings
+Pydantic schemas for job-related operations:
+- Job creation and acceptance
+- Completion and cancellation
+- Reading job details
 """
 
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.job.models import JobStatus
 
+
 # --------------------------------------------------
-# Base Schema for Shared Fields
+# Shared Fields Schema
 # --------------------------------------------------
 class JobBase(BaseModel):
     """
-    Shared base for job-related schemas.
+    Shared base schema for job-related payloads.
     """
-    service_id: Optional[UUID] = Field(
-        default=None,
-        description="ID of the service associated with the job"
+
+    service_id: UUID | None = Field(
+        default=None, description="UUID of the service associated with the job"
     )
 
 
@@ -34,64 +33,69 @@ class JobBase(BaseModel):
 # --------------------------------------------------
 class JobCreate(JobBase):
     """
-    Payload for creating a job manually by the client.
+    Client creates a job by specifying worker and thread.
     """
+
     worker_id: UUID = Field(..., description="UUID of the assigned worker")
     thread_id: UUID = Field(..., description="UUID of the conversation thread initiating the job")
 
 
 # --------------------------------------------------
-# Accept Job Input Schema (Worker)
+# Accept Job Schema
 # --------------------------------------------------
 class JobAccept(BaseModel):
     """
-    Payload for worker to accept a job by ID.
+    Worker accepts a job previously created by a client.
     """
-    worker_id: UUID = Field(None, description="UUID of the worker accepting the job")
-    job_id: UUID = Field(..., description="ID of the job to accept")
+
+    job_id: UUID = Field(..., description="UUID of the job to accept")
+    worker_id: UUID | None = Field(None, description="UUID of the worker accepting the job")
 
 
 # --------------------------------------------------
-# Complete Job Schema (No Payload Required)
+# Complete Job Schema (Empty Payload)
 # --------------------------------------------------
 class JobComplete(BaseModel):
     """
-    No input fields required when marking a job as complete.
+    Worker marks job as completed — no payload needed.
     """
-    pass
+
+    pass  # No fields required
 
 
 # --------------------------------------------------
-# Cancel Job Input Schema
+# Cancel Job Schema
 # --------------------------------------------------
 class CancelJobRequest(BaseModel):
     """
-    Payload for cancelling a job with a reason.
+    Client cancels a job and provides a cancellation reason.
     """
+
     cancel_reason: str = Field(
-        ...,
-        description="Reason provided by the client for cancelling the job"
+        ..., description="Reason provided by the client for cancelling the job"
     )
 
 
 # --------------------------------------------------
-# Read Job Output Schema
+# Read Job Schema (Output)
 # --------------------------------------------------
 class JobRead(BaseModel):
     """
-    Full job detail response schema used for listings and detail views.
+    Job detail used for list and detail views.
     """
-    id: UUID = Field(..., description="Unique identifier for the job")
+
+    id: UUID = Field(..., description="Job unique identifier")
     client_id: UUID = Field(..., description="UUID of the client who created the job")
     worker_id: UUID = Field(..., description="UUID of the worker assigned to the job")
-    service_id: Optional[UUID] = Field(default=None, description="UUID of the service related to the job")
+    service_id: UUID | None = Field(default=None, description="Related service UUID (if any)")
+
     status: JobStatus = Field(..., description="Current status of the job")
-    cancel_reason: Optional[str] = Field(default=None, description="Cancellation reason, if applicable")
-    started_at: Optional[datetime] = Field(default=None, description="Timestamp when the job started")
-    completed_at: Optional[datetime] = Field(default=None, description="Timestamp when the job was completed")
-    cancelled_at: Optional[datetime] = Field(default=None, description="Timestamp when the job was cancelled")
-    created_at: datetime = Field(..., description="Timestamp when the job was created")
-    updated_at: datetime = Field(..., description="Timestamp when the job was last updated")
+    cancel_reason: str | None = Field(default=None, description="Reason for cancellation (if any)")
+
+    started_at: datetime | None = Field(default=None, description="When the job started")
+    completed_at: datetime | None = Field(default=None, description="When the job was completed")
+    cancelled_at: datetime | None = Field(default=None, description="When the job was cancelled")
+    created_at: datetime = Field(..., description="When the job was created")
+    updated_at: datetime = Field(..., description="When the job was last updated")
 
     model_config = ConfigDict(from_attributes=True)
-

@@ -9,7 +9,7 @@ SQLAlchemy models for the reusable messaging system:
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Text, DateTime, Boolean, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -32,30 +32,28 @@ class MessageThread(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the message thread"
+        comment="Unique identifier for the message thread",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the thread was created"
+        comment="Timestamp when the thread was created",
     )
     is_closed: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        comment="Whether this thread is closed and no longer active"
+        Boolean, default=False, comment="Whether this thread is closed and no longer active"
     )
 
     # -------------------------------------
     # Relationships (grouped by type)
     # -------------------------------------
     # One-to-Many Relationships
-    participants: Mapped[List["ThreadParticipant"]] = relationship(
+    participants: Mapped[list["ThreadParticipant"]] = relationship(
         "ThreadParticipant",
         back_populates="thread",
         cascade="all, delete",
         # Relationship: One MessageThread can have many ThreadParticipants
     )
-    messages: Mapped[List["Message"]] = relationship(
+    messages: Mapped[list["Message"]] = relationship(
         "Message",
         back_populates="thread",
         cascade="all, delete",
@@ -81,19 +79,31 @@ class ThreadParticipant(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the thread participant"
+        comment="Unique identifier for the thread participant",
     )
     thread_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("message_threads.id", use_alter=True, name="fk_thread_participants_thread_id", deferrable=True, initially="DEFERRED"),
+        ForeignKey(
+            "message_threads.id",
+            use_alter=True,
+            name="fk_thread_participants_thread_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=False,
-        comment="The message thread this user is part of"
+        comment="The message thread this user is part of",
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", use_alter=True, name="fk_thread_participants_user_id", deferrable=True, initially="DEFERRED"),
+        ForeignKey(
+            "users.id",
+            use_alter=True,
+            name="fk_thread_participants_user_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=False,
-        comment="User participating in the thread"
+        comment="User participating in the thread",
     )
 
     # -------------------------------------
@@ -122,29 +132,37 @@ class Message(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the message"
+        comment="Unique identifier for the message",
     )
     thread_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("message_threads.id", use_alter=True, name="fk_messages_thread_id", deferrable=True, initially="DEFERRED"),
+        ForeignKey(
+            "message_threads.id",
+            use_alter=True,
+            name="fk_messages_thread_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=False,
-        comment="Thread this message belongs to"
+        comment="Thread this message belongs to",
     )
     sender_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", use_alter=True, name="fk_messages_sender_id", deferrable=True, initially="DEFERRED"),
+        ForeignKey(
+            "users.id",
+            use_alter=True,
+            name="fk_messages_sender_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=False,
-        comment="User who sent this message"
+        comment="User who sent this message",
     )
-    content: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-        comment="Content of the message"
-    )
+    content: Mapped[str] = mapped_column(Text, nullable=False, comment="Content of the message")
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the message was sent"
+        comment="Timestamp when the message was sent",
     )
 
     # -------------------------------------

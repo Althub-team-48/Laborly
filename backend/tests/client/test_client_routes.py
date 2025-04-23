@@ -1,21 +1,16 @@
 import pytest
-import pytest_asyncio
 from uuid import uuid4
 from datetime import datetime, timezone
 from unittest.mock import patch, AsyncMock
-from httpx import AsyncClient, ASGITransport
 from fastapi import HTTPException
 
-from main import app
-from app.client.schemas import *
-from app.client.routes import client_user_dependency
-from app.core.dependencies import get_db
-from app.database.enums import UserRole
+from app.client.schemas import ClientProfileRead, ClientProfileUpdate, FavoriteRead, ClientJobRead
 from app.client.services import ClientService
 
 # ----------------------------
 # Client Profile
 # ----------------------------
+
 
 @patch.object(ClientService, 'get_profile', new_callable=AsyncMock)
 @pytest.mark.asyncio
@@ -30,7 +25,7 @@ async def test_get_client_profile(mock_get_profile, override_client_user, async_
         location="ibadan",
         profile_picture="cat image",
         created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc)
+        updated_at=datetime.now(timezone.utc),
     )
     mock_get_profile.return_value = fake_response
     async with async_client as ac:
@@ -50,7 +45,7 @@ async def test_update_client_profile(mock_update_profile, override_client_user, 
         first_name="john",
         last_name="Doe",
         location="lagos",
-        profile_picture="dogimage"
+        profile_picture="dogimage",
     )
     fake_response = ClientProfileRead(
         id=uuid4(),
@@ -62,7 +57,7 @@ async def test_update_client_profile(mock_update_profile, override_client_user, 
         location="lagos",
         profile_picture="dogimage",
         created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc)
+        updated_at=datetime.now(timezone.utc),
     )
     mock_update_profile.return_value = fake_response
     async with async_client as ac:
@@ -77,12 +72,17 @@ async def test_update_client_profile(mock_update_profile, override_client_user, 
 # Favorite Workers
 # ----------------------------
 
+
 @patch.object(ClientService, 'list_favorites', new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_list_favorite_workers(mock_list_favorites, override_client_user, async_client):
     favorites = [
-        FavoriteRead(id=uuid4(), worker_id=uuid4(), client_id=uuid4(), created_at=datetime.now(timezone.utc)),
-        FavoriteRead(id=uuid4(), worker_id=uuid4(), client_id=uuid4(), created_at=datetime.now(timezone.utc))
+        FavoriteRead(
+            id=uuid4(), worker_id=uuid4(), client_id=uuid4(), created_at=datetime.now(timezone.utc)
+        ),
+        FavoriteRead(
+            id=uuid4(), worker_id=uuid4(), client_id=uuid4(), created_at=datetime.now(timezone.utc)
+        ),
     ]
     mock_list_favorites.return_value = favorites
     async with async_client as ac:
@@ -101,7 +101,7 @@ async def test_add_favorite_worker(mock_add_favorite, override_client_user, asyn
         id=uuid4(),
         worker_id=test_worker_id,
         client_id=uuid4(),
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc),
     )
     mock_add_favorite.return_value = fake_response
     async with async_client as ac:
@@ -115,7 +115,10 @@ async def test_add_favorite_worker(mock_add_favorite, override_client_user, asyn
 @pytest.mark.asyncio
 async def test_remove_favorite_worker(mock_remove_favorite, override_client_user, async_client):
     worker_id = uuid4()
-    mock_remove_favorite.side_effect = [None, HTTPException(status_code=404, detail="Favorite not found")]
+    mock_remove_favorite.side_effect = [
+        None,
+        HTTPException(status_code=404, detail="Favorite not found"),
+    ]
     async with async_client as ac:
         res1 = await ac.delete(f"/client/delete/favorites/{worker_id}")
         assert res1.status_code == 204
@@ -128,6 +131,7 @@ async def test_remove_favorite_worker(mock_remove_favorite, override_client_user
 # Job History
 # ----------------------------
 
+
 @patch.object(ClientService, 'get_jobs', new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_list_client_jobs(mock_get_jobs, override_client_user, async_client):
@@ -138,7 +142,7 @@ async def test_list_client_jobs(mock_get_jobs, override_client_user, async_clien
             worker_id=uuid4(),
             status="completed",
             started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc)
+            completed_at=datetime.now(timezone.utc),
         ),
         ClientJobRead(
             id=uuid4(),
@@ -147,8 +151,8 @@ async def test_list_client_jobs(mock_get_jobs, override_client_user, async_clien
             status="cancelled",
             started_at=datetime.now(timezone.utc),
             cancelled_at=datetime.now(timezone.utc),
-            cancel_reason="exorbitant pricing"
-        )
+            cancel_reason="exorbitant pricing",
+        ),
     ]
     mock_get_jobs.return_value = jobs
     async with async_client as ac:
@@ -161,8 +165,10 @@ async def test_list_client_jobs(mock_get_jobs, override_client_user, async_clien
 
 @patch.object(ClientService, 'get_job_detail', new_callable=AsyncMock)
 @pytest.mark.asyncio
-async def test_get_client_job_detail(mock_get_job_detail,fake_client_job_read, override_client_user, async_client):
-    job_id=uuid4()
+async def test_get_client_job_detail(
+    mock_get_job_detail, fake_client_job_read, override_client_user, async_client
+):
+    job_id = uuid4()
     mock_get_job_detail.return_value = fake_client_job_read
     async with async_client as ac:
         response = await ac.get(f"/client/get/jobs/{job_id}")
@@ -171,17 +177,19 @@ async def test_get_client_job_detail(mock_get_job_detail,fake_client_job_read, o
     assert data["id"] == str(fake_client_job_read.id)
     assert data["status"] == fake_client_job_read.status
 
+
 # ---------------------------
 # Error Handling
-# ---------------------------    
+# ---------------------------
 @patch.object(ClientService, 'get_job_detail', new_callable=AsyncMock)
 @pytest.mark.asyncio
-async def test_get_client_job_detail_failed(mock_get_job_detail,fake_client_job_read, override_client_user, async_client):
-    job_id=uuid4()
+async def test_get_client_job_detail_failed(
+    mock_get_job_detail, fake_client_job_read, override_client_user, async_client
+):
+    job_id = uuid4()
     mock_get_job_detail.side_effect = HTTPException(status_code=404, detail="unauthorized access")
     async with async_client as ac:
         response = await ac.get(f"/client/get/jobs/{job_id}")
     data = response.json()
     assert response.status_code == 404
     assert data["detail"] == "unauthorized access"
-    

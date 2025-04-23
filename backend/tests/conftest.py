@@ -17,19 +17,19 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
-from app.messaging.schemas import MessageRead, ThreadParticipantRead,ThreadRead
+from app.messaging.schemas import MessageRead, ThreadParticipantRead, ThreadRead
 from app.review.schemas import ReviewRead, WorkerReviewSummary
 from app.service.schemas import ServiceRead
-from backend.app.client.schemas import ClientJobRead
-from backend.app.worker.schemas import WorkerProfileRead
+from app.client.schemas import ClientJobRead
+from app.worker.schemas import WorkerProfileRead
 from main import app
 from app.database.enums import UserRole
 from app.core.dependencies import get_current_user, get_db
-from app.admin.routes import admin_user_dependency
-from app.client.routes import client_user_dependency
+from app.admin.routes import AdminDep
+from app.client.routes import UserDep
 from app.review.routes import client_dependency
 from app.service.routes import require_worker_admin_roles
-from app.worker.routes import require_roles
+from app.worker.routes import WorkerDep
 from app.auth.schemas import AuthSuccessResponse, AuthUserResponse
 from app.job.schemas import JobRead
 
@@ -38,25 +38,31 @@ from app.job.schemas import JobRead
 # Fake Users
 # ----------------------------------------------------------------------
 
+
 @pytest.fixture
 def fake_admin_user():
     class FakeAdminUser:
         id = uuid4()
         role = UserRole.ADMIN
+
     return FakeAdminUser()
+
 
 @pytest.fixture
 def fake_client_user():
     class FakeClientUser:
         id = uuid4()
         role = UserRole.CLIENT
+
     return FakeClientUser()
+
 
 @pytest.fixture
 def fake_worker_user():
     class FakeWorkerUser:
         id = uuid4()
         role = UserRole.WORKER
+
     return FakeWorkerUser()
 
 
@@ -64,17 +70,20 @@ def fake_worker_user():
 # Dependency Overrides (Role-based and DB)
 # ----------------------------------------------------------------------
 
+
 @pytest.fixture
 def override_admin_user(fake_admin_user):
-    app.dependency_overrides[admin_user_dependency] = lambda: fake_admin_user
+    app.dependency_overrides[AdminDep] = lambda: fake_admin_user
     yield
     app.dependency_overrides.clear()
 
+
 @pytest.fixture
 def override_client_user(fake_client_user):
-    app.dependency_overrides[client_user_dependency] = lambda: fake_client_user
+    app.dependency_overrides[UserDep] = lambda: fake_client_user
     yield
     app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def override_client(fake_client_user):
@@ -85,27 +94,30 @@ def override_client(fake_client_user):
 
 @pytest.fixture
 def override_worker_user(fake_worker_user):
-    app.dependency_overrides[require_roles] = lambda *roles: fake_worker_user
+    app.dependency_overrides[WorkerDep] = lambda *roles: fake_worker_user
     yield
     app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def override_worker_admin_user(fake_worker_user):
     app.dependency_overrides[require_worker_admin_roles] = lambda: fake_worker_user
     yield
     app.dependency_overrides.clear()
-  
-       
+
+
 @pytest.fixture
 def override_current_user(fake_client_user):  # Override as needed
     app.dependency_overrides[get_current_user] = lambda: fake_client_user
     yield
     app.dependency_overrides.clear()
 
+
 @pytest.fixture
 def override_get_db():
     async def _override():
         yield AsyncMock()
+
     app.dependency_overrides[get_db] = _override
     yield
     app.dependency_overrides.clear()
@@ -114,6 +126,7 @@ def override_get_db():
 # ----------------------------------------------------------------------
 # Fake Auth and Token Response
 # ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def fake_user():
@@ -125,23 +138,24 @@ def fake_user():
         last_name="Doe",
         role="CLIENT",
         created_at="2024-01-01T00:00:00",
-        updated_at="2024-01-01T00:00:00"
+        updated_at="2024-01-01T00:00:00",
     )
+
 
 @pytest.fixture
 def fake_token():
     return "fake-jwt-token"
 
+
 @pytest.fixture
 def fake_auth_response(fake_user, fake_token):
-    return AuthSuccessResponse(
-        access_token=fake_token,
-        user=fake_user
-    )
+    return AuthSuccessResponse(access_token=fake_token, user=fake_user)
+
 
 # ----------------------------------------------------------------------
 # Fake Client Object
 # ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def fake_client_job_read():
@@ -151,12 +165,14 @@ def fake_client_job_read():
         worker_id=uuid4(),
         status="completed",
         started_at=datetime.now(timezone.utc),
-        completed_at=datetime.now(timezone.utc)
+        completed_at=datetime.now(timezone.utc),
     )
+
 
 # ----------------------------------------------------------------------
 # Fake Job Object
 # ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def fake_job_read():
@@ -171,19 +187,18 @@ def fake_job_read():
         completed_at=None,
         cancelled_at=None,
         created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc)
+        updated_at=datetime.now(timezone.utc),
     )
+
 
 # ----------------------------------------------------------------------
 # Fake Message Objects
 # ----------------------------------------------------------------------
 
+
 @pytest.fixture
 def fake_thread_read():
-    participants = [
-        ThreadParticipantRead(user_id=uuid4()),
-        ThreadParticipantRead(user_id=uuid4())
-    ]
+    participants = [ThreadParticipantRead(user_id=uuid4()), ThreadParticipantRead(user_id=uuid4())]
 
     messages = [
         MessageRead(
@@ -191,14 +206,14 @@ def fake_thread_read():
             content="Hello, this is a test message",
             sender_id=uuid4(),
             thread_id=uuid4(),
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         ),
         MessageRead(
             id=uuid4(),
             content="Another message",
             sender_id=uuid4(),
             thread_id=uuid4(),
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         ),
     ]
     return ThreadRead(
@@ -207,8 +222,9 @@ def fake_thread_read():
         job_id=uuid4(),
         is_closed=False,
         participants=participants,
-        messages=messages    
+        messages=messages,
     )
+
 
 @pytest.fixture
 def fake_message_read():
@@ -217,12 +233,14 @@ def fake_message_read():
         sender_id=uuid4(),
         thread_id=uuid4(),
         timestamp=datetime.now(timezone.utc),
-        content="Hi,can you fix my dishwasher?"
+        content="Hi,can you fix my dishwasher?",
     )
+
 
 # ----------------------------------------------------------------------
 # Fake Review Object
 # ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def fake_review_read():
@@ -235,19 +253,19 @@ def fake_review_read():
         text="Suraju did a perfect job",
         is_flagged=False,
         created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc)
+        updated_at=datetime.now(timezone.utc),
     )
+
 
 @pytest.fixture
 def fake_review_summary():
-    return WorkerReviewSummary(
-       average_rating=4.8,
-       total_reviews=3
-    )   
+    return WorkerReviewSummary(average_rating=4.8, total_reviews=3)
+
 
 # ----------------------------------------------------------------------
 # Fake Service Object
 # ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def fake_service_read():
@@ -256,13 +274,16 @@ def fake_service_read():
         worker_id=uuid4(),
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
-        title= "plumbing",
-        description= "Everything related to plumbing",
-        location= "Magodo"
+        title="plumbing",
+        description="Everything related to plumbing",
+        location="Magodo",
     )
+
+
 # ----------------------------------------------------------------------
 # Fake Worker Object
 # ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def fake_worker_profile_read():
@@ -283,15 +304,19 @@ def fake_worker_profile_read():
         profile_picture="https://example.com/images/profile.jpg",
         bio="Passionate about improving homes with quality workmanship.",
         years_experience=12,
-        availability_note="Available weekdays from 9am to 5pm."
+        availability_note="Available weekdays from 9am to 5pm.",
     )
+
+
 # ----------------------------------------------------------------------
 # HTTPX Async Client (ASGI)
 # ----------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def transport():
     return ASGITransport(app=app)
+
 
 @pytest_asyncio.fixture
 def async_client(transport):

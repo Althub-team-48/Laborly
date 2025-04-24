@@ -18,7 +18,6 @@ Includes relationships with:
 
 import uuid
 from datetime import datetime
-from typing import List
 
 from sqlalchemy import (
     Boolean,
@@ -52,100 +51,68 @@ class User(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the user"
+        comment="Unique identifier for the user",
     )
 
     # Identity and Auth
     email: Mapped[str] = mapped_column(
-        String(255),
-        unique=True,
-        nullable=False,
-        comment="User's email address"
+        String(255), unique=True, nullable=False, comment="User's email address"
     )
     phone_number: Mapped[str] = mapped_column(
-        String(20),
-        unique=True,
-        nullable=False,
-        comment="User's phone number"
+        String(20), unique=True, nullable=False, comment="User's phone number"
     )
     hashed_password: Mapped[str] = mapped_column(
-        String,
-        nullable=False,
-        comment="Hashed password for authentication"
+        String, nullable=False, comment="Hashed password for authentication"
     )
 
     # Role-based access
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole),
-        nullable=False,
-        comment="User role (CLIENT, WORKER, ADMIN)"
+        Enum(UserRole), nullable=False, comment="User role (CLIENT, WORKER, ADMIN)"
     )
 
     # Profile Info
     first_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-        comment="User's first name"
+        String(100), nullable=False, comment="User's first name"
     )
-    last_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-        comment="User's last name"
-    )
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False, comment="User's last name")
     middle_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=True,
-        comment="User's middle name (optional)"
+        String(100), nullable=True, comment="User's middle name (optional)"
     )
     profile_picture: Mapped[str] = mapped_column(
-        String,
-        nullable=True,
-        comment="Path to user's profile picture (optional)"
+        String, nullable=True, comment="Path to user's profile picture (optional)"
     )
     location: Mapped[str] = mapped_column(
-        String,
-        nullable=True,
-        comment="User's location (optional)"
+        String, nullable=True, comment="User's location (optional)"
     )
 
     # Status Flags
     is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        comment="Whether the user account is active"
+        Boolean, default=True, comment="Whether the user account is active"
     )
     is_frozen: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        comment="Whether the user account is temporarily frozen"
+        Boolean, default=False, comment="Whether the user account is temporarily frozen"
     )
     is_banned: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        comment="Whether the user account is banned"
+        Boolean, default=False, comment="Whether the user account is banned"
     )
     is_deleted: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        comment="Whether the user account is marked as deleted"
+        Boolean, default=False, comment="Whether the user account is marked as deleted"
     )
     is_verified: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        comment="Whether the user has verified their email"
+        Boolean, default=False, comment="Whether the user has verified their email"
     )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the user was created"
+        comment="Timestamp when the user was created",
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
-        comment="Timestamp when the user was last updated"
+        comment="Timestamp when the user was last updated",
     )
 
     # -------------------------------------
@@ -172,53 +139,53 @@ class User(Base):
     )
 
     # One-to-Many Relationships
-    favorite_clients: Mapped[List["FavoriteWorker"]] = relationship(
+    favorite_clients: Mapped[list["FavoriteWorker"]] = relationship(
         "FavoriteWorker",
         foreign_keys=[FavoriteWorker.client_id],
         back_populates="client",
         # Relationship: One User (client) can favorite many workers
     )
-    favorited_by: Mapped[List["FavoriteWorker"]] = relationship(
+    favorited_by: Mapped[list["FavoriteWorker"]] = relationship(
         "FavoriteWorker",
         foreign_keys=[FavoriteWorker.worker_id],
         back_populates="worker",
         # Relationship: One User (worker) can be favorited by many clients
     )
-    given_reviews: Mapped[List["Review"]] = relationship(
+    given_reviews: Mapped[list["Review"]] = relationship(
         "Review",
         back_populates="client",
         foreign_keys=[Review.client_id],
         # Relationship: One User (client) can give many Reviews
     )
-    received_reviews: Mapped[List["Review"]] = relationship(
+    received_reviews: Mapped[list["Review"]] = relationship(
         "Review",
         back_populates="worker",
         foreign_keys=[Review.worker_id],
         # Relationship: One User (worker) can receive many Reviews
     )
-    created_jobs: Mapped[List["Job"]] = relationship(
+    created_jobs: Mapped[list["Job"]] = relationship(
         "Job",
         back_populates="client",
         foreign_keys=[Job.client_id],
         # Relationship: One User (client) can create many Jobs
     )
-    assigned_jobs: Mapped[List["Job"]] = relationship(
+    assigned_jobs: Mapped[list["Job"]] = relationship(
         "Job",
         back_populates="worker",
         foreign_keys=[Job.worker_id],
         # Relationship: One User (worker) can be assigned many Jobs
     )
-    services: Mapped[List["Service"]] = relationship(
+    services: Mapped[list["Service"]] = relationship(
         "Service",
         back_populates="worker",
         # Relationship: One User (worker) can offer many Services
     )
-    threads: Mapped[List["ThreadParticipant"]] = relationship(
+    threads: Mapped[list["ThreadParticipant"]] = relationship(
         "ThreadParticipant",
         back_populates="user",
         # Relationship: One User can participate in many Threads
     )
-    sent_messages: Mapped[List["Message"]] = relationship(
+    sent_messages: Mapped[list["Message"]] = relationship(
         "Message",
         back_populates="sender",
         # Relationship: One User can send many Messages
@@ -236,33 +203,29 @@ class KYC(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the KYC record"
+        comment="Unique identifier for the KYC record",
     )
 
     # Relationship to User
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", use_alter=True, name="fk_kyc_user_id", deferrable=True, initially="DEFERRED"),
+        ForeignKey(
+            "users.id", use_alter=True, name="fk_kyc_user_id", deferrable=True, initially="DEFERRED"
+        ),
         nullable=False,
         unique=True,
-        comment="Reference to the associated user"
+        comment="Reference to the associated user",
     )
 
     # Document Details
     document_type: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        comment="Type of identification document"
+        String(50), nullable=False, comment="Type of identification document"
     )
     document_path: Mapped[str] = mapped_column(
-        String,
-        nullable=False,
-        comment="Path to the uploaded document"
+        String, nullable=False, comment="Path to the uploaded document"
     )
     selfie_path: Mapped[str] = mapped_column(
-        String,
-        nullable=False,
-        comment="Path to the uploaded selfie"
+        String, nullable=False, comment="Path to the uploaded selfie"
     )
 
     # Status & Timestamps
@@ -270,17 +233,17 @@ class KYC(Base):
         Enum(KYCStatus),
         default=KYCStatus.PENDING,
         nullable=False,
-        comment="KYC verification status (PENDING, APPROVED, REJECTED)"
+        comment="KYC verification status (PENDING, APPROVED, REJECTED)",
     )
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the KYC was submitted"
+        comment="Timestamp when the KYC was submitted",
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        comment="Timestamp when the KYC was reviewed (optional)"
+        comment="Timestamp when the KYC was reviewed (optional)",
     )
 
     # -------------------------------------

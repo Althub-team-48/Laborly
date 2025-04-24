@@ -6,9 +6,8 @@ WebSocket connection manager for thread-based live messaging.
 - Broadcasts messages to all participants within a thread
 """
 
-from typing import Dict, List
-from fastapi import WebSocket
 from uuid import UUID
+from fastapi import WebSocket
 
 
 class ConnectionManager:
@@ -16,9 +15,9 @@ class ConnectionManager:
     Manages WebSocket connections per message thread.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Mapping of thread_id to list of connected WebSocket clients
-        self.active_connections: Dict[UUID, List[WebSocket]] = {}
+        self.active_connections: dict[UUID, list[WebSocket]] = {}
 
     async def connect(self, thread_id: UUID, websocket: WebSocket) -> None:
         """

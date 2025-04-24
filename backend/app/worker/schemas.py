@@ -7,18 +7,21 @@ Defines Pydantic schemas for worker profile operations:
 """
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
 from uuid import UUID
 from datetime import datetime
+
+from app.database.enums import KYCStatus
 
 
 # -------------------------------------
 # Base Schema for Worker Profile Fields
 # -------------------------------------
 class WorkerProfileBase(BaseModel):
-    bio: Optional[str] = Field(default=None, description="Short biography of the worker")
-    years_experience: Optional[int] = Field(default=None, description="Number of years of experience")
-    availability_note: Optional[str] = Field(default=None, description="Custom note about availability")
+    bio: str | None = Field(default=None, description="Short biography of the worker")
+    years_experience: int | None = Field(default=None, description="Number of years of experience")
+    availability_note: str | None = Field(
+        default=None, description="Custom note about availability"
+    )
 
 
 # -------------------------------------
@@ -28,6 +31,7 @@ class WorkerProfileWrite(WorkerProfileBase):
     """
     Schema for creating a new worker profile.
     """
+
     pass
 
 
@@ -38,22 +42,26 @@ class WorkerProfileUpdate(WorkerProfileBase):
     """
     Schema for updating a worker profile and basic user fields.
     """
-    is_available: Optional[bool] = Field(default=None, description="Availability status for job assignments")
 
-    professional_skills: Optional[str] = Field(default=None, description="Comma-separated list of skills")
+    is_available: bool | None = Field(
+        default=None, description="Availability status for job assignments"
+    )
 
-    work_experience: Optional[str] = Field(default=None, description="Summary of work experience")
+    professional_skills: str | None = Field(
+        default=None, description="Comma-separated list of skills"
+    )
 
-    first_name: Optional[str] = Field(default=None, description="First name of the worker")
+    work_experience: str | None = Field(default=None, description="Summary of work experience")
 
-    last_name: Optional[str] = Field(default=None, description="Last name of the worker")
+    first_name: str | None = Field(default=None, description="First name of the worker")
 
-    phone_number: Optional[str] = Field(default=None, description="Worker's phone number")
+    last_name: str | None = Field(default=None, description="Last name of the worker")
 
-    location: Optional[str] = Field(default=None, description="Worker's location")
-    
-    profile_picture: Optional[str] = Field(default=None, description="URL to profile picture")
+    phone_number: str | None = Field(default=None, description="Worker's phone number")
 
+    location: str | None = Field(default=None, description="Worker's location")
+
+    profile_picture: str | None = Field(default=None, description="URL to profile picture")
 
 
 # -------------------------------------
@@ -63,22 +71,36 @@ class WorkerProfileRead(WorkerProfileBase):
     """
     Schema returned when reading a full worker profile with user info.
     """
+
     id: UUID = Field(..., description="Unique identifier for the worker profile")
     user_id: UUID = Field(..., description="UUID of the user this profile belongs to")
     is_available: bool = Field(..., description="Availability status for job assignments")
     created_at: datetime = Field(..., description="Profile creation timestamp")
     updated_at: datetime = Field(..., description="Profile last update timestamp")
     is_kyc_verified: bool = Field(..., description="KYC verification status")
-    professional_skills: Optional[str] = Field(default=None, description="Comma-separated list of skills")
-    work_experience: Optional[str] = Field(default=None, description="Summary of work experience")
+    professional_skills: str | None = Field(
+        default=None, description="Comma-separated list of skills"
+    )
+    work_experience: str | None = Field(default=None, description="Summary of work experience")
 
     # Related user fields
     email: str = Field(..., description="Worker's email address")
     first_name: str = Field(..., description="First name of the worker")
     last_name: str = Field(..., description="Last name of the worker")
-    phone_number: Optional[str] = Field(default=None, description="Worker's phone number")
-    location: Optional[str] = Field(default=None, description="Worker's location")
-    profile_picture: Optional[str] = Field(default=None, description="URL to profile picture")
+    phone_number: str | None = Field(default=None, description="Worker's phone number")
+    location: str | None = Field(default=None, description="Worker's location")
+    profile_picture: str | None = Field(default=None, description="URL to profile picture")
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class KYCRead(BaseModel):
+    id: UUID = Field(..., description="Unique identifier for the KYC record")
+    user_id: UUID = Field(..., description="Reference to the associated user")
+    document_type: str = Field(..., description="Type of identification document")
+    document_path: str = Field(..., description="Path to the uploaded document")
+    selfie_path: str = Field(..., description="Path to the uploaded selfie")
+    status: KYCStatus = Field(..., description="KYC verification status")
+    submitted_at: datetime = Field(..., description="Timestamp when the KYC was submitted")
+    reviewed_at: datetime | None = Field(None, description="Timestamp when the KYC was reviewed")
+    model_config = ConfigDict(from_attributes=True)

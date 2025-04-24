@@ -9,8 +9,6 @@ API routes for the reusable messaging system:
 """
 
 from uuid import UUID
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,11 +21,8 @@ from app.messaging import schemas, services
 router = APIRouter(prefix="/messages", tags=["Messaging"])
 
 
-# --------------------------------------------
-# Initiate New Thread
-# --------------------------------------------
 @router.post(
-    "/{worker_id}",
+    "/initiate",
     response_model=schemas.MessageRead,
     status_code=status.HTTP_201_CREATED,
     summary="Start New Thread",
@@ -36,29 +31,28 @@ router = APIRouter(prefix="/messages", tags=["Messaging"])
 @limiter.limit("5/minute")
 async def initiate_message(
     request: Request,
-    worker_id: UUID,
     message_data: schemas.ThreadInitiate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> schemas.MessageRead:
     if current_user.role not in {"CLIENT", "ADMIN"}:
-        raise HTTPException(status_code=403, detail="Only clients and admins can initiate conversations.")
+        raise HTTPException(
+            status_code=403, detail="Only clients and admins can initiate conversations."
+        )
 
     return await services.send_message(
         db=db,
         sender_id=current_user.id,
         message_data=schemas.MessageCreate(
             content=message_data.content,
-            receiver_id=worker_id,
-            service_id=message_data.service_id
+            service_id=message_data.service_id,
+            thread_id=None,
+            job_id=None,
         ),
-        sender_role=current_user.role
+        sender_role=current_user.role,
     )
 
 
-# --------------------------------------------
-# Reply to Existing Thread
-# --------------------------------------------
 @router.post(
     "/{thread_id}/reply",
     response_model=schemas.MessageRead,
@@ -72,25 +66,24 @@ async def reply_message(
     thread_id: UUID,
     message_data: schemas.MessageBase,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> schemas.MessageRead:
     return await services.send_message(
         db=db,
         sender_id=current_user.id,
         message_data=schemas.MessageCreate(
             thread_id=thread_id,
-            content=message_data.content
+            content=message_data.content,
+            job_id=None,
+            service_id=None,
         ),
-        sender_role=current_user.role
+        sender_role=current_user.role,
     )
 
 
-# --------------------------------------------
-# Get All Threads for Current User
-# --------------------------------------------
 @router.get(
     "/threads",
-    response_model=List[schemas.ThreadRead],
+    response_model=list[schemas.ThreadRead],
     status_code=status.HTTP_200_OK,
     summary="List My Threads",
     description="Retrieve all message threads involving the authenticated user.",
@@ -98,14 +91,11 @@ async def reply_message(
 async def get_my_threads(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> list[schemas.ThreadRead]:
     return await services.get_user_threads(db, current_user.id)
 
 
-# --------------------------------------------
-# Get Specific Thread Details
-# --------------------------------------------
 @router.get(
     "/threads/{thread_id}",
     response_model=schemas.ThreadRead,
@@ -117,6 +107,6 @@ async def get_thread_conversation(
     request: Request,
     thread_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> schemas.ThreadRead:
     return await services.get_thread_detail(db, thread_id, current_user.id)

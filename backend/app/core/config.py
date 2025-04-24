@@ -9,15 +9,18 @@ import logging
 import os
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic_settings import SettingsConfigDict
+from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 load_dotenv()
+
 
 class Settings(BaseSettings):
     """
     Application-wide settings loaded from environment variables.
     """
+
     APP_NAME: str
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
@@ -61,14 +64,14 @@ class Settings(BaseSettings):
     SUPPORT_EMAIL: str
     BASE_URL: str = "http://localhost:3000"
 
-    model_config = ConfigDict(
-            env_file=".env",    # Load variables from .env file
-            extra="forbid"      # controls undeclared vars, false by default
-        )
-
     @property
     def db_url(self) -> str:
-        """Dynamically resolves the appropriate database URL based on the current environment. If running tests (detected via PYTEST_CURRENT_TEST), use TEST_DATABASE_URL. Otherwise, use the main DATABASE_URL. Prevents accidental writes to production DB during testing."""
+        """
+        Dynamically resolves the appropriate database URL based on the current environment.
+        If running tests (detected via PYTEST_CURRENT_TEST), use TEST_DATABASE_URL.
+        Otherwise, use the main DATABASE_URL.
+        Prevents accidental writes to production DB during testing.
+        """
         is_testing = os.getenv("PYTEST_CURRENT_TEST") is not None
         url = self.TEST_DATABASE_URL if is_testing else self.DATABASE_URL
         print("🔍 Using DATABASE URL:", url)
@@ -77,5 +80,30 @@ class Settings(BaseSettings):
             raise RuntimeError("Database URL is not set for the current environment.")
         return url
 
+    model_config = SettingsConfigDict(env_file=".env", extra="forbid")
+
+
 # Instantiate the settings for global use
-settings = Settings()
+if TYPE_CHECKING:
+    settings = Settings(
+        APP_NAME="MyApp",
+        DEBUG=False,
+        DATABASE_URL="sqlite:///fake.db",
+        TEST_DATABASE_URL="sqlite:///test.db",
+        SECRET_KEY="secret",
+        ALGORITHM="HS256",
+        ACCESS_TOKEN_EXPIRE_MINUTES=30,
+        GOOGLE_CLIENT_ID="dummy",
+        GOOGLE_CLIENT_SECRET="dummy",
+        AWS_ACCESS_KEY_ID="dummy",
+        AWS_SECRET_ACCESS_KEY="dummy",
+        AWS_REGION="us-east-1",
+        AWS_S3_BUCKET="dummy-bucket",
+        MAIL_USERNAME="email@example.com",
+        MAIL_PASSWORD="pass",
+        MAIL_FROM="email@example.com",
+        MAIL_FROM_NAME="Laborly",
+        SUPPORT_EMAIL="support@example.com",
+    )
+else:
+    settings = Settings()

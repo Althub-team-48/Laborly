@@ -62,9 +62,11 @@ async def run_migrations_online() -> None:
         )
         await conn.run_sync(lambda sync_conn: context.run_migrations())
 
+
 # --- Entry point ---
 if context.is_offline_mode():
     run_migrations_offline()
 else:
     import asyncio
+
     asyncio.run(run_migrations_online())

@@ -8,7 +8,6 @@ Pydantic schemas for reusable messaging system:
 
 from uuid import UUID
 from datetime import datetime
-from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -23,10 +22,13 @@ class MessageBase(BaseModel):
 # Message Creation Schema
 # -------------------------------
 class MessageCreate(MessageBase):
-    thread_id: Optional[UUID] = Field(None, description="Thread ID if replying to an existing thread")
-    receiver_id: Optional[UUID] = Field(None, description="Receiver ID if starting a new thread")
-    job_id: Optional[UUID] = Field(None, description="Job ID associated with the message (required for non-admins)")
-    service_id: Optional[UUID] = Field(None, description="Service ID associated with the message (required for non-admins)")
+    thread_id: UUID | None = Field(None, description="Thread ID if replying to an existing thread")
+    job_id: UUID | None = Field(
+        None, description="Job ID associated with the message (required for non-admins)"
+    )
+    service_id: UUID | None = Field(
+        None, description="Service ID associated with the message (required for non-admins)"
+    )
 
 
 # -------------------------------
@@ -44,8 +46,7 @@ class MessageRead(MessageBase):
 # -------------------------------
 # Thread Initiate Schema
 # -------------------------------
-class ThreadInitiate(BaseModel):
-    content: str = Field(..., description="Message content to start a new thread")
+class ThreadInitiate(MessageBase):
     service_id: UUID = Field(..., description="Service ID to associate with the message")
 
 
@@ -58,17 +59,17 @@ class ThreadParticipantRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-
 # -------------------------------
 # Thread with Messages Schema
 # -------------------------------
 class ThreadRead(BaseModel):
     id: UUID = Field(..., description="Unique identifier for the message thread")
     created_at: datetime = Field(..., description="Timestamp when the thread was created")
-    job_id: Optional[UUID] = Field(None, description="Associated job ID if thread is job-related")
+    job_id: UUID | None = Field(None, description="Associated job ID if thread is job-related")
     is_closed: bool = Field(..., description="Flag indicating if the thread is closed")
-    participants: List[ThreadParticipantRead] = Field(..., description="Users involved in the thread")
-    messages: List[MessageRead] = Field(..., description="Messages in the thread")
+    participants: list[ThreadParticipantRead] = Field(
+        ..., description="Users involved in the thread"
+    )
+    messages: list[MessageRead] = Field(..., description="Messages in the thread")
 
     model_config = ConfigDict(from_attributes=True)
-

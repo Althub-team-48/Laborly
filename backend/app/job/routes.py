@@ -2,34 +2,34 @@
 job/routes.py
 
 Job-related API endpoints for both clients and workers:
+- Create a job
 - Accept a job
 - Complete a job
-- Cancel a job with reason
-- List all jobs related to the current user
-- Retrieve details of a specific job
+- Cancel a job (with reason)
+- List all jobs for current user
+- Retrieve job details
 
-All routes require authentication.
+All endpoints require authentication.
 """
 
 from uuid import UUID
-from typing import List
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.job import schemas
-from app.job.services import JobService
+from app.database.models import User
 from app.database.session import get_db
 from app.core.dependencies import get_current_user
-from app.database.models import User
 from app.core.limiter import limiter
+from app.job import schemas
+from app.job.services import JobService
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
-current_user= get_current_user
-# ---------------------------
-# Create Job (Client)
-# ---------------------------
+# Dependency alias
+current_user = get_current_user
+
+
 @router.post(
     "/create",
     response_model=schemas.JobRead,
@@ -42,14 +42,12 @@ async def create_job(
     request: Request,
     payload: schemas.JobCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(current_user)
-):
-    client_id = current_user.id
-    return await JobService(db).create_job(client_id=client_id, payload=payload)
+    current_user: User = Depends(current_user),
+) -> schemas.JobRead:
+    job = await JobService(db).create_job(client_id=current_user.id, payload=payload)
+    return schemas.JobRead.model_validate(job)
 
-# ---------------------------
-# Accept Job (Worker)
-# ---------------------------
+
 @router.post(
     "/accept",
     response_model=schemas.JobRead,
@@ -62,15 +60,13 @@ async def accept_job(
     request: Request,
     payload: schemas.JobAccept,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(current_user)
-):
-    payload.worker_id = current_user.id
-    return await JobService(db).accept_job(payload=payload)
+    current_user: User = Depends(current_user),
+) -> schemas.JobRead:
+    payload.worker_id = current_user.id  # Ensure only the current user can accept as worker
+    job = await JobService(db).accept_job(payload=payload)
+    return schemas.JobRead.model_validate(job)
 
 
-# ---------------------------
-# Complete Job
-# ---------------------------
 @router.put(
     "/{job_id}/complete",
     response_model=schemas.JobRead,
@@ -83,14 +79,12 @@ async def complete_job(
     request: Request,
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(current_user)
-):
-    return await JobService(db).complete_job(current_user.id, job_id)
+    current_user: User = Depends(current_user),
+) -> schemas.JobRead:
+    job = await JobService(db).complete_job(user_id=current_user.id, job_id=job_id)
+    return schemas.JobRead.model_validate(job)
 
 
-# ---------------------------
-# Cancel Job
-# ---------------------------
 @router.put(
     "/{job_id}/cancel",
     response_model=schemas.JobRead,
@@ -104,49 +98,46 @@ async def cancel_job(
     job_id: UUID,
     payload: schemas.CancelJobRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(current_user)
-):
-    return await JobService(db).cancel_job(
+    current_user: User = Depends(current_user),
+) -> schemas.JobRead:
+    job = await JobService(db).cancel_job(
         user_id=current_user.id,
         job_id=job_id,
-        cancel_reason=payload.cancel_reason
+        cancel_reason=payload.cancel_reason,
     )
+    return schemas.JobRead.model_validate(job)
 
 
-# ---------------------------
-# List Jobs for Current User
-# ---------------------------
 @router.get(
     "",
-    response_model=List[schemas.JobRead],
+    response_model=list[schemas.JobRead],
     status_code=status.HTTP_200_OK,
     summary="List My Jobs",
-    description="Retrieve all jobs associated with the currently authenticated user (client or worker).",
+    description="Fetch all jobs where the authenticated user is the client or worker.",
 )
 @limiter.limit("5/minute")
 async def get_jobs_for_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(current_user)
-):
-    return await JobService(db).get_all_jobs_for_user(current_user.id)
+    current_user: User = Depends(current_user),
+) -> list[schemas.JobRead]:
+    jobs = await JobService(db).get_all_jobs_for_user(current_user.id)
+    return [schemas.JobRead.model_validate(job) for job in jobs]
 
 
-# ---------------------------
-# Get Job Details
-# ---------------------------
 @router.get(
     "/{job_id}",
     response_model=schemas.JobRead,
     status_code=status.HTTP_200_OK,
     summary="Get Job Detail",
-    description="Retrieve full details for a specific job related to the authenticated user.",
+    description="Fetch full detail of a specific job associated with the authenticated user.",
 )
 @limiter.limit("5/minute")
 async def get_job_detail(
     request: Request,
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(current_user)
-):
-    return await JobService(db).get_job_detail(current_user.id, job_id)
+    current_user: User = Depends(current_user),
+) -> schemas.JobRead:
+    job = await JobService(db).get_job_detail(user_id=current_user.id, job_id=job_id)
+    return schemas.JobRead.model_validate(job)

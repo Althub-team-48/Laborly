@@ -12,8 +12,8 @@ import logging
 import os
 import random
 import string
-from datetime import datetime, timedelta, timezone
-from typing import Union
+from datetime import datetime, timezone
+from typing import Any, cast
 
 from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -42,41 +42,53 @@ from app.core.blacklist import blacklist_token
 logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ----------------------------------------
-# Password Utilities
-# ----------------------------------------
 
+# ------------------------------------------------
+# Password Utilities
+# ------------------------------------------------
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return cast(str, pwd_context.hash(password))
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return cast(bool, pwd_context.verify(plain_password, hashed_password))
+
 
 def generate_strong_password(length: int = 12) -> str:
     if length < 8:
         raise ValueError("Password length must be at least 8 characters")
-    
+
     required = [
         random.choice(string.ascii_uppercase),
         random.choice(string.ascii_lowercase),
         random.choice(string.digits),
         random.choice(string.punctuation),
     ]
-    remaining = random.choices(string.ascii_letters + string.digits + string.punctuation, k=length - 4)
+    remaining = random.choices(
+        string.ascii_letters + string.digits + string.punctuation, k=length - 4
+    )
     password = required + remaining
     random.shuffle(password)
     return ''.join(password)
 
-# ----------------------------------------
-# Signup with Email Verification
-# ----------------------------------------
 
+# ------------------------------------------------
+# Signup with Email Verification
+# ------------------------------------------------
 async def signup_user(payload: SignupRequest, db: AsyncSession) -> MessageResponse:
-    email_exists = (await db.execute(select(User).filter(User.email == payload.email))).scalar_one_or_none()
+    email_exists = (
+        (await db.execute(select(User).filter(User.email == payload.email)))
+        .unique()
+        .scalar_one_or_none()
+    )
     if email_exists:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    phone_exists = (await db.execute(select(User).filter(User.phone_number == payload.phone_number))).scalar_one_or_none()
+    phone_exists = (
+        (await db.execute(select(User).filter(User.phone_number == payload.phone_number)))
+        .unique()
+        .scalar_one_or_none()
+    )
     if phone_exists:
         raise HTTPException(status_code=400, detail="Phone number already in use")
 
@@ -97,12 +109,14 @@ async def signup_user(payload: SignupRequest, db: AsyncSession) -> MessageRespon
     token = create_email_verification_token(str(new_user.id))
     await send_email_verification(new_user.email, token)
 
-    return MessageResponse(detail="Registration successful. Please check your email to verify your account.")
+    return MessageResponse(
+        detail="Registration successful. Please check your email to verify your account."
+    )
 
-# ----------------------------------------
+
+# ------------------------------------------------
 # Email Verification
-# ----------------------------------------
-
+# ------------------------------------------------
 async def verify_email_token(token: str, db: AsyncSession) -> MessageResponse:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -117,26 +131,35 @@ async def verify_email_token(token: str, db: AsyncSession) -> MessageResponse:
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid token payload")
 
-    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.unique().scalar_one_or_none()
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.is_verified:
         return MessageResponse(detail="Your email has already been verified.")
 
+    email = user.email
+    first_name = user.first_name
+
     user.is_verified = True
     await db.commit()
-    await send_welcome_email(user.email, user.first_name)
+
+    await send_welcome_email(email, first_name)
 
     return MessageResponse(detail="Your email has been successfully verified. You may now log in.")
 
-# ----------------------------------------
-# Login (JSON & OAuth2)
-# ----------------------------------------
 
+# ------------------------------------------------
+# Login (JSON and OAuth2)
+# ------------------------------------------------
 async def login_user_json(payload: LoginRequest, db: AsyncSession) -> AuthSuccessResponse:
-    user = (await db.execute(select(User).filter(User.email == payload.email))).scalar_one_or_none()
-
+    user = (
+        (await db.execute(select(User).filter(User.email == payload.email)))
+        .unique()
+        .scalar_one_or_none()
+    )
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_verified:
@@ -146,9 +169,12 @@ async def login_user_json(payload: LoginRequest, db: AsyncSession) -> AuthSucces
     return AuthSuccessResponse(access_token=token, user=AuthUserResponse.model_validate(user))
 
 
-async def login_user_oauth(form_data, db: AsyncSession) -> AuthSuccessResponse:
-    user = (await db.execute(select(User).filter(User.email == form_data.username))).scalar_one_or_none()
-
+async def login_user_oauth(form_data: Any, db: AsyncSession) -> AuthSuccessResponse:
+    user = (
+        (await db.execute(select(User).filter(User.email == form_data.username)))
+        .unique()
+        .scalar_one_or_none()
+    )
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_verified:
@@ -157,11 +183,11 @@ async def login_user_oauth(form_data, db: AsyncSession) -> AuthSuccessResponse:
     token = create_access_token({"sub": str(user.id), "role": user.role})
     return AuthSuccessResponse(access_token=token, user=AuthUserResponse.model_validate(user))
 
-# ----------------------------------------
-# Logout
-# ----------------------------------------
 
-def logout_user_token(token: str) -> dict:
+# ------------------------------------------------
+# Logout
+# ------------------------------------------------
+def logout_user_token(token: str) -> dict[str, str]:
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     jti = payload.get("jti")
     exp = payload.get("exp")
@@ -173,10 +199,10 @@ def logout_user_token(token: str) -> dict:
 
     return {"detail": "Logout successful"}
 
-# ----------------------------------------
-# Google OAuth2
-# ----------------------------------------
 
+# ------------------------------------------------
+# Google OAuth2
+# ------------------------------------------------
 starlette_config = StarletteConfig(environ=os.environ)
 oauth = OAuth(starlette_config)
 
@@ -189,17 +215,23 @@ oauth.register(
     api_base_url="https://www.googleapis.com/oauth2/v3/",
 )
 
+
 async def handle_google_login(request: Request) -> RedirectResponse:
     redirect_uri = request.url_for("google_callback")
     logger.info(f"Redirecting to Google OAuth2: {redirect_uri}")
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+    return cast(RedirectResponse, await oauth.google.authorize_redirect(request, redirect_uri))
+
 
 async def handle_google_callback(request: Request, db: AsyncSession) -> RedirectResponse:
     token = await oauth.google.authorize_access_token(request)
     resp = await oauth.google.get("userinfo", token=token)
     user_info = resp.json()
 
-    user = (await db.execute(select(User).filter(User.email == user_info.get("email")))).scalar_one_or_none()
+    user = (
+        (await db.execute(select(User).filter(User.email == user_info.get("email"))))
+        .unique()
+        .scalar_one_or_none()
+    )
 
     if not user:
         password = generate_strong_password()
@@ -207,9 +239,9 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         user_obj = UserCreate.from_google(user_info, hashed_password=hashed_password)
 
         user_fields = {c.key for c in inspect(User).mapper.column_attrs}
-        user_data = {k: v for k, v in user_obj.dict().items() if k in user_fields}
+        user_data = {k: v for k, v in user_obj.model_dump().items() if k in user_fields}
 
-        user = User(**user_data)
+        user = User(**user_data, is_verified=True)
         db.add(user)
         await db.commit()
         await db.refresh(user)

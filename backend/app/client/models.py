@@ -7,7 +7,7 @@ Defines SQLAlchemy models specific to the Client module:
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, String, func
@@ -20,48 +20,52 @@ if TYPE_CHECKING:
     from app.database.models import User
 
 
+# ---------------------------------------------------
+# Client Profile Model
+# ---------------------------------------------------
 class ClientProfile(Base):
     """
     Represents additional profile data for users with the 'CLIENT' role.
     """
+
     __tablename__ = "client_profiles"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the client profile"
+        comment="Unique identifier for the client profile",
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", use_alter=True, name="fk_client_profiles_user_id", deferrable=True, initially="DEFERRED"),
+        ForeignKey(
+            "users.id",
+            use_alter=True,
+            name="fk_client_profiles_user_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=False,
-        comment="Linked user ID for this client profile"
+        comment="Linked user ID for this client profile",
     )
 
     profile_description: Mapped[str] = mapped_column(
-        String,
-        nullable=True,
-        comment="Optional profile description or note"
+        String, nullable=True, comment="Optional profile description or note"
     )
 
-    address: Mapped[str] = mapped_column(
-        String,
-        nullable=True,
-        comment="Optional client address"
-    )
+    address: Mapped[str] = mapped_column(String, nullable=True, comment="Optional client address")
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the profile was created"
+        comment="Timestamp when the profile was created",
     )
 
     # -------------------------------------
     # Relationships
     # -------------------------------------
-    # One-to-One Relationships
+    # One-to-One Relationship
     user: Mapped["User"] = relationship(
         "User",
         back_populates="client_profile",
@@ -70,44 +74,60 @@ class ClientProfile(Base):
     )
 
 
+# ---------------------------------------------------
+# Favorite Worker Model
+# ---------------------------------------------------
 class FavoriteWorker(Base):
     """
     Represents a many-to-many relationship where a client marks a worker as favorite.
     """
+
     __tablename__ = "favorites"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the favorite relationship"
+        comment="Unique identifier for the favorite relationship",
     )
 
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", use_alter=True, name="fk_favorite_client_id", deferrable=True, initially="DEFERRED"),
+        ForeignKey(
+            "users.id",
+            use_alter=True,
+            name="fk_favorite_client_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=False,
-        comment="User ID of the client who favorited the worker"
+        comment="User ID of the client who favorited the worker",
     )
 
     worker_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", use_alter=True, name="fk_client_profiles_worker_id", deferrable=True, initially="DEFERRED"),
+        ForeignKey(
+            "users.id",
+            use_alter=True,
+            name="fk_client_profiles_worker_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=False,
-        comment="User ID of the worker who was favorited"
+        comment="User ID of the worker who was favorited",
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the favorite relationship was created"
+        comment="Timestamp when the favorite relationship was created",
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
-        comment="Timestamp when the favorite relationship was last updated"
+        comment="Timestamp when the favorite relationship was last updated",
     )
 
     # -------------------------------------

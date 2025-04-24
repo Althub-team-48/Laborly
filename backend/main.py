@@ -9,6 +9,7 @@ Application entrypoint for the Laborly API.
 """
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -47,14 +48,14 @@ app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 # CORSMiddleware Configuration
 # -----------------------------
 origins = [
-    "http://localhost:5000",       # React dev server
-    "http://127.0.0.1:5000",       # Localhost alternative
-    "http://host.docker.internal", # Lets Docker access your host machine
+    "http://localhost:5000",  # React dev server
+    "http://127.0.0.1:5000",  # Localhost alternative
+    "http://host.docker.internal",  # Lets Docker access your host machine
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,3 +72,21 @@ app.include_router(review_router)
 app.include_router(service_router)
 app.include_router(worker_router)
 app.include_router(messaging_router)
+
+
+# -----------------------------
+# Root Endpoint
+# -----------------------------
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    return """
+    <html>
+        <head>
+            <title>Welcome to Laborly</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; text-align: center; padding-top: 50px;">
+            <h1>👋 Welcome to <span style="color: #2c3e50;">Laborly</span></h1>
+            <p>Your trusted API backend for jobs, clients, and workforce management.</p>
+        </body>
+    </html>
+    """

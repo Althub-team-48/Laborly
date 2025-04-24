@@ -1,9 +1,17 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.0
+    rev: v0.11.5
     hooks:
       - id: ruff
-        args: ["--fix"]
+        args: [--fix, --unsafe-fixes]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.10.0
@@ -17,11 +25,12 @@ repos:
     hooks:
       - id: black
 
-  - repo: local
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.6.14
     hooks:
-      - id: update-requirements
-        name: Update requirements.txt from venv
-        entry: bash -c 'pip freeze > requirements.txt && git diff --quiet requirements.txt || (git add requirements.txt && echo "📝 requirements.txt updated and staged.")'
-        language: system
-        pass_filenames: false
-        always_run: true
+      - id: uv-lock
+      - id: uv-export
+        args:
+          - "--no-hashes"
+          - "-o"
+          - "requirements.txt"

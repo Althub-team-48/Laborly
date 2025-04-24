@@ -1,74 +1,151 @@
+Your README looks solid and up-to-date. A couple of very minor tweaks to ensure clarity:
+
+1. **Move `uv lock` & `uv sync` together** under Option A, replacing the lone `uv lock`.  
+2. Update the pip-compile snippet under Note for correctness (remove `requirements.in`).
+
+Here's the final suggested README:
+
+---
+
 # 🚀 Laborly Backend
 
-Laborly is a modular FastAPI-based backend that powers a job-matching platform between clients and verified workers.
+Laborly is a modular FastAPI-based backend for a job-matching platform that connects clients with verified workers.
 
 ---
 
 ## ✅ Prerequisites
 
-Make sure the following are installed and running:
+Ensure the following are installed and available:
 
 - **Python 3.11+**
 - **PostgreSQL** (running and accessible)
-- **Redis** (must be running locally on port `6379`)
+- **Redis** (running locally on port `6379`)
 - **Git**
 - **Virtual Environment** (`venv` or equivalent)
+- **[uv (optional)](https://github.com/astral-sh/uv)** – fast dependency & virtual environment manager
 
 ---
 
-## ⚙️ Setup Guide
+## ⚙️ Project Setup
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/laborly-backend.git
+git clone https://github.com/Althub-team-48/Laborly.git
 cd laborly-backend
 ```
 
-### 2. Create and Activate a Virtual Environment
+---
+
+### 2. Set Up the Environment
+
+Choose **either** pip **or** uv as your environment manager:
+
+#### ➤ Option A: Using `uv` (recommended)
+
+```bash
+uv venv                   # Create .venv automatically
+# Activate the virtual environment:
+# macOS/Linux:
+source .venv/bin/activate  
+# Windows:
+.venv\Scripts\activate  
+uv lock                   # Generate uv.lock from pyproject.toml
+uv sync                   # Install dependencies from uv.lock
+ 
+```
+
+To **add** a new package (and update both `pyproject.toml` _and_ `uv.lock`):
+
+```bash
+uv add httpx               # Adds httpx to [tool.uv.dependencies], updates uv.lock
+uv sync                    # Installs the newly added package
+```
+
+---
+
+#### ➤ Option B: Using `pip` and `requirements.txt`
 
 ```bash
 python -m venv venv
-source venv/bin/activate    # On Windows: venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-
-```bash
+# Activate the virtual environment:
+# macOS/Linux:
+source venv/bin/activate  
+# Windows:
+venv\Scripts\activate     
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
-
-Edit the `.env.sample` file with your environment details, then rename it to `.env`:
+To update dependencies:
 
 ```bash
-mv .env.sample .env
+pip freeze > requirements.txt
 ```
 
-### 5. Generate Database Migration
+---
+
+### 3. Configure Environment Variables
+
+```bash
+cp .env.sample .env   # Copy and customize
+```
+
+---
+
+### 4. Run Database Migrations
 
 ```bash
 alembic revision --autogenerate -m "initial schema"
 ```
 
-### 6. Apply Migration
+### 5. Apply Migration
 
 ```bash
 alembic upgrade head
 ```
 
-### 7. Start the Server
+---
+
+### 6. Start the Server
 
 ```bash
 uvicorn main:app --reload
 ```
 
-Visit the API documentation at [http://localhost:8000/docs](http://localhost:8000/docs)
+Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the interactive API docs.
 
 ---
 
-## 🐘 Notes
+## 🛠 Developer Tools
 
-- Redis **must be running** before launching the app.
-- Database structure is managed via Alembic migrations.
+Run code checks and formatters:
+
+```bash
+# Windows
+./run_checks.bat
+# macOS/Linux
+sh run_checks.sh
+```
+
+---
+
+## 🧠 Notes
+
+- **Redis** must be running before starting the server.  
+- Alembic is used for managing database migrations.  
+- You can use `uv` for modern, lockfile-based dependency management **or** stick with `pip` and `requirements.txt`.
+
+---
+
+## 🔄 Additional UV/PIP Workflow Tips
+
+- **Compile a `requirements.txt`** from your lockfile:
+  ```bash
+  uv export --no-hashes -o requirements.txt
+  ```
+- **Sync your venv** from `requirements.txt`:
+  ```bash
+  uv pip sync requirements.txt   # replicates locked pins
+  # or fall back to:
+  pip install -r requirements.txt
+  ```

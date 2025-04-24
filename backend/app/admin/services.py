@@ -56,8 +56,10 @@ class AdminService:
             HTTPException (404): If the KYC record for the given user ID is not found.
         """
         kyc = (
-            await self.db.execute(select(KYC).filter(KYC.user_id == user_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(KYC).filter(KYC.user_id == user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not kyc:
             logger.warning(f"[KYC] KYC not found for user_id={user_id}")
             raise HTTPException(status_code=404, detail="KYC not found")
@@ -75,8 +77,10 @@ class AdminService:
             HTTPException (404): If the KYC record for the given user ID is not found.
         """
         kyc = (
-            await self.db.execute(select(KYC).filter(KYC.user_id == user_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(KYC).filter(KYC.user_id == user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not kyc:
             logger.warning(f"[KYC] KYC not found for user_id={user_id}")
             raise HTTPException(status_code=404, detail="KYC not found")
@@ -173,8 +177,10 @@ class AdminService:
             HTTPException (404): If the review with the given ID is not found.
         """
         review = (
-            await self.db.execute(select(Review).filter(Review.id == review_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(Review).filter(Review.id == review_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not review:
             logger.warning(f"[REVIEW] Not found: review_id={review_id}")
             raise HTTPException(status_code=404, detail="Review not found")
@@ -199,7 +205,11 @@ class AdminService:
         Raises:
             HTTPException (404): If the user with the given ID is not found.
         """
-        user = (await self.db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
+        user = (
+            (await self.db.execute(select(User).filter(User.id == user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not user:
             logger.warning(f"[USER] Not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="User not found")

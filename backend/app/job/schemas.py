@@ -23,9 +23,8 @@ class JobBase(BaseModel):
     Shared base schema for job-related payloads.
     """
 
-    service_id: UUID | None = Field(
-        default=None, description="UUID of the service associated with the job"
-    )
+    service_id: UUID = Field(..., description="UUID of the service associated with the job")
+    thread_id: UUID = Field(..., description="UUID of the conversation thread initiating the job")
 
 
 # --------------------------------------------------
@@ -33,11 +32,11 @@ class JobBase(BaseModel):
 # --------------------------------------------------
 class JobCreate(JobBase):
     """
-    Client creates a job by specifying worker and thread.
+    Client creates a job by specifying service and thread.
+    Worker is inferred from the service.
     """
 
-    worker_id: UUID = Field(..., description="UUID of the assigned worker")
-    thread_id: UUID = Field(..., description="UUID of the conversation thread initiating the job")
+    pass
 
 
 # --------------------------------------------------
@@ -60,7 +59,7 @@ class JobComplete(BaseModel):
     Worker marks job as completed — no payload needed.
     """
 
-    pass  # No fields required
+    pass
 
 
 # --------------------------------------------------

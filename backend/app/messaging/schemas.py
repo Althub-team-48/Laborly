@@ -23,7 +23,6 @@ class MessageBase(BaseModel):
 # -------------------------------
 class MessageCreate(MessageBase):
     thread_id: UUID | None = Field(None, description="Thread ID if replying to an existing thread")
-    receiver_id: UUID | None = Field(None, description="Receiver ID if starting a new thread")
     job_id: UUID | None = Field(
         None, description="Job ID associated with the message (required for non-admins)"
     )
@@ -47,8 +46,7 @@ class MessageRead(MessageBase):
 # -------------------------------
 # Thread Initiate Schema
 # -------------------------------
-class ThreadInitiate(BaseModel):
-    content: str = Field(..., description="Message content to start a new thread")
+class ThreadInitiate(MessageBase):
     service_id: UUID = Field(..., description="Service ID to associate with the message")
 
 

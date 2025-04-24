@@ -34,14 +34,20 @@ class WorkerService:
 
     async def get_profile(self, user_id: UUID) -> schemas.WorkerProfileRead:
         logger.info(f"Fetching worker profile for user_id={user_id}")
-        user = (await self.db.execute(select(User).filter_by(id=user_id))).scalar_one_or_none()
+        user = (
+            (await self.db.execute(select(User).filter_by(id=user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not user:
             logger.warning(f"User not found for user_id={user_id}")
             raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found.")
 
         profile = (
-            await self.db.execute(select(models.WorkerProfile).filter_by(user_id=user_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(models.WorkerProfile).filter_by(user_id=user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not profile:
             logger.info("No profile found. Creating new worker profile...")
             profile = models.WorkerProfile(user_id=user_id)
@@ -59,14 +65,20 @@ class WorkerService:
         self, user_id: UUID, data: schemas.WorkerProfileUpdate
     ) -> schemas.WorkerProfileRead:
         logger.info(f"Updating worker profile for user_id={user_id}")
-        user = (await self.db.execute(select(User).filter_by(id=user_id))).scalar_one_or_none()
+        user = (
+            (await self.db.execute(select(User).filter_by(id=user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not user:
             logger.warning(f"User not found for user_id={user_id}")
             raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found.")
 
         profile = (
-            await self.db.execute(select(models.WorkerProfile).filter_by(user_id=user_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(models.WorkerProfile).filter_by(user_id=user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not profile:
             logger.warning(f"Profile not found for user_id={user_id}")
             raise HTTPException(status_code=404, detail="Worker profile not found")
@@ -96,8 +108,10 @@ class WorkerService:
     async def toggle_availability(self, user_id: UUID, status: bool) -> models.WorkerProfile:
         logger.info(f"Toggling availability: user_id={user_id}, status={status}")
         profile = (
-            await self.db.execute(select(models.WorkerProfile).filter_by(user_id=user_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(models.WorkerProfile).filter_by(user_id=user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not profile:
             raise HTTPException(status_code=404, detail="Worker profile not found")
 
@@ -113,7 +127,11 @@ class WorkerService:
 
     async def get_kyc(self, user_id: UUID) -> schemas.KYCRead | None:
         logger.info(f"Fetching KYC for user_id={user_id}")
-        kyc = (await self.db.execute(select(KYC).filter_by(user_id=user_id))).scalar_one_or_none()
+        kyc = (
+            (await self.db.execute(select(KYC).filter_by(user_id=user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not kyc:
             raise HTTPException(
                 status_code=404, detail=f"No KYC record found for user_id={user_id}"
@@ -124,7 +142,11 @@ class WorkerService:
         self, user_id: UUID, document_type: str, document_path: str, selfie_path: str
     ) -> schemas.KYCRead:
         logger.info(f"Submitting KYC for user_id={user_id}")
-        kyc = (await self.db.execute(select(KYC).filter_by(user_id=user_id))).scalar_one_or_none()
+        kyc = (
+            (await self.db.execute(select(KYC).filter_by(user_id=user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         now = datetime.now(timezone.utc)
 
         if not kyc:
@@ -166,8 +188,10 @@ class WorkerService:
     async def get_job_detail(self, user_id: UUID, job_id: UUID) -> JobRead:
         logger.info(f"Fetching job_id={job_id} for user_id={user_id}")
         job = (
-            await self.db.execute(select(Job).filter_by(id=job_id, worker_id=user_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(Job).filter_by(id=job_id, worker_id=user_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found or unauthorized")
         return JobRead.model_validate(job)

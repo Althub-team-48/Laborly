@@ -22,7 +22,7 @@ router = APIRouter(prefix="/messages", tags=["Messaging"])
 
 
 @router.post(
-    "/{worker_id}",
+    "/initiate",
     response_model=schemas.MessageRead,
     status_code=status.HTTP_201_CREATED,
     summary="Start New Thread",
@@ -31,7 +31,6 @@ router = APIRouter(prefix="/messages", tags=["Messaging"])
 @limiter.limit("5/minute")
 async def initiate_message(
     request: Request,
-    worker_id: UUID,
     message_data: schemas.ThreadInitiate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -46,7 +45,6 @@ async def initiate_message(
         sender_id=current_user.id,
         message_data=schemas.MessageCreate(
             content=message_data.content,
-            receiver_id=worker_id,
             service_id=message_data.service_id,
             thread_id=None,
             job_id=None,
@@ -76,7 +74,6 @@ async def reply_message(
         message_data=schemas.MessageCreate(
             thread_id=thread_id,
             content=message_data.content,
-            receiver_id=None,
             job_id=None,
             service_id=None,
         ),

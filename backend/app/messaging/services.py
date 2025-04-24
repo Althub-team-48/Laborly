@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.messaging import models, schemas
+from app.service.models import Service
 
 logger = logging.getLogger(__name__)
 
@@ -43,26 +44,33 @@ async def send_message(
     Enforces required conditions such as job association for non-admins.
     """
     if not message_data.thread_id:
-        if not message_data.receiver_id:
-            logger.error(f"Missing receiver_id for new message from {sender_id}")
-            raise HTTPException(status_code=400, detail="Receiver ID is required for new thread")
+        if sender_role != "ADMIN":
+            if not message_data.service_id:
+                logger.warning(
+                    f"Non-admin {sender_id} attempted to start thread without service_id"
+                )
+                raise HTTPException(
+                    status_code=400, detail="Service ID is required for non-admin users."
+                )
+            # Derive worker_id (receiver) from service
+            service_result = await db.execute(select(Service).filter_by(id=message_data.service_id))
+            service = service_result.unique().scalar_one_or_none()
+            if not service:
+                logger.error(f"Invalid service ID: {message_data.service_id}")
+                raise HTTPException(status_code=400, detail="Invalid service ID")
+            receiver_id = service.worker_id
+        else:
+            logger.error("Admins must provide receiver_id for new threads")
+            raise HTTPException(status_code=400, detail="Receiver ID is required for admins.")
 
-        if sender_role != "ADMIN" and not message_data.service_id:
-            logger.warning(f"Non-admin {sender_id} attempted to start thread without service_id")
-            raise HTTPException(
-                status_code=400, detail="Service ID is required for non-admin users."
-            )
-
-        thread_id = await create_thread(db, sender_id, message_data.receiver_id)
+        thread_id = await create_thread(db, sender_id, receiver_id)
     else:
         thread_id = message_data.thread_id
         result = await db.execute(select(models.MessageThread).filter_by(id=thread_id))
         thread = result.scalars().first()
-
         if not thread:
             logger.warning(f"Thread {thread_id} not found for sender {sender_id}")
             raise HTTPException(status_code=404, detail="Thread not found")
-
         if thread.is_closed:
             logger.warning(f"Attempt to message closed thread {thread_id} by user {sender_id}")
             raise HTTPException(

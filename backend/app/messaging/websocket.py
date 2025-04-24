@@ -55,7 +55,6 @@ async def websocket_endpoint(
                 message_data=MessageCreate(
                     thread_id=thread_id,
                     content=content,
-                    receiver_id=UUID(data["receiver_id"]),
                     job_id=UUID(data["job_id"]),
                     service_id=UUID(data["service_id"]),
                 ),

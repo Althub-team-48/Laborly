@@ -14,7 +14,6 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User
 from app.job import models, schemas
 from app.job.models import JobStatus
 from app.messaging.models import MessageThread
@@ -38,30 +37,27 @@ class JobService:
         The job status is set to 'NEGOTIATING' while waiting for the worker to accept it.
         """
         logger.info(
-            f"[CREATE] Client {client_id} creating job with worker {payload.worker_id} via thread {payload.thread_id}"
+            f"[CREATE] Client {client_id} creating job with service {payload.service_id} via thread {payload.thread_id}"
         )
 
-        worker = (
-            await self.db.execute(select(User).filter_by(id=payload.worker_id))
-        ).scalar_one_or_none()
-        if not worker:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Worker with ID {payload.worker_id} does not exist.",
-            )
-
         service = (
-            await self.db.execute(select(Service).filter_by(id=payload.service_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(Service).filter_by(id=payload.service_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not service:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Service with ID {payload.service_id} does not exist.",
             )
 
+        worker_id = service.worker_id
+
         thread = (
-            await self.db.execute(select(MessageThread).filter_by(id=payload.thread_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(MessageThread).filter_by(id=payload.thread_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not thread:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -70,7 +66,7 @@ class JobService:
 
         job = models.Job(
             client_id=client_id,
-            worker_id=payload.worker_id,
+            worker_id=worker_id,
             service_id=payload.service_id,
             status=JobStatus.NEGOTIATING,
             thread_id=payload.thread_id,
@@ -91,8 +87,10 @@ class JobService:
         logger.info(f"[ACCEPT] Worker {payload.worker_id} accepting job {payload.job_id}")
 
         job = (
-            await self.db.execute(select(models.Job).filter_by(id=payload.job_id))
-        ).scalar_one_or_none()
+            (await self.db.execute(select(models.Job).filter_by(id=payload.job_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -116,7 +114,11 @@ class JobService:
         """
         logger.info(f"[COMPLETE] User {user_id} attempting to complete job {job_id}")
 
-        job = (await self.db.execute(select(models.Job).filter_by(id=job_id))).scalar_one_or_none()
+        job = (
+            (await self.db.execute(select(models.Job).filter_by(id=job_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -140,7 +142,11 @@ class JobService:
         """
         logger.info(f"[CANCEL] User {user_id} attempting to cancel job {job_id}")
 
-        job = (await self.db.execute(select(models.Job).filter_by(id=job_id))).scalar_one_or_none()
+        job = (
+            (await self.db.execute(select(models.Job).filter_by(id=job_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -179,7 +185,11 @@ class JobService:
         """
         logger.info(f"[DETAIL] Fetching job {job_id} for user_id={user_id}")
 
-        job = (await self.db.execute(select(models.Job).filter_by(id=job_id))).scalar_one_or_none()
+        job = (
+            (await self.db.execute(select(models.Job).filter_by(id=job_id)))
+            .unique()
+            .scalar_one_or_none()
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 

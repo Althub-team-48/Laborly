@@ -34,19 +34,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------
 
 
-def merge_user_profile(profile: models.ClientProfile, user: User) -> dict[str, Any]:
+def merge_user_profile(profile: models.ClientProfile, user_data: dict[str, Any]) -> dict[str, Any]:
     """
     Combine user and profile attributes for unified response.
     """
     return {
         **{k: v for k, v in vars(profile).items() if not k.startswith("_")},
-        "email": user.email,
-        "phone_number": user.phone_number,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "location": user.location,
-        "profile_picture": user.profile_picture,
-        "updated_at": user.updated_at,
+        **user_data,
     }
 
 
@@ -76,7 +70,7 @@ class ClientService:
         """
         logger.info(f"Retrieving client profile for user_id={user_id}")
         user_result = await self.db.execute(select(User).filter(User.id == user_id))
-        user = user_result.scalar_one_or_none()
+        user = user_result.unique().scalar_one_or_none()
         if not user:
             logger.warning(f"User not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="User not found")
@@ -84,7 +78,7 @@ class ClientService:
         profile_result = await self.db.execute(
             select(models.ClientProfile).filter(models.ClientProfile.user_id == user_id)
         )
-        profile = profile_result.scalar_one_or_none()
+        profile = profile_result.unique().scalar_one_or_none()
 
         if not profile:
             logger.info(f"No profile found. Creating new one for user_id={user_id}")
@@ -94,7 +88,17 @@ class ClientService:
             await self.db.refresh(profile)
             logger.info(f"New profile created: profile_id={profile.id}")
 
-        merged_data = merge_user_profile(profile, user)
+        user_data = {
+            "email": user.email,
+            "phone_number": user.phone_number,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "location": user.location,
+            "profile_picture": user.profile_picture,
+            "updated_at": user.updated_at,
+        }
+
+        merged_data = merge_user_profile(profile, user_data)
         return schemas.ClientProfileRead.model_validate(merged_data)
 
     async def update_profile(
@@ -105,7 +109,7 @@ class ClientService:
         """
         logger.info(f"Updating profile for user_id={user_id}")
         user_result = await self.db.execute(select(User).filter(User.id == user_id))
-        user = user_result.scalar_one_or_none()
+        user = user_result.unique().scalar_one_or_none()
         if not user:
             logger.warning(f"User not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="User not found")
@@ -113,7 +117,7 @@ class ClientService:
         profile_result = await self.db.execute(
             select(models.ClientProfile).filter(models.ClientProfile.user_id == user_id)
         )
-        profile = profile_result.scalar_one_or_none()
+        profile = profile_result.unique().scalar_one_or_none()
         if not profile:
             logger.warning(f"Profile not found: user_id={user_id}")
             raise HTTPException(status_code=404, detail="Client profile not found")
@@ -124,20 +128,29 @@ class ClientService:
         for attr in user_fields_to_update:
             if attr in update_data:
                 setattr(user, attr, update_data[attr])
-                # Removed debug log: logger.debug(...)
 
         profile_fields_to_update = ["business_name"]
         for attr in profile_fields_to_update:
             if attr in update_data:
                 setattr(profile, attr, update_data[attr])
-                # Removed debug log: logger.debug(...)
 
         await self.db.commit()
         await self.db.refresh(user)
         await self.db.refresh(profile)
 
         logger.info(f"Profile updated for user_id={user_id}, profile_id={profile.id}")
-        merged_data = merge_user_profile(profile, user)
+
+        user_data = {
+            "email": user.email,
+            "phone_number": user.phone_number,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "location": user.location,
+            "profile_picture": user.profile_picture,
+            "updated_at": user.updated_at,
+        }
+
+        merged_data = merge_user_profile(profile, user_data)
         return schemas.ClientProfileRead.model_validate(merged_data)
 
     # ---------------------------------------------------
@@ -165,7 +178,7 @@ class ClientService:
                 models.FavoriteWorker.worker_id == worker_id,
             )
         )
-        existing = existing_favorite_result.scalar_one_or_none()
+        existing = existing_favorite_result.unique().scalar_one_or_none()
 
         if existing:
             logger.warning("Worker already favorited")
@@ -190,7 +203,7 @@ class ClientService:
                 models.FavoriteWorker.worker_id == worker_id,
             )
         )
-        favorite = favorite_to_remove_result.scalar_one_or_none()
+        favorite = favorite_to_remove_result.unique().scalar_one_or_none()
 
         if not favorite:
             logger.warning("Favorite not found")
@@ -199,7 +212,6 @@ class ClientService:
         await self.db.delete(favorite)
         await self.db.commit()
         logger.info("Favorite removed successfully")
-        # Explicit return None is good practice for functions declared to return None
         return None
 
     # ---------------------------------------------------
@@ -222,7 +234,7 @@ class ClientService:
         result = await self.db.execute(
             select(Job).filter(Job.id == job_id, Job.client_id == client_id)
         )
-        job = result.scalar_one_or_none()
+        job = result.unique().scalar_one_or_none()
 
         if not job:
             logger.warning("Job not found or unauthorized access")

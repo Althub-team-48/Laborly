@@ -77,14 +77,18 @@ def generate_strong_password(length: int = 12) -> str:
 # ------------------------------------------------
 async def signup_user(payload: SignupRequest, db: AsyncSession) -> MessageResponse:
     email_exists = (
-        await db.execute(select(User).filter(User.email == payload.email))
-    ).scalar_one_or_none()
+        (await db.execute(select(User).filter(User.email == payload.email)))
+        .unique()
+        .scalar_one_or_none()
+    )
     if email_exists:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     phone_exists = (
-        await db.execute(select(User).filter(User.phone_number == payload.phone_number))
-    ).scalar_one_or_none()
+        (await db.execute(select(User).filter(User.phone_number == payload.phone_number)))
+        .unique()
+        .scalar_one_or_none()
+    )
     if phone_exists:
         raise HTTPException(status_code=400, detail="Phone number already in use")
 
@@ -127,16 +131,22 @@ async def verify_email_token(token: str, db: AsyncSession) -> MessageResponse:
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid token payload")
 
-    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.unique().scalar_one_or_none()
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.is_verified:
         return MessageResponse(detail="Your email has already been verified.")
 
+    email = user.email
+    first_name = user.first_name
+
     user.is_verified = True
     await db.commit()
-    await send_welcome_email(user.email, user.first_name)
+
+    await send_welcome_email(email, first_name)
 
     return MessageResponse(detail="Your email has been successfully verified. You may now log in.")
 
@@ -145,7 +155,11 @@ async def verify_email_token(token: str, db: AsyncSession) -> MessageResponse:
 # Login (JSON and OAuth2)
 # ------------------------------------------------
 async def login_user_json(payload: LoginRequest, db: AsyncSession) -> AuthSuccessResponse:
-    user = (await db.execute(select(User).filter(User.email == payload.email))).scalar_one_or_none()
+    user = (
+        (await db.execute(select(User).filter(User.email == payload.email)))
+        .unique()
+        .scalar_one_or_none()
+    )
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_verified:
@@ -157,8 +171,10 @@ async def login_user_json(payload: LoginRequest, db: AsyncSession) -> AuthSucces
 
 async def login_user_oauth(form_data: Any, db: AsyncSession) -> AuthSuccessResponse:
     user = (
-        await db.execute(select(User).filter(User.email == form_data.username))
-    ).scalar_one_or_none()
+        (await db.execute(select(User).filter(User.email == form_data.username)))
+        .unique()
+        .scalar_one_or_none()
+    )
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_verified:
@@ -212,8 +228,10 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
     user_info = resp.json()
 
     user = (
-        await db.execute(select(User).filter(User.email == user_info.get("email")))
-    ).scalar_one_or_none()
+        (await db.execute(select(User).filter(User.email == user_info.get("email"))))
+        .unique()
+        .scalar_one_or_none()
+    )
 
     if not user:
         password = generate_strong_password()
@@ -223,7 +241,7 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         user_fields = {c.key for c in inspect(User).mapper.column_attrs}
         user_data = {k: v for k, v in user_obj.model_dump().items() if k in user_fields}
 
-        user = User(**user_data)
+        user = User(**user_data, is_verified=True)
         db.add(user)
         await db.commit()
         await db.refresh(user)

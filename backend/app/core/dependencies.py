@@ -65,7 +65,7 @@ async def get_current_user(
         raise credentials_exception
 
     result = await db.execute(select(User).filter(User.id == token_data.sub))
-    user = result.scalar_one_or_none()
+    user = result.unique().scalar_one_or_none()
 
     if not user:
         logger.warning(f"JWT valid but no user found: user_id={token_data.sub}")

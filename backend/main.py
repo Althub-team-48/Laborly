@@ -8,12 +8,14 @@ Application entrypoint for the Laborly API.
 - Integrates rate limiting via SlowAPI
 """
 
-from fastapi import FastAPI
+from typing import Any
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 
 from app.core.logging import init_logging
 from app.core.config import settings
@@ -40,7 +42,13 @@ app = FastAPI(title="Laborly API")
 # -----------------------------
 init_logging()
 app.state.limiter = limiter
-app.add_exception_handler(429, _rate_limit_exceeded_handler)
+
+
+async def rate_limit_exceeded_handler(request: Request, exc: Exception) -> Response:
+    return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
+
+
+app.add_exception_handler(429, rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
@@ -78,7 +86,7 @@ app.include_router(messaging_router)
 # Root Endpoint
 # -----------------------------
 @app.get("/", response_class=HTMLResponse)
-async def home():
+async def home() -> Any:
     return """
     <html>
         <head>

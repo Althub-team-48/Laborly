@@ -6,6 +6,7 @@ Defines Pydantic models for authentication flows:
 - JWT token payload and response structure
 - Authenticated user response schema
 - Factory method for Google OAuth user creation
+- Forgot password and email update schemas
 """
 
 from datetime import datetime
@@ -67,6 +68,43 @@ class SignupRequest(BaseModel):
 
 
 # --------------------------------------------------
+# PASSWORD RESET SCHEMAS
+# --------------------------------------------------
+class ForgotPasswordRequest(BaseModel):
+    """
+    Request schema for initiating the password reset process.
+    """
+
+    email: EmailStr = Field(..., description="Email address of the user requesting password reset")
+
+
+class ResetPasswordRequest(BaseModel):
+    """
+    Request schema for resetting the password using a token.
+    """
+
+    token: str = Field(..., description="Password reset token received via email")
+    new_password: PasswordStr = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+        description="New password (must meet complexity requirements)",
+    )
+
+
+# --------------------------------------------------
+# EMAIL UPDATE SCHEMAS
+# --------------------------------------------------
+class UpdateEmailRequest(BaseModel):
+    """
+    Request schema for initiating an email address update.
+    Requires authentication.
+    """
+
+    new_email: EmailStr = Field(..., description="The desired new email address")
+
+
+# --------------------------------------------------
 # AUTH TOKEN SCHEMAS
 # --------------------------------------------------
 class TokenResponse(BaseModel):
@@ -80,13 +118,31 @@ class TokenResponse(BaseModel):
 
 class TokenPayload(BaseModel):
     """
-    Decoded JWT payload structure.
+    Decoded JWT payload structure for access tokens.
     """
 
     sub: UUID = Field(..., description="Subject (user ID)")
     role: UserRole = Field(..., description="User role encoded in the token")
     exp: int = Field(..., description="Expiration timestamp of the token")
     jti: str = Field(..., description="JWT ID (used for token blacklist)")
+
+
+class VerificationTokenPayload(BaseModel):
+    """
+    Decoded JWT payload structure for verification tokens (email, password reset, etc.).
+    Includes optional fields specific to the verification type.
+    """
+
+    sub: UUID = Field(..., description="Subject (user ID)")
+    type: str = Field(
+        ...,
+        description="Type of verification token (e.g., 'email_verification', 'password_reset', 'new_email_verification')",
+    )
+    exp: int = Field(..., description="Expiration timestamp of the token")
+    # Optional field for new email verification
+    new_email: EmailStr | None = Field(
+        None, description="The new email address being verified (used for email updates)"
+    )
 
 
 # --------------------------------------------------
@@ -103,6 +159,7 @@ class AuthUserResponse(BaseModel):
     first_name: str = Field(..., description="User's first name")
     last_name: str = Field(..., description="User's last name")
     role: UserRole = Field(..., description="User's role in the system")
+    is_verified: bool = Field(..., description="Indicates if the user's email is verified")
     created_at: datetime = Field(..., description="Timestamp when the user was created")
     updated_at: datetime = Field(..., description="Timestamp when the user was last updated")
 

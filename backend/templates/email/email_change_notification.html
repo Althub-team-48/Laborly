@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify Your Email Address</title>
+    <title>Email Change Notification</title>
     <style>
         body {
             font-family: sans-serif;
@@ -24,20 +24,14 @@
         .header {
             text-align: center;
             margin-bottom: 20px;
-            color: #0056b3; /* Example primary color */
+            color: #ffc107; /* Example warning color */
         }
         .content p {
             margin-bottom: 15px;
         }
-        .button {
-            display: inline-block;
-            padding: 12px 25px;
-            margin: 15px 0;
-            background-color: #28a745; /* Example success button color */
-            color: #ffffff;
-            text-decoration: none;
-            border-radius: 5px;
+        .email-address {
             font-weight: bold;
+            color: #333;
         }
         .footer {
             margin-top: 30px;
@@ -45,35 +39,30 @@
             font-size: 0.9em;
             color: #777;
         }
-        .footer a {
+         .footer a {
             color: #0056b3;
             text-decoration: none;
-        }
-        .note {
-            font-size: 0.9em;
-            color: #555;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Verify Your Email Address</h1>
+            <h1>Security Notification: Email Change Request</h1>
         </div>
         <div class="content">
             <p>Hello,</p>
-            <p>Thanks for signing up for {{ company_name }}! Please click the button below to verify your email address and activate your account.</p>
-            <p style="text-align: center;">
-                <a href="{{ verification_link }}" class="button">Verify Email Address</a>
-            </p>
-            <p class="note">This verification link will expire in {{ account_verification_ttl_min }} minutes.</p>
-            <p>If you did not create an account using this email address, please ignore this email.</p>
+            <p>This is a notification that a request was made to change the email address associated with your {{ company_name }} account from <span class="email-address">{{ old_email }}</span> to <span class="email-address">{{ new_email }}</span>.</p>
+            <p>A confirmation email has been sent to the new address (<span class="email-address">{{ new_email }}</span>). The email change will only take effect once it is confirmed via that link.</p>
+            <p><strong>If you requested this change, you can safely ignore this email.</strong> The change will be finalized once you click the link sent to your new address.</p>
+            <p><strong>If you did NOT request this change, please secure your account immediately and contact our support team:</strong></p>
+            <p><a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+            <p>Ignoring the confirmation link sent to the new email address will prevent the change from occurring.</p>
             <p>Thanks,<br>The {{ company_name }} Team</p>
         </div>
         <div class="footer">
             <p>&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
-            <p>If the button above doesn't work, copy and paste this link into your browser:</p>
-            <p><a href="{{ verification_link }}">{{ verification_link }}</a></p>
+            <p>For security reasons, we notify you of important account changes.</p>
         </div>
     </div>
 </body>

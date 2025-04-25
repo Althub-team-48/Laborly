@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine, text
+from sqlalchemy import Engine, create_engine, text
 from faker import Faker
 
 # -------------------------------------------------------
@@ -44,12 +44,12 @@ NUM_WORKERS = 10
 
 
 class Seeder:
-    def __init__(self):
+    def __init__(self) -> None:
         self.faker = Faker()
         self.sync_engine = self._get_sync_engine()
         self.db: Session = Session(bind=self.sync_engine)
 
-    def _get_sync_engine(self):
+    def _get_sync_engine(self) -> Engine:
         """Creates the synchronous engine for the database."""
         raw_url = settings.DATABASE_URL
         print(f"🔍 Using DATABASE URL: {raw_url}")
@@ -57,7 +57,7 @@ class Seeder:
         print(f"🔁 Converted to sync URL: {sync_url}")
         return create_engine(sync_url)
 
-    def truncate_all_tables(self):
+    def truncate_all_tables(self) -> None:
         """Truncates all tables using SQLAlchemy."""
         print("🧹 Truncating all tables (sync)...")
         with self.sync_engine.connect() as conn:
@@ -77,7 +77,7 @@ class Seeder:
             conn.commit()
         print("✅ All tables truncated.\n")
 
-    def seed_admins(self):
+    def seed_admins(self) -> None:
         """Seeds admin users with fake data."""
         print(f"👤 Seeding {NUM_ADMINS} admin(s)...")
         for _ in range(NUM_ADMINS):
@@ -109,7 +109,7 @@ class Seeder:
         self.db.commit()
         print("✅ Admins seeded.\n")
 
-    def seed_clients(self):
+    def seed_clients(self) -> None:
         """Seeds client users with fake data."""
         print(f"👥 Seeding {NUM_CLIENTS} client(s)...")
         from app.client.models import ClientProfile
@@ -151,7 +151,7 @@ class Seeder:
         self.db.commit()
         print("✅ Clients and profiles seeded.\n")
 
-    def seed_workers(self):
+    def seed_workers(self) -> None:
         """Seeds worker users with fake data."""
         print(f"🧑‍🔧 Seeding {NUM_WORKERS} worker(s)...")
         from app.worker.models import WorkerProfile
@@ -198,7 +198,7 @@ class Seeder:
         self.db.commit()
         print("✅ Workers and profiles seeded.\n")
 
-    def seed_services(self):
+    def seed_services(self) -> None:
         """Seeds service listings for workers."""
         print("🛠️ Seeding services for workers...")
 
@@ -231,7 +231,7 @@ class Seeder:
         self.db.commit()
         print("✅ Services seeded for all workers.\n")
 
-    def seed_messages(self):
+    def seed_messages(self) -> None:
         """Seeds message threads and messages between clients and workers."""
         print("💬 Seeding message threads and messages...")
 
@@ -272,7 +272,7 @@ class Seeder:
         self.db.commit()
         print("✅ Message threads and messages seeded.\n")
 
-    def seed_jobs(self):
+    def seed_jobs(self) -> None:
         """Seeds jobs for clients and assigns them to workers."""
         print("📝 Seeding jobs for clients...")
 
@@ -315,7 +315,7 @@ class Seeder:
         self.db.commit()
         print("✅ Jobs and threads seeded.\n")
 
-    def seed_reviews(self):
+    def seed_reviews(self) -> None:
         """Seeds reviews for completed jobs."""
         print("⭐ Seeding reviews for completed jobs...")
 

@@ -50,5 +50,14 @@ services:
     depends_on:
       - nginx
 
+  lint:
+    build:
+      context: ./backend
+    container_name: lint
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    entrypoint: ["pre-commit", "run", "--all-files"]
+
 volumes:
   redis-data:

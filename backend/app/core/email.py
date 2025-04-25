@@ -126,7 +126,7 @@ async def send_new_email_verification(new_email: EmailStr, token: str) -> None:
     template_data = {
         "verification_link": verify_url,
         "new_email": new_email,
-        "new_email_verification_ttl_hours": (
+        "new_email_verification_ttl_min": (
             settings.NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES or 1440
         ),
     }

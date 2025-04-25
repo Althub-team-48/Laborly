@@ -57,7 +57,8 @@ services:
     volumes:
       - ./backend:/app
     working_dir: /app
-    entrypoint: ["pre-commit", "run", "--all-files"]
+    entrypoint: ["pre-commit", "run", "--all-files", "--hook-stage", "manual"]
+
 
 volumes:
   redis-data:

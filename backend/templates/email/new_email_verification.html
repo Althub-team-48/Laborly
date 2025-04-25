@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome!</title>
+    <title>Confirm Your New Email Address</title>
     <style>
         body {
             font-family: sans-serif;
@@ -29,11 +29,15 @@
         .content p {
             margin-bottom: 15px;
         }
+        .email-address {
+            font-weight: bold;
+            color: #333;
+        }
         .button {
             display: inline-block;
             padding: 12px 25px;
             margin: 15px 0;
-            background-color: #007bff; /* Example button color */
+            background-color: #28a745; /* Example success button color */
             color: #ffffff;
             text-decoration: none;
             border-radius: 5px;
@@ -45,25 +49,36 @@
             font-size: 0.9em;
             color: #777;
         }
+        .footer a {
+            color: #0056b3;
+            text-decoration: none;
+        }
+        .note {
+            font-size: 0.9em;
+            color: #555;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Welcome to {{ company_name }}, {{ first_name }}! 🎉</h1>
+            <h1>Confirm Your New Email Address</h1>
         </div>
         <div class="content">
-            <p>Hello {{ first_name }},</p>
-            <p>We're thrilled to have you on board! Your account has been successfully activated.</p>
-            <p>You can now log in and start exploring.</p>
+            <p>Hello,</p>
+            <p>You requested to change the email address associated with your {{ company_name }} account to <span class="email-address">{{ new_email }}</span>.</p>
+            <p>Please click the button below to confirm this new email address:</p>
             <p style="text-align: center;">
-                <a href="{{ login_url }}" class="button">Log In to Your Account</a>
+                <a href="{{ verification_link }}" class="button">Confirm New Email Address</a>
             </p>
-            <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
-            <p>Best regards,<br>The {{ company_name }} Team</p>
+            <p class="note">This confirmation link will expire in {{ new_email_verification_ttl_hours }} hours.</p>
+            <p>If you did not request this change, please ignore this email or contact support immediately.</p>
+            <p>Thanks,<br>The {{ company_name }} Team</p>
         </div>
         <div class="footer">
             <p>&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
+            <p>If the button above doesn't work, copy and paste this link into your browser:</p>
+            <p><a href="{{ verification_link }}">{{ verification_link }}</a></p>
         </div>
     </div>
 </body>

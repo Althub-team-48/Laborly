@@ -62,7 +62,11 @@ class Settings(BaseSettings):
     MAIL_VALIDATE_CERTS: bool = True
     MAIL_TEMPLATE_FOLDER: str = "templates/email"
     SUPPORT_EMAIL: str
-    BASE_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = "http://localhost:5000"
+    BACKEND_URL: str = "http://localhost:8000"
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
     @property
     def db_url(self) -> str:

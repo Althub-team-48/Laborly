@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome!</title>
+    <title>Email Address Updated</title>
     <style>
         body {
             font-family: sans-serif;
@@ -24,10 +24,14 @@
         .header {
             text-align: center;
             margin-bottom: 20px;
-            color: #0056b3; /* Example primary color */
+            color: #28a745; /* Example success color */
         }
         .content p {
             margin-bottom: 15px;
+        }
+        .email-address {
+            font-weight: bold;
+            color: #333;
         }
         .button {
             display: inline-block;
@@ -45,26 +49,32 @@
             font-size: 0.9em;
             color: #777;
         }
+        .footer a {
+            color: #0056b3;
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Welcome to {{ company_name }}, {{ first_name }}! 🎉</h1>
+            <h1>Email Address Updated Successfully</h1>
         </div>
         <div class="content">
-            <p>Hello {{ first_name }},</p>
-            <p>We're thrilled to have you on board! Your account has been successfully activated.</p>
-            <p>You can now log in and start exploring.</p>
-            <p style="text-align: center;">
-                <a href="{{ login_url }}" class="button">Log In to Your Account</a>
+            <p>Hello,</p>
+            <p>This email confirms that your email address for {{ company_name }} has been successfully updated to:</p>
+            <p class="email-address">{{ new_email }}</p>
+            <p>All future communications regarding your account will be sent to this new address.</p>
+            <p>If you did not make this change, please contact our support team immediately.</p>
+            <p>You can view your profile details here:</p>
+             <p style="text-align: center;">
+                <a href="{{ profile_url }}" class="button">View Profile</a>
             </p>
-            <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
-            <p>Best regards,<br>The {{ company_name }} Team</p>
+            <p>Thanks,<br>The {{ company_name }} Team</p>
         </div>
         <div class="footer">
             <p>&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
-        </div>
+            </div>
     </div>
 </body>
 </html>

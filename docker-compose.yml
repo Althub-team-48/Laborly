@@ -56,9 +56,9 @@ services:
     container_name: lint
     volumes:
       - ./backend:/app
+      - ./.git:/app/.git
     working_dir: /app
-    entrypoint: ["pre-commit", "run", "--all-files", "--hook-stage", "manual"]
-
+    entrypoint: ["pre-commit", "run", "--all-files"]
 
 volumes:
   redis-data:

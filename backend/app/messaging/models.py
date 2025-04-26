@@ -1,17 +1,19 @@
 """
-messaging/models.py
+backend/app/messaging/models.py
 
-SQLAlchemy models for the reusable messaging system:
-- MessageThread: Holds thread metadata for a conversation.
-- ThreadParticipant: Links users to threads.
-- Message: Individual messages sent within threads.
+Messaging Models
+
+Defines SQLAlchemy models for the messaging system:
+- MessageThread: Holds metadata for a conversation between users.
+- ThreadParticipant: Maps users to their message threads.
+- Message: Represents individual messages sent within threads.
 """
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import Text, DateTime, Boolean, ForeignKey, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,10 +24,14 @@ if TYPE_CHECKING:
     from app.job.models import Job
 
 
-# ----------------------------------------
-# Message Model (Define Message first)
-# ----------------------------------------
+# ---------------------------------------------------
+# Message Model
+# ---------------------------------------------------
 class Message(Base):
+    """
+    Represents an individual message sent in a thread.
+    """
+
     __tablename__ = "messages"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -58,7 +64,11 @@ class Message(Base):
         nullable=False,
         comment="User who sent this message",
     )
-    content: Mapped[str] = mapped_column(Text, nullable=False, comment="Content of the message")
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="Content of the message",
+    )
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -71,13 +81,21 @@ class Message(Base):
         "MessageThread",
         back_populates="messages",
     )
-    sender: Mapped["User"] = relationship("User", back_populates="sent_messages", lazy="joined")
+    sender: Mapped["User"] = relationship(
+        "User",
+        back_populates="sent_messages",
+        lazy="joined",
+    )
 
 
-# ----------------------------------------
+# ---------------------------------------------------
 # MessageThread Model
-# ----------------------------------------
+# ---------------------------------------------------
 class MessageThread(Base):
+    """
+    Represents a conversation thread between users.
+    """
+
     __tablename__ = "message_threads"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -110,12 +128,15 @@ class MessageThread(Base):
         ),
         nullable=True,
         unique=True,
-        comment="Optional Job this thread is associated with",
+        comment="Optional job this thread is associated with",
     )
 
     # Relationships
     participants: Mapped[list["ThreadParticipant"]] = relationship(
-        "ThreadParticipant", back_populates="thread", cascade="all, delete-orphan", lazy="selectin"
+        "ThreadParticipant",
+        back_populates="thread",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
     messages: Mapped[list["Message"]] = relationship(
         "Message",
@@ -124,16 +145,21 @@ class MessageThread(Base):
         order_by=Message.timestamp.asc(),
         lazy="selectin",
     )
-
     job: Mapped[Optional["Job"]] = relationship(
-        "Job", back_populates="thread", foreign_keys=[job_id]
+        "Job",
+        back_populates="thread",
+        foreign_keys=[job_id],
     )
 
 
-# ----------------------------------------
+# ---------------------------------------------------
 # ThreadParticipant Model
-# ----------------------------------------
+# ---------------------------------------------------
 class ThreadParticipant(Base):
+    """
+    Represents a user participating in a message thread.
+    """
+
     __tablename__ = "thread_participants"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -160,4 +186,8 @@ class ThreadParticipant(Base):
         "MessageThread",
         back_populates="participants",
     )
-    user: Mapped["User"] = relationship("User", back_populates="threads", lazy="joined")
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="threads",
+        lazy="joined",
+    )

@@ -36,15 +36,9 @@ def merge_user_profile(profile: models.ClientProfile, user: User) -> dict[str, A
     Uses the User model directly now.
     """
     profile_data = {k: v for k, v in vars(profile).items() if not k.startswith("_")}
-    user_data = {
-        "email": user.email,
-        "phone_number": user.phone_number,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "location": user.location,
-        "created_at": user.created_at,
-        "updated_at": user.updated_at,
-    }
+    user_data = {k: v for k, v in vars(user).items() if not k.startswith("_") and k in {
+        "email", "phone_number", "first_name", "last_name", "location", "created_at", "updated_at"
+    }}
     return {**user_data, **profile_data, "id": profile.id, "user_id": user.id}
 
 

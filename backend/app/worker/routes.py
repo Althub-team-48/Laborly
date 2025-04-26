@@ -74,18 +74,18 @@ async def update_worker_profile(
 @router.get(
     "/kyc",
     status_code=status.HTTP_200_OK,
-    summary="Get KYC Status",
+    summary="Get My KYC Status",
     description="Fetch the submitted KYC status of the currently authenticated worker.",
 )
 @limiter.limit("10/minute")
-async def get_worker_kyc(
+async def get_my_kyc(
     request: Request,
     db: DBDep,
     current_user: WorkerDep,
-) -> KYCRead | None:  # Corrected return type to KYCRead
+) -> KYCRead | None:
     kyc = await WorkerService(db).get_kyc(current_user.id)
     if kyc:
-        return KYCRead.model_validate(kyc)  # Convert model to schema
+        return KYCRead.model_validate(kyc)
     return None
 
 
@@ -95,25 +95,30 @@ async def get_worker_kyc(
     summary="Submit KYC Documents",
     description="Submit KYC documents including a document type, a document file, and a selfie.",
 )
-@limiter.limit("3/minute")
-async def submit_worker_kyc(
+@limiter.limit("3/hour")
+async def submit_my_kyc(
     request: Request,
     db: DBDep,
     current_user: WorkerDep,
-    document_type: str = Form(...),
-    document_file: UploadFile = File(...),
-    selfie_file: UploadFile = File(...),
-) -> KYCRead:  # Return type adjusted to KYCRead
-    document_path = upload_file_to_s3(document_file, subfolder="kyc")
-    selfie_path = upload_file_to_s3(selfie_file, subfolder="kyc")
+    document_type: str = Form(
+        ...,
+        description="Type of identification document being uploaded (e.g., 'Passport', 'Driver\\'s License', 'National ID Card').",
+    ),
+    document_file: UploadFile = File(
+        ..., description="The identification document file (PDF, JPG, PNG). Max 10MB."
+    ),
+    selfie_file: UploadFile = File(..., description="A clear selfie image (JPG, PNG). Max 10MB."),
+) -> KYCRead:
+    document_path = await upload_file_to_s3(document_file, subfolder="kyc")
+    selfie_path = await upload_file_to_s3(selfie_file, subfolder="kyc")
 
-    kyc = await WorkerService(db).submit_kyc(
+    kyc_model = await WorkerService(db).submit_kyc(
         user_id=current_user.id,
         document_type=document_type,
         document_path=document_path,
         selfie_path=selfie_path,
     )
-    return KYCRead.model_validate(kyc)  # Convert model to schema
+    return KYCRead.model_validate(kyc_model, from_attributes=True)
 
 
 # ----------------------------------------------------
@@ -126,14 +131,14 @@ async def submit_worker_kyc(
     status_code=status.HTTP_200_OK,
     summary="List Worker Jobs",
     description="Returns a list of all jobs assigned to the currently authenticated worker.",
-    response_model=list[JobRead],  # Use Pydantic schema for response
+    response_model=list[JobRead],
 )
 @limiter.limit("10/minute")
 async def list_worker_jobs(
     request: Request,
     db: DBDep,
     current_user: WorkerDep,
-) -> list[JobRead]:  # Corrected return type to JobRead
+) -> list[JobRead]:
     jobs = await WorkerService(db).get_jobs(current_user.id)
     return [JobRead.model_validate(job) for job in jobs]
 
@@ -143,7 +148,7 @@ async def list_worker_jobs(
     status_code=status.HTTP_200_OK,
     summary="Get Job Detail",
     description="Retrieve detailed information about a specific job assigned to the worker.",
-    response_model=JobRead,  # Use Pydantic schema for response
+    response_model=JobRead,
 )
 @limiter.limit("10/minute")
 async def get_worker_job_detail(
@@ -151,6 +156,6 @@ async def get_worker_job_detail(
     job_id: UUID,
     db: DBDep,
     current_user: WorkerDep,
-) -> JobRead:  # Corrected return type to JobRead
+) -> JobRead:
     job = await WorkerService(db).get_job_detail(job_id, current_user.id)
     return JobRead.model_validate(job)

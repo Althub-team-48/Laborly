@@ -61,8 +61,6 @@ class WorkerProfileUpdate(WorkerProfileBase):
 
     location: str | None = Field(default=None, description="Worker's location")
 
-    profile_picture: str | None = Field(default=None, description="URL to profile picture")
-
 
 # -------------------------------------
 # Schema for Reading Merged Profile + User Info
@@ -89,7 +87,6 @@ class WorkerProfileRead(WorkerProfileBase):
     last_name: str = Field(..., description="Last name of the worker")
     phone_number: str | None = Field(default=None, description="Worker's phone number")
     location: str | None = Field(default=None, description="Worker's location")
-    profile_picture: str | None = Field(default=None, description="URL to profile picture")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -104,3 +101,14 @@ class KYCRead(BaseModel):
     submitted_at: datetime = Field(..., description="Timestamp when the KYC was submitted")
     reviewed_at: datetime | None = Field(None, description="Timestamp when the KYC was reviewed")
     model_config = ConfigDict(from_attributes=True)
+
+
+# -----------------------------------------------------
+# Generic Message Response Schema
+# -----------------------------------------------------
+class MessageResponse(BaseModel):
+    """
+    Generic response schema for simple success or info messages.
+    """
+
+    detail: str = Field(..., description="Description of the operation result")

@@ -10,10 +10,10 @@ Laborly Seeder Script (Fully Populated)
 import sys
 import random
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta  # Import timedelta
 from pathlib import Path
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import Engine, create_engine, text
 from faker import Faker
 
@@ -34,6 +34,8 @@ from app.service.models import Service
 from app.job.models import Job, JobStatus
 from app.messaging.models import MessageThread, Message, ThreadParticipant
 from app.review.models import Review
+
+# Import profile models explicitly if needed later
 from app.client.models import ClientProfile
 from app.worker.models import WorkerProfile
 
@@ -84,7 +86,7 @@ NIGERIAN_STATES = [
     "Taraba",
     "Yobe",
     "Zamfara",
-    "FCT",
+    "FCT",  # Federal Capital Territory
 ]
 
 
@@ -98,6 +100,7 @@ class Seeder:
         """Creates the synchronous engine for the database."""
         raw_url = settings.DATABASE_URL
         print(f"🔍 Using DATABASE URL: {raw_url}")
+        # Ensure psycopg2 is used for sync operations if DATABASE_URL uses asyncpg
         sync_url = raw_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
         print(f"🔁 Converted to sync URL: {sync_url}")
         return create_engine(sync_url)
@@ -123,7 +126,6 @@ class Seeder:
                     print(f"✅ Truncated {table_name}")
                 except Exception as e:
                     print(f"⚠️ Could not truncate {table_name}: {e}")
-
             conn.commit()
         print("✅ All tables truncated.\n")
 
@@ -186,7 +188,7 @@ class Seeder:
                 is_frozen=False,
                 is_banned=False,
                 is_deleted=False,
-                is_verified=random.choice([True, False]),
+                is_verified=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
@@ -227,7 +229,7 @@ class Seeder:
                 is_frozen=False,
                 is_banned=False,
                 is_deleted=False,
-                is_verified=random.choice([True, False]),
+                is_verified=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
@@ -251,7 +253,6 @@ class Seeder:
     def seed_services(self) -> None:
         """Seeds service listings for workers with Nigerian locations."""
         print("🛠️ Seeding services for workers...")
-
         worker_users = self.db.query(User).filter(User.role == UserRole.WORKER).all()
         if not worker_users:
             print("⚠️ No workers found to seed services for.")
@@ -273,16 +274,14 @@ class Seeder:
             "Welding",
             "Event Ushering",
         ]
-
+        service_count = 0
         for worker in worker_users:
             num_services = random.randint(1, 3)
             assigned_titles = random.sample(
                 service_titles, k=min(num_services, len(service_titles))
             )
-
             for title in assigned_titles:
                 service_location = random.choice([worker.location, random.choice(NIGERIAN_STATES)])
-
                 service = Service(
                     worker_id=worker.id,
                     title=title,
@@ -290,14 +289,13 @@ class Seeder:
                     location=service_location,
                 )
                 self.db.add(service)
-
+                service_count += 1
         self.db.commit()
-        print(f"✅ {len(worker_users) * num_services} Services seeded.\n")
+        print(f"✅ {service_count} Services seeded.\n")
 
     def seed_jobs(self) -> None:
         """Seeds jobs for clients and assigns them to workers."""
         print("📝 Seeding jobs...")
-
         client_users = self.db.query(User).filter(User.role == UserRole.CLIENT).all()
         worker_users = self.db.query(User).filter(User.role == UserRole.WORKER).all()
         all_services = self.db.query(Service).all()
@@ -317,15 +315,21 @@ class Seeder:
                 self.db.add(thread)
                 self.db.flush()  # Get thread.id
 
-                # Create the job linked to the thread
-                job_status = random.choice(list(JobStatus))  # Random status
+                # Create the job WITHOUT thread_id
+                job_status = random.choice(list(JobStatus))
                 job = Job(
                     client_id=client.id,
                     worker_id=worker_id,
                     service_id=service.id,
                     status=job_status,
-                    thread_id=thread.id,
+                    # REMOVED: thread_id=thread.id,
                 )
+                self.db.add(job)
+                self.db.flush()  # Get job.id
+
+                # FIX: Update the thread with the job_id
+                thread.job_id = job.id
+                self.db.add(thread)  # Add thread again to mark it dirty for the update
 
                 # Set timestamps based on status
                 if job_status in [
@@ -349,18 +353,24 @@ class Seeder:
                     )
                     job.cancel_reason = self.faker.sentence(nb_words=6)
 
-                self.db.add(job)
+                # No need to add job again, already added
                 job_count += 1
 
-        self.db.commit()
+        self.db.commit()  # Commit jobs and thread updates
         print(f"✅ {job_count} Jobs seeded.\n")
 
     def seed_messages(self) -> None:
         """Seeds message threads and messages for existing jobs."""
         print("💬 Seeding messages for jobs...")
-
-        # Fetch jobs that should have conversations (e.g., not just created)
-        jobs_with_threads = self.db.query(Job).filter(Job.thread_id.is_not(None)).all()
+        jobs_with_threads = (
+            self.db.query(Job)
+            .options(
+                # Eager load thread to avoid separate queries per job
+                selectinload(Job.thread)
+            )
+            .filter(Job.thread.has())
+            .all()
+        )  # Filter jobs that have an associated thread
 
         if not jobs_with_threads:
             print("⚠️ No jobs with threads found to seed messages for.")
@@ -368,36 +378,47 @@ class Seeder:
 
         message_count = 0
         for job in jobs_with_threads:
-            thread_id = job.thread_id
+            thread = job.thread  # Access the eager-loaded thread
+            if not thread:
+                continue  # Skip if thread somehow wasn't loaded
+
+            thread_id = thread.id
             client_id = job.client_id
             worker_id = job.worker_id
 
-            if not thread_id or not client_id or not worker_id:
+            if not client_id or not worker_id:
                 continue
 
-            existing_participants = {
-                p.user_id
-                for p in self.db.query(ThreadParticipant.user_id)
-                .filter_by(thread_id=thread_id)
-                .all()
-            }
+            # Add participants (should ideally be handled when thread is created)
+            existing_participants_query = self.db.query(ThreadParticipant.user_id).filter(
+                ThreadParticipant.thread_id == thread_id
+            )
+            existing_participants = {p[0] for p in existing_participants_query.all()}
             if client_id not in existing_participants:
                 self.db.add(ThreadParticipant(thread_id=thread_id, user_id=client_id))
             if worker_id not in existing_participants:
                 self.db.add(ThreadParticipant(thread_id=thread_id, user_id=worker_id))
-            self.db.flush()
 
             # Add messages
             num_messages = random.randint(2, 7)
             participants = [client_id, worker_id]
-            last_timestamp = job.created_at or datetime.now(timezone.utc)
+            last_timestamp = (
+                job.created_at
+                if isinstance(job.created_at, datetime)
+                else datetime.now(timezone.utc)
+            )
 
-            for _i in range(num_messages):
+            for i in range(num_messages):
                 sender_id = random.choice(participants)
-                msg_timestamp = self.faker.date_time_between(
-                    start_date=last_timestamp, tzinfo=timezone.utc
-                )
-                last_timestamp = msg_timestamp
+                try:
+                    min_start_date = last_timestamp + timedelta(seconds=1)
+                    msg_timestamp = self.faker.date_time_between(
+                        start_date=min_start_date, tzinfo=timezone.utc
+                    )
+                    last_timestamp = msg_timestamp
+                except ValueError:
+                    msg_timestamp = last_timestamp + timedelta(minutes=i + 1)
+                    last_timestamp = msg_timestamp
 
                 message = Message(
                     thread_id=thread_id,
@@ -414,7 +435,6 @@ class Seeder:
     def seed_reviews(self) -> None:
         """Seeds reviews for completed or finalized jobs."""
         print("⭐ Seeding reviews...")
-
         reviewable_jobs = (
             self.db.query(Job)
             .filter(Job.status.in_([JobStatus.COMPLETED, JobStatus.FINALIZED]))
@@ -430,7 +450,6 @@ class Seeder:
             existing_review = self.db.query(Review).filter_by(job_id=job.id).first()
             if existing_review:
                 continue
-
             if not job.client_id or not job.worker_id:
                 continue
 
@@ -448,7 +467,6 @@ class Seeder:
             )
             self.db.add(review)
             review_count += 1
-
         self.db.commit()
         print(f"✅ {review_count} Reviews seeded.\n")
 
@@ -459,8 +477,8 @@ class Seeder:
         self.seed_clients()
         self.seed_workers()
         self.seed_services()
-        self.seed_jobs()
-        self.seed_messages()
+        self.seed_jobs()  # Seeds jobs and creates threads
+        self.seed_messages()  # Seeds messages for the threads created in seed_jobs
         self.seed_reviews()
         print("🎉 Seeding completed successfully!")
         print("🔑 Default password for all seeded users: String@123")
@@ -476,4 +494,6 @@ if __name__ == "__main__":
 
         traceback.print_exc()
     finally:
-        seeder.db.close()
+        if seeder.db:
+            seeder.db.close()
+            print("🔒 Database session closed.")

@@ -1,15 +1,16 @@
 """
-worker/models.py
+backend/app/worker/models.py
 
+Worker Database Models
 Defines SQLAlchemy models specific to the Worker module:
-- WorkerProfile: Stores profile and availability details for a worker
+- WorkerProfile: Stores profile and availability details for a worker.
 """
 
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, DateTime, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,10 +23,12 @@ if TYPE_CHECKING:
 # ------------------------------------------------------
 # WorkerProfile Model
 # ------------------------------------------------------
+
+
 class WorkerProfile(Base):
     """
     Represents additional profile information for users with the 'WORKER' role.
-    Stores professional background and experience of the worker.
+    Stores professional background, skills, and availability details.
     """
 
     __tablename__ = "worker_profiles"
@@ -51,48 +54,63 @@ class WorkerProfile(Base):
     )
 
     professional_skills: Mapped[str] = mapped_column(
-        String, nullable=True, comment="Comma-separated list of skills (e.g., plumbing, carpentry)"
+        String,
+        nullable=True,
+        comment="Comma-separated list of professional skills (e.g., plumbing, carpentry)",
     )
 
     work_experience: Mapped[str] = mapped_column(
-        String, nullable=True, comment="Brief summary of the worker's experience or background"
+        String,
+        nullable=True,
+        comment="Brief summary of the worker's experience or background",
     )
 
     years_experience: Mapped[int] = mapped_column(
-        nullable=True, comment="Number of years of experience"
+        nullable=True,
+        comment="Number of years of professional experience",
     )
 
     availability_note: Mapped[str] = mapped_column(
-        String, nullable=True, comment="Custom note about availability"
+        String,
+        nullable=True,
+        comment="Custom note describing worker availability",
     )
 
-    bio: Mapped[str] = mapped_column(String, nullable=True, comment="Short biography of the worker")
+    bio: Mapped[str] = mapped_column(
+        String,
+        nullable=True,
+        comment="Short biography of the worker",
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the profile was created",
+        comment="Timestamp when the worker profile was created",
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
-        comment="Timestamp when the profile was last updated",
+        comment="Timestamp when the worker profile was last updated",
     )
 
     is_available: Mapped[bool] = mapped_column(
-        nullable=False, default=False, comment="Availability status for job assignments"
+        nullable=False,
+        default=False,
+        comment="Indicates if the worker is currently available for jobs",
     )
 
     is_kyc_verified: Mapped[bool] = mapped_column(
-        nullable=False, default=False, comment="KYC verification status"
+        nullable=False,
+        default=False,
+        comment="Indicates if the worker has completed KYC verification",
     )
 
-    # -------------------------------------
+    # ------------------------------------------------------
     # Relationships
-    # -------------------------------------
-    # One-to-One Relationships
+    # ------------------------------------------------------
+
     user: Mapped["User"] = relationship(
         "User",
         back_populates="worker_profile",

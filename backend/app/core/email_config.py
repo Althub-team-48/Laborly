@@ -1,17 +1,22 @@
 """
-core/email_config.py
+backend/app/core/email_config.py
 
-Mail connection configuration for sending emails via FastAPI-Mail.
-Loads values from environment settings.
+Email Configuration
+
+Defines the mail connection settings for sending emails using FastAPI-Mail.
+Values are dynamically loaded from environment variables.
 """
 
 from pathlib import Path
+
 from fastapi_mail import ConnectionConfig
 from pydantic import SecretStr
 
 from app.core.config import settings
 
-# Configuration for FastAPI-Mail using environment-based settings
+# ---------------------------------------------------
+# FastAPI-Mail Connection Configuration
+# ---------------------------------------------------
 conf: ConnectionConfig = ConnectionConfig(
     MAIL_USERNAME=settings.MAIL_USERNAME,
     MAIL_PASSWORD=SecretStr(settings.MAIL_PASSWORD),

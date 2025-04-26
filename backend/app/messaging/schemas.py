@@ -1,48 +1,67 @@
 """
-messaging/schemas.py
+backend/app/messaging/schemas.py
 
-Pydantic schemas for reusable messaging system:
-- Message creation and response
-- Thread structure and participant responses
+Messaging Schemas
+
+Defines Pydantic schemas for the messaging system, including:
+- Message creation and response models
+- Thread structure models
+- Participant information models
 """
 
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
+# ---------------------------------------------------
+# Participant Information Schema
+# ---------------------------------------------------
 class ParticipantInfo(BaseModel):
-    """Basic information about a user involved in messaging."""
+    """
+    Basic information about a user involved in a message thread.
+    """
 
     id: UUID = Field(..., description="User ID")
     first_name: str = Field(..., description="User's first name")
     last_name: str = Field(..., description="User's last name")
-    profile_picture: HttpUrl | None = Field(None, description="URL to user's profile picture")
+    profile_picture: HttpUrl | None = Field(None, description="URL to the user's profile picture")
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# -------------------------------
-# Base Schema for Messages
-# -------------------------------
+# ---------------------------------------------------
+# Base Message Schema
+# ---------------------------------------------------
 class MessageBase(BaseModel):
+    """
+    Base schema for message content.
+    """
+
     content: str = Field(..., description="Content of the message")
 
 
-# -------------------------------
+# ---------------------------------------------------
 # Message Creation Schema
-# -------------------------------
+# ---------------------------------------------------
 class MessageCreate(MessageBase):
+    """
+    Schema for creating a new message, either new thread or reply.
+    """
+
     thread_id: UUID | None = Field(None, description="Thread ID if replying to an existing thread")
     job_id: UUID | None = Field(None, description="Job ID associated with the message")
     service_id: UUID | None = Field(None, description="Service ID associated with the message")
 
 
-# -------------------------------
-# Message Response Schema (Updated)
-# -------------------------------
+# ---------------------------------------------------
+# Message Response Schema
+# ---------------------------------------------------
 class MessageRead(MessageBase):
-    """Schema for reading a message, including sender info."""
+    """
+    Schema for reading a message, including sender information.
+    """
 
     id: UUID = Field(..., description="Unique identifier for the message")
     sender: ParticipantInfo = Field(..., description="Information about the message sender")
@@ -52,39 +71,48 @@ class MessageRead(MessageBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# -------------------------------
-# Thread Initiate Schema
-# -------------------------------
+# ---------------------------------------------------
+# Thread Initiation Schema
+# ---------------------------------------------------
 class ThreadInitiate(MessageBase):
-    service_id: UUID = Field(..., description="Service ID to associate with the message")
-    receiver_id: UUID | None = Field(None, description="Required if sender is Admin")
+    """
+    Schema for initiating a new message thread.
+    """
+
+    service_id: UUID = Field(..., description="Service ID associated with the initial message")
+    receiver_id: UUID | None = Field(None, description="Receiver ID (required if sender is Admin)")
 
 
-# -------------------------------
-# Thread Participant Schema (Updated)
-# -------------------------------
+# ---------------------------------------------------
+# Thread Participant Schema
+# ---------------------------------------------------
 class ThreadParticipantRead(BaseModel):
-    """Schema for reading thread participant details."""
+    """
+    Schema for reading thread participant details.
+    """
 
-    user: ParticipantInfo = Field(..., description="Information about the participant")
+    user: ParticipantInfo = Field(..., description="Information about the thread participant")
+
     model_config = ConfigDict(from_attributes=True)
 
 
-# -------------------------------
-# Thread with Messages Schema (Updated)
-# -------------------------------
+# ---------------------------------------------------
+# Thread with Messages Schema
+# ---------------------------------------------------
 class ThreadRead(BaseModel):
-    """Detailed view of a thread including participants and messages."""
+    """
+    Detailed view of a message thread, including participants and messages.
+    """
 
     id: UUID = Field(..., description="Unique identifier for the message thread")
     created_at: datetime = Field(..., description="Timestamp when the thread was created")
     job_id: UUID | None = Field(None, description="Associated job ID if thread is job-related")
-    is_closed: bool = Field(..., description="Flag indicating if the thread is closed")
+    is_closed: bool = Field(..., description="Whether the thread is closed and inactive")
     participants: list[ThreadParticipantRead] = Field(
-        ..., description="Users involved in the thread"
+        ..., description="List of users involved in the thread"
     )
     messages: list[MessageRead] = Field(
-        ..., description="Messages in the thread, typically ordered by timestamp"
+        ..., description="List of messages in the thread, ordered by timestamp"
     )
 
     model_config = ConfigDict(from_attributes=True)

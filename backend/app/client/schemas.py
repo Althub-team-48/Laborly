@@ -1,10 +1,9 @@
 """
-client/schemas.py
+backend/app/client/schemas.py
 
-Defines Pydantic schemas for the Client module:
-- Client profile creation, update, and read
-- Favorite worker creation and read
-- Job history and job detail views
+Client Schemas
+Defines Pydantic models for client profile management, favorite worker handling,
+job history records, and generic message responses.
 """
 
 from datetime import datetime
@@ -16,28 +15,25 @@ from pydantic import BaseModel, ConfigDict, Field
 # ---------------------------------------------------
 # Client Profile Schemas
 # ---------------------------------------------------
-class ClientProfileBase(BaseModel):
-    """
-    Base schema for client profile information.
-    """
 
-    business_name: str | None = Field(
-        default=None, description="Optional business name for the client"
+
+class ClientProfileBase(BaseModel):
+    """Base schema for client profile information."""
+
+    profile_description: str | None = Field(
+        default=None, description="Optional profile description or note"
     )
+    address: str | None = Field(default=None, description="Optional client address")
 
 
 class ClientProfileWrite(ClientProfileBase):
-    """
-    Schema used when creating a client profile.
-    """
+    """Schema used when creating a new client profile."""
 
     pass
 
 
 class ClientProfileUpdate(ClientProfileBase):
-    """
-    Schema used when updating an existing client profile.
-    """
+    """Schema used when updating an existing client profile."""
 
     phone_number: str | None = Field(default=None, description="Client's phone number")
     first_name: str | None = Field(default=None, description="Client's first name")
@@ -46,9 +42,7 @@ class ClientProfileUpdate(ClientProfileBase):
 
 
 class ClientProfileRead(ClientProfileBase):
-    """
-    Schema returned when reading a client profile.
-    """
+    """Schema returned when reading a client profile for the authenticated user."""
 
     id: UUID = Field(..., description="Unique identifier for the client profile")
     user_id: UUID = Field(..., description="UUID of the user this profile belongs to")
@@ -64,20 +58,34 @@ class ClientProfileRead(ClientProfileBase):
 
 
 # ---------------------------------------------------
+# Public Client Profile Schema
+# ---------------------------------------------------
+
+
+class PublicClientRead(BaseModel):
+    """Schema for a public view of a client profile (excluding sensitive information)."""
+
+    user_id: UUID = Field(..., description="UUID of the user this profile belongs to")
+    first_name: str = Field(..., description="First name of the client")
+    last_name: str = Field(..., description="Last name of the client")
+    location: str | None = Field(default=None, description="Location of the client")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------
 # Favorite Worker Schemas
 # ---------------------------------------------------
+
+
 class FavoriteBase(BaseModel):
-    """
-    Base schema for favorite worker information.
-    """
+    """Base schema for favorite worker information."""
 
     worker_id: UUID = Field(..., description="UUID of the worker being favorited")
 
 
 class FavoriteRead(FavoriteBase):
-    """
-    Schema returned when reading a favorite worker record.
-    """
+    """Schema returned when reading a favorite worker record."""
 
     id: UUID = Field(..., description="Unique identifier for the favorite entry")
     client_id: UUID = Field(..., description="UUID of the client who favorited the worker")
@@ -89,10 +97,10 @@ class FavoriteRead(FavoriteBase):
 # ---------------------------------------------------
 # Client Job History Schemas
 # ---------------------------------------------------
+
+
 class ClientJobRead(BaseModel):
-    """
-    Schema returned when reading a job in the client’s job history.
-    """
+    """Schema returned when reading a job from the client's job history."""
 
     id: UUID = Field(..., description="Unique identifier of the job")
     service_id: UUID | None = Field(default=None, description="Service related to the job")
@@ -111,9 +119,9 @@ class ClientJobRead(BaseModel):
 # ---------------------------------------------------
 # Generic Message Response Schema
 # ---------------------------------------------------
+
+
 class MessageResponse(BaseModel):
-    """
-    Generic message response schema.
-    """
+    """Generic response schema for simple success or informational messages."""
 
     detail: str = Field(..., description="Response message detail")

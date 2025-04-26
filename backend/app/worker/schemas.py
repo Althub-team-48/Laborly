@@ -1,22 +1,27 @@
 """
-worker/schemas.py
+backend/app/worker/schemas.py
 
-Defines Pydantic schemas for worker profile operations:
-- Creation and updates
-- Reading merged user and profile data
+Worker Schemas
+Defines Pydantic models for worker profile creation, updates, public display,
+KYC handling, and generic message responses.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.database.enums import KYCStatus
 
 
-# -------------------------------------
+# -----------------------------------------------------
 # Base Schema for Worker Profile Fields
-# -------------------------------------
+# -----------------------------------------------------
+
+
 class WorkerProfileBase(BaseModel):
+    """Base fields shared across worker profile schemas."""
+
     bio: str | None = Field(default=None, description="Short biography of the worker")
     years_experience: int | None = Field(default=None, description="Number of years of experience")
     availability_note: str | None = Field(
@@ -24,51 +29,45 @@ class WorkerProfileBase(BaseModel):
     )
 
 
-# -------------------------------------
+# -----------------------------------------------------
 # Schema for Writing New Profiles
-# -------------------------------------
+# -----------------------------------------------------
+
+
 class WorkerProfileWrite(WorkerProfileBase):
-    """
-    Schema for creating a new worker profile.
-    """
+    """Schema for creating a new worker profile."""
 
     pass
 
 
-# -------------------------------------
+# -----------------------------------------------------
 # Schema for Updating Existing Profiles
-# -------------------------------------
+# -----------------------------------------------------
+
+
 class WorkerProfileUpdate(WorkerProfileBase):
-    """
-    Schema for updating a worker profile and basic user fields.
-    """
+    """Schema for updating a worker profile and associated user fields."""
 
     is_available: bool | None = Field(
         default=None, description="Availability status for job assignments"
     )
-
     professional_skills: str | None = Field(
         default=None, description="Comma-separated list of skills"
     )
-
     work_experience: str | None = Field(default=None, description="Summary of work experience")
-
     first_name: str | None = Field(default=None, description="First name of the worker")
-
     last_name: str | None = Field(default=None, description="Last name of the worker")
-
     phone_number: str | None = Field(default=None, description="Worker's phone number")
-
     location: str | None = Field(default=None, description="Worker's location")
 
 
-# -------------------------------------
-# Schema for Reading Merged Profile + User Info
-# -------------------------------------
+# -----------------------------------------------------
+# Schema for Reading Full Profile + User Info (Authenticated)
+# -----------------------------------------------------
+
+
 class WorkerProfileRead(WorkerProfileBase):
-    """
-    Schema returned when reading a full worker profile with user info.
-    """
+    """Schema for retrieving a full worker profile with user information."""
 
     id: UUID = Field(..., description="Unique identifier for the worker profile")
     user_id: UUID = Field(..., description="UUID of the user this profile belongs to")
@@ -91,24 +90,58 @@ class WorkerProfileRead(WorkerProfileBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# -----------------------------------------------------
+# Schema for Public View of Worker Profile
+# -----------------------------------------------------
+
+
+class PublicWorkerRead(BaseModel):
+    """Schema for displaying public worker profile information (non-sensitive)."""
+
+    user_id: UUID = Field(..., description="UUID of the user this profile belongs to")
+    first_name: str = Field(..., description="First name of the worker")
+    last_name: str = Field(..., description="Last name of the worker")
+    location: str | None = Field(default=None, description="Worker's location")
+    professional_skills: str | None = Field(
+        default=None, description="Comma-separated list of skills"
+    )
+    work_experience: str | None = Field(default=None, description="Summary of work experience")
+    years_experience: int | None = Field(default=None, description="Number of years of experience")
+    bio: str | None = Field(default=None, description="Short biography of the worker")
+    is_available: bool = Field(..., description="Availability status for job assignments")
+    is_kyc_verified: bool = Field(..., description="KYC verification status")
+    # Uncomment if implementing public access to profile pictures
+    # profile_picture: str | None = Field(None, description="URL to worker's profile picture")
+
+
+# -----------------------------------------------------
+# Schema for Reading KYC Information
+# -----------------------------------------------------
+
+
 class KYCRead(BaseModel):
+    """Schema for retrieving KYC submission details."""
+
     id: UUID = Field(..., description="Unique identifier for the KYC record")
     user_id: UUID = Field(..., description="Reference to the associated user")
-    document_type: str = Field(..., description="Type of identification document")
-    document_path: str = Field(..., description="Path to the uploaded document")
+    document_type: str = Field(..., description="Type of identification document submitted")
+    document_path: str = Field(..., description="Path to the uploaded identification document")
     selfie_path: str = Field(..., description="Path to the uploaded selfie")
     status: KYCStatus = Field(..., description="KYC verification status")
     submitted_at: datetime = Field(..., description="Timestamp when the KYC was submitted")
-    reviewed_at: datetime | None = Field(None, description="Timestamp when the KYC was reviewed")
+    reviewed_at: datetime | None = Field(
+        None, description="Timestamp when the KYC was reviewed, if applicable"
+    )
+
     model_config = ConfigDict(from_attributes=True)
 
 
 # -----------------------------------------------------
 # Generic Message Response Schema
 # -----------------------------------------------------
+
+
 class MessageResponse(BaseModel):
-    """
-    Generic response schema for simple success or info messages.
-    """
+    """Generic schema for simple success or informational messages."""
 
     detail: str = Field(..., description="Description of the operation result")

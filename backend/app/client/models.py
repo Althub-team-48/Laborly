@@ -1,9 +1,10 @@
 """
-client/models.py
+backend/app/client/models.py
 
+Client Database Models
 Defines SQLAlchemy models specific to the Client module:
-- ClientProfile: Stores additional profile information for a client user
-- FavoriteWorker: Represents a relationship where a client marks a worker as a favorite
+- ClientProfile: Stores additional profile information for a client user.
+- FavoriteWorker: Represents the relationship where a client marks a worker as a favorite.
 """
 
 import uuid
@@ -23,10 +24,10 @@ if TYPE_CHECKING:
 # ---------------------------------------------------
 # Client Profile Model
 # ---------------------------------------------------
+
+
 class ClientProfile(Base):
-    """
-    Represents additional profile data for users with the 'CLIENT' role.
-    """
+    """Represents additional profile data for users with the 'CLIENT' role."""
 
     __tablename__ = "client_profiles"
 
@@ -51,21 +52,27 @@ class ClientProfile(Base):
     )
 
     profile_description: Mapped[str] = mapped_column(
-        String, nullable=True, comment="Optional profile description or note"
+        String,
+        nullable=True,
+        comment="Optional profile description or note",
     )
 
-    address: Mapped[str] = mapped_column(String, nullable=True, comment="Optional client address")
+    address: Mapped[str] = mapped_column(
+        String,
+        nullable=True,
+        comment="Optional client address",
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the profile was created",
+        comment="Timestamp when the client profile was created",
     )
 
-    # -------------------------------------
+    # ---------------------------------------------------
     # Relationships
-    # -------------------------------------
-    # One-to-One Relationship
+    # ---------------------------------------------------
+
     user: Mapped["User"] = relationship(
         "User",
         back_populates="client_profile",
@@ -77,10 +84,10 @@ class ClientProfile(Base):
 # ---------------------------------------------------
 # Favorite Worker Model
 # ---------------------------------------------------
+
+
 class FavoriteWorker(Base):
-    """
-    Represents a many-to-many relationship where a client marks a worker as favorite.
-    """
+    """Represents a many-to-many relationship where a client marks a worker as a favorite."""
 
     __tablename__ = "favorites"
 
@@ -130,10 +137,10 @@ class FavoriteWorker(Base):
         comment="Timestamp when the favorite relationship was last updated",
     )
 
-    # -------------------------------------
+    # ---------------------------------------------------
     # Relationships
-    # -------------------------------------
-    # Many-to-One Relationships
+    # ---------------------------------------------------
+
     client: Mapped["User"] = relationship(
         "User",
         foreign_keys=[client_id],

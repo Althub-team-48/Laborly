@@ -1,22 +1,26 @@
 """
-core/logging.py
+backend/app/core/logging.py
 
-Centralized logging configuration for the application.
-- Uses RotatingFileHandler for file logs (1MB max, 5 backups)
-- Logs to both console and logs/app.log
-- Separate logs/error.log for ERROR and above
-- Colored console logs if `colorlog` is installed
-- Log level controlled via environment variable (LOG_LEVEL)
+Centralized Logging Configuration
 
-Should be initialized once early in app startup (e.g., in main.py)
+Sets up structured logging for the application:
+- Rotating file logs (1MB max per file, 5 backups)
+- Separate error log file for ERROR and above
+- Console logs with optional colorized output
+- Logging level controlled via environment variable (LOG_LEVEL)
+
+This module should be initialized once early in the app startup (e.g., in `main.py`).
 """
 
-import os
 import logging
+import os
 from logging.config import dictConfig
+
 from app.core.config import settings
 
-# Check for colorlog availability
+# ---------------------------------------------------
+# Colorlog Availability Check
+# ---------------------------------------------------
 try:
     import colorlog
 
@@ -24,13 +28,21 @@ try:
 except ImportError:
     COLORLOG_AVAILABLE = False
 
-# Create logs directory dynamically relative to this file
+# ---------------------------------------------------
+# Log Directory Setup
+# ---------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "..", "..", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
+# ---------------------------------------------------
+# Global Logging Level
+# ---------------------------------------------------
 LOG_LEVEL = settings.LOG_LEVEL.upper()
 
+# ---------------------------------------------------
+# Logging Configuration Dictionary
+# ---------------------------------------------------
 LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -85,7 +97,13 @@ LOGGING_CONFIG = {
     },
 }
 
+# ---------------------------------------------------
+# Initialize Logging
+# ---------------------------------------------------
+
 
 def init_logging() -> None:
-    """Initializes logging using the global LOGGING_CONFIG."""
+    """
+    Initializes logging system based on the global LOGGING_CONFIG dictionary.
+    """
     dictConfig(LOGGING_CONFIG)

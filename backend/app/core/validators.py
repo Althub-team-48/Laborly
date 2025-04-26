@@ -1,45 +1,49 @@
 """
-core/validators.py
+backend/app/core/validators.py
 
-Password Validator
+Password Validation Utility
 
-Validates password strength based on:
-- ASCII-only characters
-- Minimum length
-- At least one uppercase, lowercase, digit, and special character
+Provides:
+- Strict password strength validation
+- Enforces ASCII-only passwords
+- Minimum and maximum length restrictions
+- Uppercase, lowercase, digit, and special character requirements
 """
 
 import string
 from typing import Final
 
-
-# -------------------------------
+# ---------------------------------------------------
 # Constants
-# -------------------------------
+# ---------------------------------------------------
 MIN_PASSWORD_LENGTH: Final[int] = 8
 MAX_PASSWORD_LENGTH: Final[int] = 128
 
+# ---------------------------------------------------
+# Password Validator
+# ---------------------------------------------------
 
-# -------------------------------
-# Validator Function
-# -------------------------------
+
 def password_validator(password: str) -> str:
     """
-    Validates password strength.
+    Validates password strength according to application rules.
 
-    Rules:
-    - Must contain only ASCII characters
-    - Must include at least one uppercase letter
-    - Must include at least one lowercase letter
-    - Must include at least one digit
-    - Must include at least one special character
-    - Length must be between MIN_PASSWORD_LENGTH and MAX_PASSWORD_LENGTH
+    Validation Rules:
+    - ASCII characters only
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    - At least one special character
+    - Length between MIN_PASSWORD_LENGTH and MAX_PASSWORD_LENGTH
+
+    Args:
+        password (str): Password to validate.
 
     Returns:
-        str: The valid password (if all checks pass)
+        str: Validated password (if all checks pass).
 
     Raises:
-        ValueError: If any rule is violated
+        ValueError: If any validation rule fails.
     """
     if not password.isascii():
         raise ValueError("Password must contain only ASCII characters.")

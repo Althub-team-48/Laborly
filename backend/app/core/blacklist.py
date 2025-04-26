@@ -1,9 +1,11 @@
 """
-core/blacklist.py
+backend/app/core/blacklist.py
+
+JWT Blacklist Management
 
 Handles JWT token blacklisting using Redis:
-- Stores token jti (JWT ID) with an expiration
-- Used to invalidate tokens on logout or force-expire sessions
+- Stores token `jti` (JWT ID) with expiration
+- Allows invalidating tokens on logout or forced expiration
 """
 
 import logging
@@ -12,11 +14,14 @@ import redis
 
 from app.core.config import settings
 
+# ---------------------------------------------------
+# Logger Configuration
+# ---------------------------------------------------
 logger = logging.getLogger(__name__)
 
-# ------------------------------------------------------
-# Redis Client Initialization from .env Settings
-# ------------------------------------------------------
+# ---------------------------------------------------
+# Redis Client Initialization
+# ---------------------------------------------------
 redis_client: redis.Redis | None = None  # type: ignore[type-arg]
 
 try:
@@ -24,43 +29,47 @@ try:
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
         db=settings.REDIS_DB,
-        decode_responses=True,  # Ensures values are strings, not bytes
+        decode_responses=True,  # Ensure stored values are strings
     )
-    # Test connection at startup
+    # Test Redis connection at startup
     redis_client.ping()
     logger.info(
-        f"Connected to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+        f"[REDIS] Connected to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
     )
 except redis.RedisError as e:
-    logger.error(f"Redis connection failed: {e}")
-    redis_client = None  # Fallback — avoid raising at import time
+    logger.error(f"[REDIS] Connection failed: {e}")
+    redis_client = None  # Safe fallback to prevent import-time failure
 
-# Prefix for blacklist keys
+# Prefix for all blacklist keys
 BLACKLIST_PREFIX = "jwt_blacklist:"
+
+# ---------------------------------------------------
+# Blacklist Management Functions
+# ---------------------------------------------------
 
 
 def blacklist_token(jti: str, expires_in: int) -> None:
     """
-    Add a JWT token ID to Redis blacklist with TTL.
+    Blacklist a JWT token by storing its `jti` in Redis with TTL.
 
     Args:
-        jti (str): Unique JWT ID from payload.
-        expires_in (int): TTL in seconds (match token expiration).
+        jti (str): Unique JWT ID from the token payload.
+        expires_in (int): Expiration time in seconds (matches token lifetime).
     """
     if not redis_client:
-        logger.warning("Redis unavailable: token not blacklisted.")
+        logger.warning("[BLACKLIST] Redis unavailable: Token not blacklisted.")
         return
 
     try:
         redis_client.setex(f"{BLACKLIST_PREFIX}{jti}", expires_in, "true")
-        logger.debug(f"Token blacklisted: jti={jti} for {expires_in}s")
+        logger.debug(f"[BLACKLIST] Token blacklisted: jti={jti} for {expires_in}s")
     except redis.RedisError as e:
-        logger.error(f"Failed to blacklist token: {e}")
+        logger.error(f"[BLACKLIST] Failed to blacklist token: {e}")
 
 
 def is_token_blacklisted(jti: str) -> bool:
     """
-    Check whether a JWT ID is currently blacklisted.
+    Check if a JWT token ID (`jti`) is blacklisted.
 
     Args:
         jti (str): Token ID to check.
@@ -69,11 +78,11 @@ def is_token_blacklisted(jti: str) -> bool:
         bool: True if blacklisted, False otherwise.
     """
     if not redis_client:
-        logger.warning("Redis unavailable: assuming token is not blacklisted.")
+        logger.warning("[BLACKLIST] Redis unavailable: Assuming token is not blacklisted.")
         return False
 
     try:
         return redis_client.exists(f"{BLACKLIST_PREFIX}{jti}") == 1
     except redis.RedisError as e:
-        logger.error(f"Failed to check blacklist for jti={jti}: {e}")
+        logger.error(f"[BLACKLIST] Failed to check token blacklist status: {e}")
         return False

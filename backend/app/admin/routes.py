@@ -33,10 +33,11 @@ from app.admin.schemas import (
     UserStatusUpdateResponse,
 )
 from app.admin.services import AdminService, UserService
-from app.core.dependencies import get_current_user_with_role, get_db
+from app.core.dependencies import get_current_user_with_role
 from app.core.limiter import limiter
 from app.database.enums import UserRole
 from app.database.models import User
+from app.database.session import get_db
 
 # ---------------------------------------------------
 # Router Configuration

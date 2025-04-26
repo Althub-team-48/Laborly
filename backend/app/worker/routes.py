@@ -14,11 +14,12 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.schemas import PresignedUrlResponse
-from app.core.dependencies import get_current_user_with_role, get_db
+from app.core.dependencies import get_current_user_with_role
 from app.core.limiter import limiter
 from app.core.upload import upload_file_to_s3
 from app.database.enums import UserRole
 from app.database.models import User
+from app.database.session import get_db
 from app.job.schemas import JobRead
 from app.worker import schemas
 from app.worker.schemas import KYCRead, PublicWorkerRead

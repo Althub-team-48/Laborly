@@ -9,7 +9,7 @@ Provides authentication and role-based access control (RBAC) dependencies for Fa
 """
 
 import logging
-from collections.abc import AsyncGenerator, Callable, Coroutine
+from collections.abc import Callable, Coroutine
 from typing import Any
 
 from fastapi import Depends, HTTPException, WebSocket, status
@@ -23,19 +23,11 @@ from app.core.blacklist import is_token_blacklisted
 from app.core.config import settings
 from app.database.enums import UserRole
 from app.database.models import User
-from app.database.session import AsyncSessionLocal
+from app.database.session import get_db
 
 logger = logging.getLogger(__name__)
 
 oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(tokenUrl="/auth/login/oauth")
-
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Dependency to get a database session.
-    """
-    async with AsyncSessionLocal() as db:
-        yield db
 
 
 async def get_current_user(

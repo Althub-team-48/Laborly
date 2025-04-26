@@ -1,100 +1,111 @@
 """
-job/schemas.py
+backend/app/job/schemas.py
 
+Job Schemas
 Pydantic schemas for job-related operations:
 - Job creation and acceptance
-- Completion and cancellation
-- Reading job details
+- Job completion and cancellation
+- Reading job details (Authenticated users)
 """
 
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.job.models import JobStatus
 
 
-# --------------------------------------------------
+# ---------------------------------------------------
 # Shared Fields Schema
-# --------------------------------------------------
+# ---------------------------------------------------
+
+
 class JobBase(BaseModel):
-    """
-    Shared base schema for job-related payloads.
-    """
+    """Base schema containing shared fields for job-related payloads."""
 
     service_id: UUID = Field(..., description="UUID of the service associated with the job")
     thread_id: UUID = Field(..., description="UUID of the conversation thread initiating the job")
 
 
-# --------------------------------------------------
-# Job Creation Schema
-# --------------------------------------------------
+# ---------------------------------------------------
+# Job Creation Schema (Authenticated Client)
+# ---------------------------------------------------
+
+
 class JobCreate(JobBase):
-    """
-    Client creates a job by specifying service and thread.
-    Worker is inferred from the service.
-    """
+    """Schema used when a client creates a new job."""
 
     pass
 
 
-# --------------------------------------------------
-# Accept Job Schema
-# --------------------------------------------------
+# ---------------------------------------------------
+# Accept Job Schema (Authenticated Worker)
+# ---------------------------------------------------
+
+
 class JobAccept(BaseModel):
-    """
-    Worker accepts a job previously created by a client.
-    """
+    """Schema used when a worker accepts an assigned job."""
 
     job_id: UUID = Field(..., description="UUID of the job to accept")
-    worker_id: UUID | None = Field(None, description="UUID of the worker accepting the job")
+    worker_id: UUID | None = Field(
+        None,
+        description="UUID of the worker accepting the job (optional; may be inferred from auth)",
+    )
 
 
-# --------------------------------------------------
-# Complete Job Schema (Empty Payload)
-# --------------------------------------------------
+# ---------------------------------------------------
+# Complete Job Schema (Authenticated Worker)
+# ---------------------------------------------------
+
+
 class JobComplete(BaseModel):
-    """
-    Worker marks job as completed — no payload needed.
-    """
+    """Schema used when a worker marks a job as completed (no payload needed)."""
 
     pass
 
 
-# --------------------------------------------------
-# Cancel Job Schema
-# --------------------------------------------------
+# ---------------------------------------------------
+# Cancel Job Schema (Authenticated Client)
+# ---------------------------------------------------
+
+
 class CancelJobRequest(BaseModel):
-    """
-    Client cancels a job and provides a cancellation reason.
-    """
+    """Schema used when a client cancels a job and provides a cancellation reason."""
 
     cancel_reason: str = Field(
         ..., description="Reason provided by the client for cancelling the job"
     )
 
 
-# --------------------------------------------------
-# Read Job Schema (Output)
-# --------------------------------------------------
+# ---------------------------------------------------
+# Read Job Schema (Authenticated Output)
+# ---------------------------------------------------
+
+
 class JobRead(BaseModel):
-    """
-    Job detail used for list and detail views.
-    """
+    """Schema returned when reading job details (authenticated users)."""
 
     id: UUID = Field(..., description="Job unique identifier")
     client_id: UUID = Field(..., description="UUID of the client who created the job")
     worker_id: UUID = Field(..., description="UUID of the worker assigned to the job")
-    service_id: UUID | None = Field(default=None, description="Related service UUID (if any)")
+    service_id: UUID | None = Field(
+        default=None, description="UUID of the related service (optional)"
+    )
 
     status: JobStatus = Field(..., description="Current status of the job")
     cancel_reason: str | None = Field(default=None, description="Reason for cancellation (if any)")
 
-    started_at: datetime | None = Field(default=None, description="When the job started")
-    completed_at: datetime | None = Field(default=None, description="When the job was completed")
-    cancelled_at: datetime | None = Field(default=None, description="When the job was cancelled")
-    created_at: datetime = Field(..., description="When the job was created")
-    updated_at: datetime = Field(..., description="When the job was last updated")
+    started_at: datetime | None = Field(
+        default=None, description="Timestamp when the job was started"
+    )
+    completed_at: datetime | None = Field(
+        default=None, description="Timestamp when the job was completed"
+    )
+    cancelled_at: datetime | None = Field(
+        default=None, description="Timestamp when the job was cancelled"
+    )
+    created_at: datetime = Field(..., description="Timestamp when the job was created")
+    updated_at: datetime = Field(..., description="Timestamp when the job was last updated")
 
     model_config = ConfigDict(from_attributes=True)

@@ -139,8 +139,22 @@ class WorkerService:
 
         if not user_updated and not profile_updated:
             logger.info(f"No fields to update for worker profile user_id={user_id}")
-            merged_data = {**vars(profile), **vars(user)}
-            return schemas.WorkerProfileRead.model_validate(merged_data, from_attributes=True)
+            merged_data = {
+                "user_id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "phone_number": user.phone_number,
+                "location": user.location,
+                "profile_picture": user.profile_picture,
+                "bio": profile.bio,
+                "years_experience": profile.years_experience,
+                "availability_note": profile.availability_note,
+                "is_available": profile.is_available,
+                "professional_skills": profile.professional_skills,
+                "work_experience": profile.work_experience,
+            }
+            return schemas.WorkerProfileRead.model_validate(merged_data)
 
         try:
             await self.db.commit()

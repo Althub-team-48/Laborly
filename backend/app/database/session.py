@@ -23,6 +23,7 @@ AsyncSessionLocal = async_sessionmaker(
     class_=AsyncSession,
     autoflush=False,
     autocommit=False,
+    expire_on_commit=False,  # Prevents auto-expiration of objects after commit
 )
 
 
@@ -32,4 +33,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     Yields a single session per request and closes it afterward.
     """
     async with AsyncSessionLocal() as db:
-        yield db
+        try:
+            yield db
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            raise e

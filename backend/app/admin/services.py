@@ -216,44 +216,106 @@ class AdminService:
     # ---------------------------------------------------
     # User Account Control
     # ---------------------------------------------------
+    # ---------------------------------------------------
+    # User Account Control (Updated with Checks)
+    # ---------------------------------------------------
     async def freeze_user(self, user_id: UUID) -> User:
+        """
+        Temporarily deactivate a user's account (freeze).
+        Raises 400 if already frozen.
+        """
         user = await self._get_user_or_404(user_id)
+        if user.is_frozen:
+            logger.warning(f"[USER Freeze] Attempt to freeze already frozen user_id={user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="User account is already frozen."
+            )
+
         user.is_frozen = True
+        user.is_active = False
         await self.db.commit()
+        await self.db.refresh(user)
         logger.info(f"[USER] Frozen: user_id={user_id}")
         return user
 
     async def unfreeze_user(self, user_id: UUID) -> User:
+        """
+        Reactivate a frozen user's account.
+        Raises 400 if not currently frozen.
+        """
         user = await self._get_user_or_404(user_id)
+        if not user.is_frozen:
+            logger.warning(
+                f"[USER Unfreeze] Attempt to unfreeze user_id={user_id} who is not frozen."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User account is not currently frozen.",
+            )
+
         user.is_frozen = False
+        if not user.is_banned:
+            user.is_active = True
         await self.db.commit()
+        await self.db.refresh(user)
         logger.info(f"[USER] Unfrozen: user_id={user_id}")
         return user
 
     async def ban_user(self, user_id: UUID) -> User:
+        """
+        Ban a user from the platform.
+        Raises 400 if already banned.
+        """
         user = await self._get_user_or_404(user_id)
+        if user.is_banned:
+            logger.warning(f"[USER Ban] Attempt to ban already banned user_id={user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="User account is already banned."
+            )
+
         user.is_banned = True
         user.is_active = False
+        user.is_frozen = False
         await self.db.commit()
+        await self.db.refresh(user)
         logger.warning(f"[USER] Banned: user_id={user_id}")
         return user
 
     async def unban_user(self, user_id: UUID) -> User:
+        """
+        Unban a previously banned user.
+        Raises 400 if not currently banned.
+        """
         user = await self._get_user_or_404(user_id)
+        if not user.is_banned:
+            logger.warning(f"[USER Unban] Attempt to unban user_id={user_id} who is not banned.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User account is not currently banned.",
+            )
+
         user.is_banned = False
-        user.is_active = True
+        if not user.is_frozen:
+            user.is_active = True
         await self.db.commit()
+        await self.db.refresh(user)
         logger.info(f"[USER] Unbanned: user_id={user_id}")
         return user
 
     async def delete_user(self, user_id: UUID) -> None:
-        """
-        Soft delete a user's account by marking is_deleted = True.
-        """
         user = await self._get_user_or_404(user_id)
+        if user.is_deleted:
+            logger.warning(f"[USER Delete] Attempt to delete already deleted user_id={user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User account is already marked as deleted.",
+            )
+
         user.is_deleted = True
         user.is_active = False
-        # clear sensitive data like email/phone if required by policy
+        user.is_frozen = False
+        user.is_banned = False
+        # Optionally clear sensitive data
         # user.email = f"deleted_{user.id}@example.com"
         # user.phone_number = f"deleted_{user.id}"
         await self.db.commit()

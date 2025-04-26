@@ -21,9 +21,11 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+from pydantic import EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect
+from sqlalchemy.orm import load_only
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config as StarletteConfig
 
@@ -173,8 +175,12 @@ async def verify_email_token(token: str, db: AsyncSession) -> MessageResponse:
         logger.warning(f"Email verification failed: {e.detail}")
         raise e
 
-    # Fetch user
-    result = await db.execute(select(User).filter(User.id == user_id))
+    stmt = (
+        select(User)
+        .filter(User.id == user_id)
+        .options(load_only(User.id, User.email, User.is_verified, User.first_name))
+    )
+    result = await db.execute(stmt)
     user = result.unique().scalar_one_or_none()
 
     if not user:
@@ -198,6 +204,31 @@ async def verify_email_token(token: str, db: AsyncSession) -> MessageResponse:
         logger.error(f"Failed to send welcome email to {user.email}: {e}")
 
     return MessageResponse(detail="Your email has been successfully verified. You may now log in.")
+
+
+# ------------------------------------------------
+# Request New Verification Email
+# ------------------------------------------------
+async def request_new_verification_email(email: EmailStr, db: AsyncSession) -> MessageResponse:
+    """Sends a new verification email if the user exists and is not verified."""
+    user = (
+        (await db.execute(select(User).filter(User.email == email))).unique().scalar_one_or_none()
+    )
+
+    # Important: Only send if user exists and is NOT verified
+    if user and not user.is_verified:
+        try:
+            # Generate a fresh token
+            token = create_email_verification_token(str(user.id))
+            # Use the existing email sending function
+            await send_email_verification(user.email, token)
+            logger.info(f"New verification email sent to: {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send new verification email to {user.email}: {e}")
+
+    return MessageResponse(
+        detail="If an account with that email exists and requires verification, a new verification link has been sent."
+    )
 
 
 # ------------------------------------------------

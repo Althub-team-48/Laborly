@@ -43,7 +43,6 @@ class ClientProfileUpdate(ClientProfileBase):
     first_name: str | None = Field(default=None, description="Client's first name")
     last_name: str | None = Field(default=None, description="Client's last name")
     location: str | None = Field(default=None, description="Client's general location")
-    profile_picture: str | None = Field(default=None, description="URL to client's profile picture")
 
 
 class ClientProfileRead(ClientProfileBase):
@@ -58,7 +57,6 @@ class ClientProfileRead(ClientProfileBase):
     first_name: str = Field(..., description="First name of the client")
     last_name: str = Field(..., description="Last name of the client")
     location: str | None = Field(default=None, description="Location of the client")
-    profile_picture: str | None = Field(default=None, description="URL to client's profile picture")
     created_at: datetime = Field(..., description="Profile creation timestamp")
     updated_at: datetime = Field(..., description="Profile last update timestamp")
 

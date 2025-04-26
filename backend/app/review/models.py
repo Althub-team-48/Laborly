@@ -1,9 +1,10 @@
 """
-review/models.py
+backend/app/review/models.py
 
-Defines the Review model for storing job-related feedback.
-- Each review is linked to a specific job (one-to-one) and user pair.
-- Supports star ratings, optional text, and admin flagging.
+Review Database Model
+Defines the Review model for storing job-related feedback:
+- Each review is linked to a specific job (one-to-one) and user pair (client and worker).
+- Supports star ratings, optional review text, and admin flagging for moderation.
 """
 
 import uuid
@@ -22,11 +23,13 @@ if TYPE_CHECKING:
     from app.job.models import Job
 
 
+# ---------------------------------------------------
+# Review Model
+# ---------------------------------------------------
+
+
 class Review(Base):
-    """
-    Review submitted by a client about a worker for a specific job.
-    Includes a star rating (1-5), optional review text, and admin moderation flag.
-    """
+    """Review submitted by a client about a worker for a specific job."""
 
     __tablename__ = "reviews"
     __table_args__ = (CheckConstraint("rating >= 1 AND rating <= 5", name="rating_range"),)
@@ -38,13 +41,26 @@ class Review(Base):
         comment="Unique identifier for the review",
     )
 
-    # Review content
-    review_text: Mapped[str] = mapped_column(
-        String, nullable=True, comment="Optional text content of the review"
-    )
-    rating: Mapped[int] = mapped_column(Integer, nullable=False, comment="Star rating from 1 to 5")
+    # ---------------------------------------------------
+    # Review Content Fields
+    # ---------------------------------------------------
 
-    # Foreign Keys
+    review_text: Mapped[str] = mapped_column(
+        String,
+        nullable=True,
+        comment="Optional text content of the review",
+    )
+
+    rating: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="Star rating from 1 to 5",
+    )
+
+    # ---------------------------------------------------
+    # Foreign Key Fields
+    # ---------------------------------------------------
+
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -57,6 +73,7 @@ class Review(Base):
         nullable=False,
         comment="User ID of the client who submitted the review",
     )
+
     worker_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -69,6 +86,7 @@ class Review(Base):
         nullable=False,
         comment="User ID of the worker being reviewed",
     )
+
     job_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -82,39 +100,47 @@ class Review(Base):
         comment="ID of the related job",
     )
 
-    # Admin moderation
+    # ---------------------------------------------------
+    # Admin Moderation
+    # ---------------------------------------------------
+
     is_flagged: Mapped[bool] = mapped_column(
-        Boolean, default=False, comment="Whether the review is flagged for moderation"
+        Boolean,
+        default=False,
+        comment="Whether the review is flagged for moderation",
     )
 
+    # ---------------------------------------------------
     # Timestamp
+    # ---------------------------------------------------
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         comment="Timestamp when the review was created",
     )
 
-    # -------------------------------------
+    # ---------------------------------------------------
     # Relationships
-    # -------------------------------------
-    # Many-to-One Relationships
+    # ---------------------------------------------------
+
     client: Mapped["User"] = relationship(
         "User",
         back_populates="given_reviews",
         foreign_keys=[client_id],
-        # Relationship: Many Reviews can be submitted by one User (client)
+        # Relationship: Many reviews can be submitted by one client
     )
+
     worker: Mapped["User"] = relationship(
         "User",
         back_populates="received_reviews",
         foreign_keys=[worker_id],
-        # Relationship: Many Reviews can be received by one User (worker)
+        # Relationship: Many reviews can be received by one worker
     )
 
-    # One-to-One Relationships
     job: Mapped["Job"] = relationship(
         "Job",
         back_populates="review",
         uselist=False,
-        # Relationship: One Review is linked to one Job
+        # Relationship: One review is linked to one job
     )

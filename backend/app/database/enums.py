@@ -1,27 +1,50 @@
 """
-enums.py
+backend/app/database/enums.py
 
-Defines enumerations used throughout the platform:
-- UserRole: Defines roles for access control (Client, Worker, Admin)
-- KYCStatus: Represents status of user identity verification
+Enumerations
+
+Defines enumerations used across the platform:
+- UserRole: Roles assigned to users (Client, Worker, Admin)
+- KYCStatus: Status values for Know Your Customer (KYC) verification
 """
 
 from enum import Enum
 
+# ---------------------------------------------------
+# User Role Enumeration
+# ---------------------------------------------------
 
-# -------------------------
-# USER ROLE ENUM
-# -------------------------
+
 class UserRole(str, Enum):
+    """
+    Enum representing user roles for access control.
+
+    Values:
+    - CLIENT
+    - WORKER
+    - ADMIN
+    """
+
     CLIENT = "CLIENT"
     WORKER = "WORKER"
     ADMIN = "ADMIN"
 
 
-# -------------------------
-# KYC STATUS ENUM
-# -------------------------
+# ---------------------------------------------------
+# KYC Status Enumeration
+# ---------------------------------------------------
+
+
 class KYCStatus(str, Enum):
+    """
+    Enum representing the status of a user's KYC verification.
+
+    Values:
+    - PENDING
+    - APPROVED
+    - REJECTED
+    """
+
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"

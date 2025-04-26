@@ -1,6 +1,7 @@
 """
-service/models.py
+backend/app/service/models.py
 
+Service Database Model
 Defines the SQLAlchemy model for services offered by workers.
 Each service is linked to a worker (User with WORKER role).
 """
@@ -9,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,11 +21,13 @@ if TYPE_CHECKING:
     from app.job.models import Job
 
 
+# ---------------------------------------------------
+# Service Model
+# ---------------------------------------------------
+
+
 class Service(Base):
-    """
-    Represents a service listing created by a worker.
-    Services include details such as title, description, and location.
-    """
+    """Represents a service listing created by a worker."""
 
     __tablename__ = "services"
 
@@ -50,15 +53,21 @@ class Service(Base):
     )
 
     title: Mapped[str] = mapped_column(
-        String(100), nullable=False, comment="Title or name of the service"
+        String(100),
+        nullable=False,
+        comment="Title or name of the service",
     )
 
     description: Mapped[str] = mapped_column(
-        Text, nullable=True, comment="Detailed description of the service"
+        Text,
+        nullable=True,
+        comment="Detailed description of the service",
     )
 
     location: Mapped[str] = mapped_column(
-        String(100), nullable=True, comment="Location where the service is offered"
+        String(100),
+        nullable=True,
+        comment="Location where the service is offered",
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -74,21 +83,20 @@ class Service(Base):
         comment="Timestamp when the service was last updated",
     )
 
-    # -------------------------------------
+    # ---------------------------------------------------
     # Relationships
-    # -------------------------------------
-    # Many-to-One Relationships
+    # ---------------------------------------------------
+
     worker: Mapped["User"] = relationship(
         "User",
         back_populates="services",
         lazy="joined",
-        # Relationship: Many Services can be offered by one User (worker)
+        # Relationship: Many services can be offered by one worker
     )
 
-    # One-to-Many Relationships
     jobs: Mapped[list["Job"]] = relationship(
         "Job",
         back_populates="service",
         lazy="joined",
-        # Relationship: One Service can be associated with many Jobs
+        # Relationship: One service can be associated with many jobs
     )

@@ -1,40 +1,66 @@
 """
-worker/routes.py
+backend/app/worker/routes.py
 
-Worker module endpoints for:
-- Profile management
-- KYC document submission
-- Job history and detail view
+Worker Routes
+Defines all public and authenticated endpoints for worker profile management,
+KYC processing, profile picture handling, and job history retrieval.
 """
 
-from uuid import UUID
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
 import logging
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.schemas import PresignedUrlResponse
-from app.database.enums import UserRole
-from app.worker.services import WorkerService
-from app.worker import schemas
+from app.core.dependencies import get_current_user_with_role, get_db
 from app.core.limiter import limiter
-from app.core.dependencies import get_db, get_current_user
-from app.database.models import User
 from app.core.upload import upload_file_to_s3
+from app.database.enums import UserRole
+from app.database.models import User
 from app.job.schemas import JobRead
-from app.worker.schemas import KYCRead
+from app.worker import schemas
+from app.worker.schemas import KYCRead, PublicWorkerRead
+from app.worker.services import WorkerService
 
 router = APIRouter(prefix="/worker", tags=["Worker"])
 logger = logging.getLogger(__name__)
 
 DBDep = Annotated[AsyncSession, Depends(get_db)]
-WorkerDep = Annotated[User, Depends(get_current_user)]
+AuthenticatedWorkerDep = Annotated[User, Depends(get_current_user_with_role(UserRole.WORKER))]
 
 
 # ----------------------------------------------------
-# Profile Endpoints
+# Public Profile Endpoints
 # ----------------------------------------------------
+
+
+@router.get(
+    "/{user_id}/public",
+    response_model=PublicWorkerRead,
+    status_code=status.HTTP_200_OK,
+    summary="Get Public Worker Profile",
+    description="Retrieve publicly available profile information for a specific worker.",
+)
+@limiter.limit("30/minute")
+async def get_public_worker_profile(
+    request: Request,
+    user_id: UUID,
+    db: DBDep,
+) -> PublicWorkerRead:
+    """
+    Retrieve the public worker profile for the specified user ID.
+    No authentication required.
+    """
+    return await WorkerService(db).get_public_worker_profile(user_id)
+
+
+# ----------------------------------------------------
+# Authenticated Profile Endpoints
+# ----------------------------------------------------
+
+
 @router.get(
     "/profile",
     response_model=schemas.WorkerProfileRead,
@@ -46,10 +72,11 @@ WorkerDep = Annotated[User, Depends(get_current_user)]
 async def get_my_worker_profile(
     request: Request,
     db: DBDep,
-    current_user: WorkerDep,
+    current_user: AuthenticatedWorkerDep,
 ) -> schemas.WorkerProfileRead:
-    if current_user.role != UserRole.WORKER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    """
+    Retrieve the authenticated worker's profile.
+    """
     return await WorkerService(db).get_profile(current_user.id)
 
 
@@ -58,17 +85,18 @@ async def get_my_worker_profile(
     response_model=schemas.WorkerProfileRead,
     status_code=status.HTTP_200_OK,
     summary="Update My Worker Profile",
-    description="Update profile information (excluding picture) for the authenticated worker.",
+    description="Update profile information (excluding profile picture) for the authenticated worker.",
 )
 @limiter.limit("5/minute")
 async def update_my_worker_profile(
     request: Request,
     data: schemas.WorkerProfileUpdate,
     db: DBDep,
-    current_user: WorkerDep,
+    current_user: AuthenticatedWorkerDep,
 ) -> schemas.WorkerProfileRead:
-    if current_user.role != UserRole.WORKER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    """
+    Update the authenticated worker's profile.
+    """
     return await WorkerService(db).update_profile(current_user.id, data)
 
 
@@ -83,31 +111,56 @@ async def update_my_worker_profile(
 async def update_my_worker_profile_picture(
     request: Request,
     db: DBDep,
-    current_user: WorkerDep,
+    current_user: AuthenticatedWorkerDep,
     profile_picture: UploadFile = File(
         ..., description="New profile picture file (JPG, PNG). Max 10MB."
     ),
 ) -> schemas.MessageResponse:
     """
-    Handles uploading and setting a new profile picture for the worker.
+    Upload a new profile picture for the authenticated worker.
     """
-    logger = logging.getLogger(__name__)
-    if current_user.role != UserRole.WORKER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
-
     logger.info(f"Worker {current_user.id} attempting to update profile picture.")
 
     picture_url = await upload_file_to_s3(profile_picture, subfolder="profile_pictures")
 
     await WorkerService(db).update_profile_picture(current_user.id, picture_url)
 
-    logger.info(f"Worker {current_user.id} successfully updated profile picture to {picture_url}")
+    logger.info(f"Worker {current_user.id} successfully updated profile picture to {picture_url}.")
     return schemas.MessageResponse(detail="Profile picture updated successfully.")
 
 
+@router.get(
+    "/profile/picture-url",
+    response_model=PresignedUrlResponse | None,
+    status_code=status.HTTP_200_OK,
+    summary="Get Pre-signed URL for My Profile Picture",
+    description="Retrieve a temporary, secure URL to view the authenticated worker's profile picture.",
+)
+@limiter.limit("30/minute")
+async def get_my_worker_profile_picture_url(
+    request: Request,
+    db: DBDep,
+    current_user: AuthenticatedWorkerDep,
+) -> PresignedUrlResponse | None:
+    """
+    Generate a pre-signed URL for the worker's profile picture.
+    Returns None if no profile picture is set.
+    """
+    logger.info(f"Worker {current_user.id} requesting pre-signed URL for their profile picture.")
+
+    presigned_url = await WorkerService(db).get_profile_picture_presigned_url(current_user.id)
+
+    if not presigned_url:
+        return None
+
+    return PresignedUrlResponse(url=presigned_url)  # type: ignore[arg-type]
+
+
 # ----------------------------------------------------
-# KYC Endpoints
+# KYC Endpoints (Authenticated Worker)
 # ----------------------------------------------------
+
+
 @router.get(
     "/kyc",
     response_model=KYCRead | None,
@@ -119,10 +172,11 @@ async def update_my_worker_profile_picture(
 async def get_my_kyc(
     request: Request,
     db: DBDep,
-    current_user: WorkerDep,
+    current_user: AuthenticatedWorkerDep,
 ) -> KYCRead | None:
-    if current_user.role != UserRole.WORKER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    """
+    Retrieve KYC information for the authenticated worker.
+    """
     kyc_model = await WorkerService(db).get_kyc(current_user.id)
     if kyc_model:
         return KYCRead.model_validate(kyc_model, from_attributes=True)
@@ -134,24 +188,25 @@ async def get_my_kyc(
     response_model=KYCRead,
     status_code=status.HTTP_201_CREATED,
     summary="Submit My KYC Documents",
-    description="Submit or update KYC documents including a document type, a document file, and a selfie.",
+    description="Submit or update KYC documents including document type, document file, and selfie.",
 )
 @limiter.limit("3/hour")
 async def submit_my_kyc(
     request: Request,
     db: DBDep,
-    current_user: WorkerDep,
+    current_user: AuthenticatedWorkerDep,
     document_type: str = Form(
         ...,
-        description="Type of identification document being uploaded (e.g., 'Passport', 'Driver\\'s License', 'National ID Card').",
+        description="Type of identification document (e.g., Passport, Driver's License, National ID Card).",
     ),
     document_file: UploadFile = File(
         ..., description="The identification document file (PDF, JPG, PNG). Max 10MB."
     ),
     selfie_file: UploadFile = File(..., description="A clear selfie image (JPG, PNG). Max 10MB."),
 ) -> KYCRead:
-    if current_user.role != UserRole.WORKER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    """
+    Submit KYC documents for the authenticated worker.
+    """
     document_path = await upload_file_to_s3(document_file, subfolder="kyc")
     selfie_path = await upload_file_to_s3(selfie_file, subfolder="kyc")
 
@@ -164,50 +219,27 @@ async def submit_my_kyc(
     return KYCRead.model_validate(kyc_model, from_attributes=True)
 
 
-@router.get(
-    "/profile/picture-url",
-    response_model=PresignedUrlResponse | None,
-    status_code=status.HTTP_200_OK,
-    summary="Get Pre-signed URL for My Profile Picture",
-    description="Retrieves a temporary, secure URL to view the authenticated worker's profile picture.",
-)
-@limiter.limit("30/minute")
-async def get_my_worker_profile_picture_url(
-    request: Request,
-    db: DBDep,
-    current_user: WorkerDep,
-) -> PresignedUrlResponse | None:
-    """
-    Generates and returns a pre-signed URL for the worker's profile picture.
-    Returns null if the user has no profile picture set.
-    """
-    logger.info(f"Worker {current_user.id} requesting pre-signed URL for their profile picture.")
-    presigned_url = await WorkerService(db).get_profile_picture_presigned_url(current_user.id)
-
-    if not presigned_url:
-        return None
-
-    return PresignedUrlResponse(url=presigned_url)  # type: ignore[arg-type]
-
-
 # ----------------------------------------------------
-# Job History Endpoints (Keep as is, use WorkerDep)
+# Job History Endpoints (Authenticated Worker)
 # ----------------------------------------------------
+
+
 @router.get(
     "/jobs",
     response_model=list[JobRead],
     status_code=status.HTTP_200_OK,
     summary="List My Worker Jobs",
-    description="Returns a list of all jobs assigned to the currently authenticated worker.",
+    description="Return a list of all jobs assigned to the currently authenticated worker.",
 )
 @limiter.limit("10/minute")
 async def list_my_worker_jobs(
     request: Request,
     db: DBDep,
-    current_user: WorkerDep,
+    current_user: AuthenticatedWorkerDep,
 ) -> list[JobRead]:
-    if current_user.role != UserRole.WORKER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    """
+    List all jobs assigned to the authenticated worker.
+    """
     job_models = await WorkerService(db).get_jobs(current_user.id)
     return [JobRead.model_validate(job, from_attributes=True) for job in job_models]
 
@@ -224,9 +256,10 @@ async def get_my_worker_job_detail(
     request: Request,
     job_id: UUID,
     db: DBDep,
-    current_user: WorkerDep,
+    current_user: AuthenticatedWorkerDep,
 ) -> JobRead:
-    if current_user.role != UserRole.WORKER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    """
+    Retrieve details about a specific job assigned to the authenticated worker.
+    """
     job_model = await WorkerService(db).get_job_detail(current_user.id, job_id)
     return JobRead.model_validate(job_model, from_attributes=True)

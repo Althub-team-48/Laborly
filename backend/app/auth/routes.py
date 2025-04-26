@@ -13,6 +13,7 @@ import logging
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Updated Schema Imports
@@ -34,6 +35,7 @@ from app.auth.services import (
     login_user_oauth,
     logout_user_token,
     request_email_update,
+    request_new_verification_email,
     request_password_reset,
     reset_password,
     signup_user,
@@ -193,6 +195,28 @@ async def verify_initial_email(
     Verifies a user's email address using the initial verification token.
     """
     return await verify_email_token(token, db)
+
+
+# ---------------------------------------------------
+# Request New Verification Email
+# ---------------------------------------------------
+@router.post(
+    "/request-verification-email/{email}",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Request New Verification Email",
+    description="Requests a new verification email via path parameter if the account is not verified.",
+)
+@limiter.limit("3/hour")
+async def post_request_verification_email(
+    request: Request,
+    email: EmailStr,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """
+    Handles the request to resend a verification email using email from the path.
+    """
+    return await request_new_verification_email(email, db)
 
 
 # ---------------------------------------------------

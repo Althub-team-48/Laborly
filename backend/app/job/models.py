@@ -9,7 +9,7 @@ Defines the Job model and associated JobStatus enum.
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -17,9 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
 
-# -----------------------------------------------
-# TYPE CHECKING IMPORTS (to avoid circular deps)
-# -----------------------------------------------
+# TYPE CHECKING IMPORTS
 if TYPE_CHECKING:
     from app.database.models import User
     from app.messaging.models import MessageThread
@@ -27,14 +25,8 @@ if TYPE_CHECKING:
     from app.review.models import Review
 
 
-# -----------------------------------------------
 # ENUM: Job Status
-# -----------------------------------------------
 class JobStatus(str, enum.Enum):
-    """
-    Enum representing lifecycle states for a job.
-    """
-
     NEGOTIATING = "NEGOTIATING"
     ACCEPTED = "ACCEPTED"
     COMPLETED = "COMPLETED"
@@ -42,27 +34,17 @@ class JobStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
-# -----------------------------------------------
 # MODEL: Job
-# -----------------------------------------------
 class Job(Base):
-    """
-    Represents a job posted by a client and assigned to a worker.
-    Tracks lifecycle events and ties into services, threads, and reviews.
-    """
-
     __tablename__ = "jobs"
 
-    # -----------------------------
     # Basic Identifiers & Foreign Keys
-    # -----------------------------
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
         comment="Unique identifier for the job",
     )
-
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -75,7 +57,6 @@ class Job(Base):
         nullable=False,
         comment="Client who created the job",
     )
-
     worker_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -88,7 +69,6 @@ class Job(Base):
         nullable=True,
         comment="Worker assigned to the job",
     )
-
     service_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -102,64 +82,33 @@ class Job(Base):
         comment="Optional service associated with the job",
     )
 
-    thread_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "message_threads.id",
-            use_alter=True,
-            name="fk_jobs_thread_id",
-            deferrable=True,
-            initially="DEFERRED",
-        ),
-        nullable=True,
-        unique=True,
-        comment="Thread ID for messaging related to the job",
-    )
-
-    # -----------------------------
     # Job Status & Lifecycle Timestamps
-    # -----------------------------
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus),
         default=JobStatus.NEGOTIATING,
         nullable=False,
         comment="Current status of the job",
     )
-
     started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="Timestamp when the job started",
+        DateTime(timezone=True), nullable=True, comment="Timestamp when the job started"
     )
-
     completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="Timestamp when the job was completed",
+        DateTime(timezone=True), nullable=True, comment="Timestamp when the job was completed"
     )
-
     cancelled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="Timestamp when the job was cancelled",
+        DateTime(timezone=True), nullable=True, comment="Timestamp when the job was cancelled"
     )
-
     cancel_reason: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Reason provided for job cancellation",
+        Text, nullable=True, comment="Reason provided for job cancellation"
     )
 
-    # -----------------------------
     # Audit Fields
-    # -----------------------------
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         comment="Timestamp when the job was created",
     )
-
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -168,45 +117,24 @@ class Job(Base):
         comment="Timestamp when the job was last updated",
     )
 
-    # -------------------------------------
-    # Relationships (grouped by type)
-    # -------------------------------------
-
-    # One-to-Many Relationships
-
+    # Relationships
     client: Mapped["User"] = relationship(
-        "User",
-        back_populates="created_jobs",
-        foreign_keys=[client_id],
-        # One User (client) can create many Jobs
+        "User", back_populates="created_jobs", foreign_keys=[client_id]
     )
-
-    worker: Mapped["User"] = relationship(
-        "User",
-        back_populates="assigned_jobs",
-        foreign_keys=[worker_id],
-        # One User (worker) can be assigned to many Jobs
+    worker: Mapped[Optional["User"]] = relationship(
+        "User", back_populates="assigned_jobs", foreign_keys=[worker_id]
     )
+    service: Mapped[Optional["Service"]] = relationship("Service", back_populates="jobs")
 
-    service: Mapped["Service"] = relationship(
-        "Service",
-        back_populates="jobs",
-        # One Service can be associated with many Jobs
-    )
-
-    # One-to-One Relationships
-
-    thread: Mapped["MessageThread"] = relationship(
+    # One-to-One Relationship (Job -> MessageThread)
+    # This relationship now relies on the FK being on the MessageThread side
+    thread: Mapped[Optional["MessageThread"]] = relationship(
         "MessageThread",
         back_populates="job",
-        uselist=False,
-        foreign_keys=[thread_id],
-        # One Job has one MessageThread (unique constraint on thread_id)
+        uselist=False,  # Indicate one-to-one nature from Job's perspective
+        cascade="all, delete-orphan",  # If job deleted, delete associated thread
     )
 
-    review: Mapped["Review"] = relationship(
-        "Review",
-        back_populates="job",
-        uselist=False,
-        # One Job has one Review
+    review: Mapped[Optional["Review"]] = relationship(
+        "Review", back_populates="job", uselist=False, cascade="all, delete-orphan"
     )

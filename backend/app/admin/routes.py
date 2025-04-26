@@ -9,19 +9,25 @@ Defines API routes for administrative actions such as:
 
 import logging
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import HttpUrl, TypeAdapter, ValidationError
+
 
 from app.admin.schemas import (
-    FlaggedReviewRead,
-    KYCReviewResponse,
-    MessageResponse,
+    AdminUserView,
+    KYCPendingListItem,
+    KYCDetailAdminView,
+    KYCReviewActionResponse,
     UserStatusUpdateResponse,
+    FlaggedReviewRead,
+    MessageResponse,
+    PresignedUrlResponse,
 )
-from app.admin.services import AdminService
+from app.admin.services import AdminService, UserService
 from app.core.dependencies import get_current_user_with_role, get_db
 from app.core.limiter import limiter
 from app.database.enums import UserRole
@@ -44,9 +50,7 @@ AdminDep = Annotated[User, Depends(get_current_user_with_role(UserRole.ADMIN))]
 # Helper Functions
 # ---------------------------------------------------
 def build_status_response(user_id: UUID, action: str) -> UserStatusUpdateResponse:
-    """
-    Builds a standard response for user status update actions.
-    """
+    """Builds a standard response for user status update actions."""
     return UserStatusUpdateResponse(
         user_id=user_id,
         action=action,
@@ -55,70 +59,197 @@ def build_status_response(user_id: UUID, action: str) -> UserStatusUpdateRespons
     )
 
 
-def build_kyc_response(user_id: UUID, status_str: str) -> KYCReviewResponse:
-    """
-    Builds a standard response for KYC review actions.
-    """
-    return KYCReviewResponse(
-        user_id=user_id,
-        status=status_str,
-        reviewed_at=datetime.now(timezone.utc),
-    )
-
-
 # ---------------------------------------------------
 # KYC Endpoints
 # ---------------------------------------------------
-@router.get("/kyc/pending", response_model=list[KYCReviewResponse])
+@router.get(
+    "/kyc/pending",
+    response_model=list[KYCPendingListItem],
+    status_code=status.HTTP_200_OK,
+    summary="List Pending KYC Submissions",
+    description="Retrieves a list of users with pending KYC submissions, including document type and submission time.",
+)
 @limiter.limit("10/minute")
 async def get_pending_kyc_list(
     request: Request,
     db: DBDep,
     current_user: AdminDep,
-) -> list[KYCReviewResponse]:
+) -> list[KYCPendingListItem]:
     """
     Retrieves a list of users with pending KYC submissions.
     """
     logger.info(f"[KYC] Admin {current_user.id} requested pending KYC list.")
-    pending_kyc = await AdminService(db).list_pending_kyc()
-    return [KYCReviewResponse.model_validate(kyc, from_attributes=True) for kyc in pending_kyc]
+    pending_kyc_models = await AdminService(db).list_pending_kyc()
+    return [
+        KYCPendingListItem.model_validate(kyc, from_attributes=True) for kyc in pending_kyc_models
+    ]
 
 
-@router.put("/kyc/{user_id}/approve", response_model=KYCReviewResponse)
+@router.get(
+    "/kyc/{user_id}",
+    response_model=KYCDetailAdminView,
+    status_code=status.HTTP_200_OK,
+    summary="Get Specific KYC Details",
+    description="Retrieves detailed information about a specific user's KYC submission.",
+)
+@limiter.limit("15/minute")
+async def get_kyc_details(
+    request: Request,
+    user_id: UUID,
+    db: DBDep,
+    current_user: AdminDep,
+) -> KYCDetailAdminView:
+    """
+    Retrieves detailed KYC information for a specific user.
+    """
+    logger.info(f"[KYC] Admin {current_user.id} requesting details for user {user_id}.")
+    kyc_model = await AdminService(db).get_kyc_details_for_admin(user_id)
+    return KYCDetailAdminView.model_validate(kyc_model, from_attributes=True)
+
+
+@router.put(
+    "/kyc/{user_id}/approve",
+    response_model=KYCReviewActionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Approve KYC Submission",
+    description="Approves the KYC submission for a specific user.",
+)
 @limiter.limit("5/minute")
 async def approve_user_kyc(
     request: Request,
     user_id: UUID,
     db: DBDep,
     current_user: AdminDep,
-) -> KYCReviewResponse:
+) -> KYCReviewActionResponse:
     """
     Approves the KYC submission for a specific user.
     """
     logger.info(f"[KYC] Admin {current_user.id} approving KYC for user {user_id}.")
-    await AdminService(db).approve_kyc(user_id)
-    return build_kyc_response(user_id, "APPROVED")
+    updated_kyc_model = await AdminService(db).approve_kyc(user_id)
+    return KYCReviewActionResponse.model_validate(updated_kyc_model, from_attributes=True)
 
 
-@router.put("/kyc/{user_id}/reject", response_model=KYCReviewResponse)
+@router.put(
+    "/kyc/{user_id}/reject",
+    response_model=KYCReviewActionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Reject KYC Submission",
+    description="Rejects the KYC submission for a specific user.",
+)
 @limiter.limit("5/minute")
 async def reject_user_kyc(
     request: Request,
     user_id: UUID,
     db: DBDep,
     current_user: AdminDep,
-) -> KYCReviewResponse:
+) -> KYCReviewActionResponse:
     """
     Rejects the KYC submission for a specific user.
     """
     logger.info(f"[KYC] Admin {current_user.id} rejecting KYC for user {user_id}.")
-    await AdminService(db).reject_kyc(user_id)
-    return build_kyc_response(user_id, "REJECTED")
+    updated_kyc_model = await AdminService(db).reject_kyc(user_id)
+    return KYCReviewActionResponse.model_validate(updated_kyc_model, from_attributes=True)
+
+
+@router.get(
+    "/kyc/{user_id}/presigned-url/{doc_type}",
+    response_model=PresignedUrlResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Pre-signed URL for KYC Document",
+    description="Generates a temporary, secure URL for an admin to view a specific KYC document (document or selfie).",
+)
+@limiter.limit("20/minute")
+async def get_kyc_document_presigned_url(
+    request: Request,
+    user_id: UUID,
+    doc_type: Literal["document", "selfie"],
+    db: DBDep,
+    current_user: AdminDep,
+) -> PresignedUrlResponse:
+    """
+    Generates a pre-signed URL for viewing a specific KYC document.
+    Requires admin privileges.
+    """
+    logger.info(
+        f"Admin {current_user.id} requesting pre-signed URL for user {user_id}, doc_type: {doc_type}"
+    )
+
+    admin_service = AdminService(db)
+    generated_url = await admin_service.get_kyc_presigned_url(user_id=user_id, doc_type=doc_type)
+
+    try:
+        validated_url = TypeAdapter(HttpUrl).validate_python(generated_url)
+    except ValidationError as e:
+        logger.error(f"URL validation failed for generated presigned URL: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate a valid pre-signed URL.",
+        )
+
+    return PresignedUrlResponse(url=validated_url)
 
 
 # ---------------------------------------------------
 # User Management Endpoints
 # ---------------------------------------------------
+@router.get(
+    "/users",
+    response_model=list[AdminUserView],
+    status_code=status.HTTP_200_OK,
+    summary="List All Users",
+    description="Retrieves a list of users with optional filtering and pagination.",
+)
+@limiter.limit("10/minute")
+async def list_all_users(
+    request: Request,
+    db: DBDep,
+    current_user: AdminDep,
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of records to return"),
+    role: UserRole | None = Query(None, description="Filter by user role (ADMIN, CLIENT, WORKER)"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    is_banned: bool | None = Query(None, description="Filter by banned status"),
+    is_deleted: bool | None = Query(None, description="Include deleted users if true"),
+) -> list[AdminUserView]:
+    """
+    Retrieves a paginated, optionally filtered list of users.
+    Requires admin privileges.
+    """
+    service = UserService(db)
+    user_models = await service.list_all_users(
+        skip=skip,
+        limit=limit,
+        role=role,
+        is_active=is_active,
+        is_banned=is_banned,
+        is_deleted=is_deleted,
+    )
+    return [AdminUserView.model_validate(user, from_attributes=True) for user in user_models]
+
+
+@router.get(
+    "/users/{user_id}",
+    response_model=AdminUserView,
+    status_code=status.HTTP_200_OK,
+    summary="Get User Details by ID",
+    description="Retrieves detailed information for a specific user by their UUID.",
+)
+@limiter.limit("20/minute")
+async def get_user_details(
+    request: Request,
+    user_id: UUID,
+    db: DBDep,
+    current_user: AdminDep,
+) -> AdminUserView:
+    """
+    Retrieves details for a specific user.
+    Requires admin privileges.
+    """
+    service = UserService(db)
+    user_model = await service.get_user_details(user_id=user_id)
+    return AdminUserView.model_validate(user_model, from_attributes=True)
+
+
 @router.put("/users/{user_id}/freeze", response_model=UserStatusUpdateResponse)
 @limiter.limit("5/minute")
 async def freeze_user_account(
@@ -127,9 +258,6 @@ async def freeze_user_account(
     db: DBDep,
     current_user: AdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Freezes a specific user's account.
-    """
     logger.info(f"[USER] Admin {current_user.id} freezing user {user_id}.")
     await AdminService(db).freeze_user(user_id)
     return build_status_response(user_id, "frozen")
@@ -143,9 +271,6 @@ async def unfreeze_user_account(
     db: DBDep,
     current_user: AdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Unfreezes a specific user's account.
-    """
     logger.info(f"[USER] Admin {current_user.id} unfreezing user {user_id}.")
     await AdminService(db).unfreeze_user(user_id)
     return build_status_response(user_id, "unfrozen")
@@ -159,9 +284,6 @@ async def ban_user_account(
     db: DBDep,
     current_user: AdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Bans a specific user's account.
-    """
     logger.info(f"[USER] Admin {current_user.id} banning user {user_id}.")
     await AdminService(db).ban_user(user_id)
     return build_status_response(user_id, "banned")
@@ -175,9 +297,6 @@ async def unban_user_account(
     db: DBDep,
     current_user: AdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Unbans a specific user's account.
-    """
     logger.info(f"[USER] Admin {current_user.id} unbanning user {user_id}.")
     await AdminService(db).unban_user(user_id)
     return build_status_response(user_id, "unbanned")
@@ -192,9 +311,9 @@ async def delete_user_account(
     current_user: AdminDep,
 ) -> UserStatusUpdateResponse:
     """
-    Deletes a specific user's account.
+    Soft deletes a specific user's account.
     """
-    logger.info(f"[USER] Admin {current_user.id} deleting user {user_id}.")
+    logger.info(f"[USER] Admin {current_user.id} soft deleting user {user_id}.")
     await AdminService(db).delete_user(user_id)
     return build_status_response(user_id, "deleted")
 
@@ -209,9 +328,6 @@ async def get_flagged_reviews(
     db: DBDep,
     current_user: AdminDep,
 ) -> list[FlaggedReviewRead]:
-    """
-    Retrieves a list of reviews that have been flagged.
-    """
     logger.info(f"[REVIEW] Admin {current_user.id} requested flagged reviews.")
     reviews = await AdminService(db).list_flagged_reviews()
     return [FlaggedReviewRead.model_validate(review, from_attributes=True) for review in reviews]
@@ -225,9 +341,6 @@ async def delete_flagged_review(
     db: DBDep,
     current_user: AdminDep,
 ) -> MessageResponse:
-    """
-    Deletes a specific flagged review.
-    """
     logger.info(f"[REVIEW] Admin {current_user.id} deleting review {review_id}.")
     await AdminService(db).delete_review(review_id)
     return MessageResponse(detail="Review deleted.")

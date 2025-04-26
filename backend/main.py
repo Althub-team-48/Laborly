@@ -59,6 +59,7 @@ origins = [
     "http://localhost:5000",  # React dev server
     "http://127.0.0.1:5000",  # Localhost alternative
     "http://host.docker.internal",  # Lets Docker access your host machine
+    "https://labourly-frontend-codebase-five.vercel.app", # Temp Laborly Frontend URL
 ]
 
 app.add_middleware(

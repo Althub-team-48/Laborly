@@ -10,20 +10,94 @@ Defines response schemas for admin operations:
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl
+
+from app.database.enums import KYCStatus, UserRole
 
 
 # -----------------------------------------------------
-# KYC Review Response Schema
+# Schema for Admin View of User Details
 # -----------------------------------------------------
-class KYCReviewResponse(BaseModel):
+class AdminUserView(BaseModel):
     """
-    Schema returned after an admin reviews a user's KYC submission.
+    Detailed view of a user account for administrators.
+    """
+
+    id: UUID = Field(..., description="User's unique identifier")
+    email: EmailStr = Field(..., description="User's email address")
+    phone_number: str = Field(..., description="User's phone number")
+    role: UserRole = Field(..., description="User's role (CLIENT, WORKER, ADMIN)")
+    first_name: str = Field(..., description="User's first name")
+    last_name: str = Field(..., description="User's last name")
+    location: str | None = Field(None, description="User's location")
+    is_active: bool = Field(..., description="Whether the user account is currently active")
+    is_frozen: bool = Field(..., description="Whether the user account is temporarily frozen")
+    is_banned: bool = Field(..., description="Whether the user account is banned")
+    is_deleted: bool = Field(..., description="Whether the user account is marked as deleted")
+    is_verified: bool = Field(..., description="Whether the user has verified their email")
+    created_at: datetime = Field(..., description="Timestamp when the user was created")
+    updated_at: datetime = Field(..., description="Timestamp when the user was last updated")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# -----------------------------------------------------
+# Schema for Listing Pending KYC Items
+# -----------------------------------------------------
+class KYCPendingListItem(BaseModel):
+    """
+    Schema for items in the list of pending KYC submissions.
+    """
+
+    user_id: UUID = Field(..., description="User ID associated with the KYC submission")
+    document_type: str = Field(
+        ..., description="Type of document submitted (e.g., Passport, Driver's License)"
+    )
+    submitted_at: datetime = Field(..., description="Timestamp when the KYC was submitted")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# -----------------------------------------------------
+# Schema for Detailed Admin View of a KYC Record
+# -----------------------------------------------------
+class KYCDetailAdminView(BaseModel):
+    """
+    Detailed view of a specific KYC record for an admin.
+    """
+
+    user_id: UUID = Field(..., description="User ID associated with the KYC submission")
+    status: KYCStatus = Field(
+        ..., description="Current status of the KYC submission (PENDING, APPROVED, REJECTED)"
+    )
+    document_type: str = Field(
+        ..., description="Type of document submitted (e.g., Passport, Driver's License)"
+    )
+    submitted_at: datetime = Field(..., description="Timestamp when the KYC was submitted")
+    reviewed_at: datetime | None = Field(
+        None, description="Timestamp when the KYC was reviewed (if applicable)"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# -----------------------------------------------------
+# KYC Review Action Response Schema
+# -----------------------------------------------------
+class KYCReviewActionResponse(BaseModel):
+    """
+    Schema returned after an admin approves or rejects a KYC submission.
     """
 
     user_id: UUID = Field(..., description="User ID whose KYC was reviewed")
-    status: str = Field(..., description="Updated KYC status after review")
-    reviewed_at: datetime = Field(..., description="Timestamp when the KYC was reviewed")
+    status: KYCStatus = Field(
+        ..., description="Updated KYC status after review (APPROVED or REJECTED)"
+    )
+    reviewed_at: datetime = Field(
+        ..., description="Timestamp when the KYC review action was performed"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -----------------------------------------------------
@@ -68,3 +142,14 @@ class MessageResponse(BaseModel):
     """
 
     detail: str = Field(..., description="Description of the operation result")
+
+
+# -----------------------------------------------------
+# Pre-signed URL Response Schema
+# -----------------------------------------------------
+class PresignedUrlResponse(BaseModel):
+    """
+    Schema for returning a generated pre-signed S3 URL.
+    """
+
+    url: HttpUrl = Field(..., description="Temporary pre-signed URL to access the S3 object")

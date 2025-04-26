@@ -63,8 +63,7 @@ async def send_email_verification(to_email: EmailStr, token: str) -> None:
     """
     Sends an email verification link to the user's email address (initial registration).
     """
-    # Construct verification URL using the correct endpoint from routes.py
-    verify_url = f"{settings.BACKEND_URL}/auth/verify-initial-email?token={token}"
+    verify_url = f"{settings.BACKEND_URL}/auth/verify-email?token={token}"
     subject = f"Verify Your Email - {settings.MAIL_FROM_NAME or 'Laborly'}"
     template_data = {
         "verification_link": verify_url,

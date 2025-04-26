@@ -1,10 +1,4 @@
-"""
-service/services.py
-
-Handles business logic for worker service listings:
-- Create, update, delete services
-- Search service listings
-"""
+# backend/app/service/services.py
 
 import logging
 from uuid import UUID
@@ -30,23 +24,17 @@ class ServiceListingService:
     async def create_service(
         self, worker_id: UUID, data: schemas.ServiceCreate
     ) -> schemas.ServiceRead:
-        """
-        Create a new service entry for a worker.
-        """
         logger.info(f"Creating new service for worker_id={worker_id}")
         service = models.Service(worker_id=worker_id, **data.model_dump())
         self.db.add(service)
         await self.db.commit()
         await self.db.refresh(service)
         logger.info(f"Service created: id={service.id}")
-        return schemas.ServiceRead.model_validate(service)
+        return schemas.ServiceRead.model_validate(service, from_attributes=True)
 
     async def update_service(
         self, worker_id: UUID, service_id: UUID, data: schemas.ServiceUpdate
     ) -> schemas.ServiceRead:
-        """
-        Update an existing service belonging to the worker.
-        """
         logger.info(f"Updating service_id={service_id} for worker_id={worker_id}")
         result = await self.db.execute(
             select(models.Service).filter_by(id=service_id, worker_id=worker_id)
@@ -63,12 +51,9 @@ class ServiceListingService:
         await self.db.commit()
         await self.db.refresh(service)
         logger.info(f"Service updated: id={service.id}")
-        return schemas.ServiceRead.model_validate(service)
+        return schemas.ServiceRead.model_validate(service, from_attributes=True)
 
     async def delete_service(self, worker_id: UUID, service_id: UUID) -> None:
-        """
-        Delete a service if owned by the worker.
-        """
         logger.info(f"Deleting service_id={service_id} for worker_id={worker_id}")
         result = await self.db.execute(
             select(models.Service).filter_by(id=service_id, worker_id=worker_id)
@@ -86,6 +71,7 @@ class ServiceListingService:
     async def get_my_services(self, worker_id: UUID) -> list[models.Service]:
         """
         Return all services listed by the authenticated worker.
+        Applies .unique() as Service model has joined loads.
         """
         logger.info(f"Fetching all services for worker_id={worker_id}")
         result = await self.db.execute(select(models.Service).filter_by(worker_id=worker_id))
@@ -96,8 +82,9 @@ class ServiceListingService:
     ) -> list[models.Service]:
         """
         Public search for services by title and/or location.
+        Applies .unique() to handle potential duplicates from joined loads.
         """
-        logger.info("Searching services...")
+        logger.info(f"Searching services with title='{title}', location='{location}'")
         query = select(models.Service)
 
         if title:
@@ -107,6 +94,8 @@ class ServiceListingService:
             query = query.filter(models.Service.location.ilike(f"%{location}%"))
 
         result = await self.db.execute(query)
-        services: Sequence[models.Service] = result.scalars().all()
-        logger.info(f"{len(services)} service(s) found")
+
+        services: Sequence[models.Service] = result.unique().scalars().all()
+
+        logger.info(f"{len(services)} service(s) found matching criteria.")
         return list(services)

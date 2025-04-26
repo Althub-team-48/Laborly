@@ -9,7 +9,7 @@ API routes for the reusable messaging system:
 """
 
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/messages", tags=["Messaging"])
     response_model=schemas.MessageRead,
     status_code=status.HTTP_201_CREATED,
     summary="Start New Thread",
-    description="Starts a new message thread between the current user (Client or Admin) and a worker.",
+    description="Starts a new message thread. Requires service_id.",
 )
 @limiter.limit("5/minute")
 async def initiate_message(
@@ -35,12 +35,7 @@ async def initiate_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> schemas.MessageRead:
-    if current_user.role not in {"CLIENT", "ADMIN"}:
-        raise HTTPException(
-            status_code=403, detail="Only clients and admins can initiate conversations."
-        )
-
-    return await services.send_message(
+    message_model = await services.send_message(
         db=db,
         sender_id=current_user.id,
         message_data=schemas.MessageCreate(
@@ -49,8 +44,9 @@ async def initiate_message(
             thread_id=None,
             job_id=None,
         ),
-        sender_role=current_user.role,
+        sender_role=current_user.role.value,
     )
+    return schemas.MessageRead.model_validate(message_model, from_attributes=True)
 
 
 @router.post(
@@ -58,9 +54,9 @@ async def initiate_message(
     response_model=schemas.MessageRead,
     status_code=status.HTTP_201_CREATED,
     summary="Reply to Thread",
-    description="Reply to an existing thread. The user must be a participant in the thread.",
+    description="Reply to an existing thread. User must be a participant.",
 )
-@limiter.limit("10/minute")
+@limiter.limit("20/minute")
 async def reply_message(
     request: Request,
     thread_id: UUID,
@@ -68,7 +64,7 @@ async def reply_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> schemas.MessageRead:
-    return await services.send_message(
+    message_model = await services.send_message(
         db=db,
         sender_id=current_user.id,
         message_data=schemas.MessageCreate(
@@ -77,8 +73,9 @@ async def reply_message(
             job_id=None,
             service_id=None,
         ),
-        sender_role=current_user.role,
+        sender_role=current_user.role.value,
     )
+    return schemas.MessageRead.model_validate(message_model, from_attributes=True)
 
 
 @router.get(
@@ -86,14 +83,16 @@ async def reply_message(
     response_model=list[schemas.ThreadRead],
     status_code=status.HTTP_200_OK,
     summary="List My Threads",
-    description="Retrieve all message threads involving the authenticated user.",
+    description="Retrieve all message threads involving the authenticated user, ordered by latest activity.",
 )
+@limiter.limit("10/minute")
 async def get_my_threads(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[schemas.ThreadRead]:
-    return await services.get_user_threads(db, current_user.id)
+    thread_models = await services.get_user_threads(db, current_user.id)
+    return [schemas.ThreadRead.model_validate(t, from_attributes=True) for t in thread_models]
 
 
 @router.get(
@@ -101,12 +100,14 @@ async def get_my_threads(
     response_model=schemas.ThreadRead,
     status_code=status.HTTP_200_OK,
     summary="Get Thread Details",
-    description="Retrieve messages in a specific thread. Access allowed only if the user is a participant.",
+    description="Retrieve messages and participant info for a specific thread. Access requires participation.",
 )
+@limiter.limit("15/minute")
 async def get_thread_conversation(
     request: Request,
     thread_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> schemas.ThreadRead:
-    return await services.get_thread_detail(db, thread_id, current_user.id)
+    thread_model = await services.get_thread_detail(db, thread_id, current_user.id)
+    return schemas.ThreadRead.model_validate(thread_model, from_attributes=True)

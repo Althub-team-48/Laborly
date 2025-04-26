@@ -577,6 +577,7 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         await db.commit()
         await db.refresh(user)
         logger.info(f"New user created and verified via Google: {user.email} (ID: {user.id})")
+        is_new_user = True
 
         try:
             await send_welcome_email(user.email, user.first_name)
@@ -590,12 +591,24 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         await db.commit()
         await db.refresh(user)
 
+    # If it's a *new* user created via Google, send a password reset email
+    if is_new_user:
+        try:
+            reset_token = create_password_reset_token(str(user.id))
+            await send_password_reset_email(user.email, reset_token)
+            logger.info(f"Sent password reset email to new Google user: {user.email}")
+        except Exception as e:
+            logger.error(
+                f"Failed to send password reset email to new Google user {user.email}: {e}"
+            )
+
     # User exists (or was just created) and is verified, issue access token
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
     logger.info(f"Google login successful for user: {user.email}")
 
     # Redirect to frontend, passing token
     # Consider using state parameter for better security and redirect flexibility
-    frontend_url = settings.FRONTEND_URL or "/"
-    redirect_url = f"{frontend_url}?token={access_token}"
+    # Temp
+    backend_url = settings.BACKEND_URL or "/"
+    redirect_url = f"{backend_url}?token={access_token}"
     return RedirectResponse(url=redirect_url)

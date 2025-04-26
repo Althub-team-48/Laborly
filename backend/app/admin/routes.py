@@ -12,12 +12,13 @@ from datetime import datetime, timezone
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import HttpUrl, TypeAdapter, ValidationError
 
 
 from app.admin.schemas import (
+    AdminUserView,
     KYCPendingListItem,
     KYCDetailAdminView,
     KYCReviewActionResponse,
@@ -26,7 +27,7 @@ from app.admin.schemas import (
     MessageResponse,
     PresignedUrlResponse,
 )
-from app.admin.services import AdminService
+from app.admin.services import AdminService, UserService
 from app.core.dependencies import get_current_user_with_role, get_db
 from app.core.limiter import limiter
 from app.database.enums import UserRole
@@ -191,6 +192,64 @@ async def get_kyc_document_presigned_url(
 # ---------------------------------------------------
 # User Management Endpoints
 # ---------------------------------------------------
+@router.get(
+    "/users",
+    response_model=list[AdminUserView],
+    status_code=status.HTTP_200_OK,
+    summary="List All Users",
+    description="Retrieves a list of users with optional filtering and pagination.",
+)
+@limiter.limit("10/minute")
+async def list_all_users(
+    request: Request,
+    db: DBDep,
+    current_user: AdminDep,
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of records to return"),
+    role: UserRole | None = Query(None, description="Filter by user role (ADMIN, CLIENT, WORKER)"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    is_banned: bool | None = Query(None, description="Filter by banned status"),
+    is_deleted: bool | None = Query(None, description="Include deleted users if true"),
+) -> list[AdminUserView]:
+    """
+    Retrieves a paginated, optionally filtered list of users.
+    Requires admin privileges.
+    """
+    service = UserService(db)
+    user_models = await service.list_all_users(
+        skip=skip,
+        limit=limit,
+        role=role,
+        is_active=is_active,
+        is_banned=is_banned,
+        is_deleted=is_deleted,
+    )
+    return [AdminUserView.model_validate(user, from_attributes=True) for user in user_models]
+
+
+@router.get(
+    "/users/{user_id}",
+    response_model=AdminUserView,
+    status_code=status.HTTP_200_OK,
+    summary="Get User Details by ID",
+    description="Retrieves detailed information for a specific user by their UUID.",
+)
+@limiter.limit("20/minute")
+async def get_user_details(
+    request: Request,
+    user_id: UUID,
+    db: DBDep,
+    current_user: AdminDep,
+) -> AdminUserView:
+    """
+    Retrieves details for a specific user.
+    Requires admin privileges.
+    """
+    service = UserService(db)
+    user_model = await service.get_user_details(user_id=user_id)
+    return AdminUserView.model_validate(user_model, from_attributes=True)
+
+
 @router.put("/users/{user_id}/freeze", response_model=UserStatusUpdateResponse)
 @limiter.limit("5/minute")
 async def freeze_user_account(

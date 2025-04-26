@@ -16,7 +16,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.enums import KYCStatus
+from app.database.enums import KYCStatus, UserRole
 from app.database.models import KYC, User
 from app.review.models import Review
 from app.core.upload import generate_presigned_url, get_s3_key_from_url
@@ -372,3 +372,52 @@ class AdminService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="KYC record not found for this user."
             )
         return kyc
+
+
+class UserService:
+    """
+    Encapsulates business logic for listing and retrieving users, with optional filters.
+    """
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def list_all_users(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        role: UserRole | None = None,
+        is_active: bool | None = None,
+        is_banned: bool | None = None,
+        is_deleted: bool | None = None,
+    ) -> list[User]:
+        """
+        Retrieve users with optional filtering by role, active, banned, or deleted status.
+        By default, excludes deleted users unless `is_deleted` is explicitly provided.
+        """
+        stmt = select(User)
+        if role is not None:
+            stmt = stmt.filter(User.role == role)
+        if is_active is not None:
+            stmt = stmt.filter(User.is_active == is_active)
+        if is_banned is not None:
+            stmt = stmt.filter(User.is_banned == is_banned)
+        if is_deleted is not None:
+            stmt = stmt.filter(User.is_deleted == is_deleted)
+        else:
+            stmt = stmt.filter(User.is_deleted.is_(False))
+
+        stmt = stmt.offset(skip).limit(limit)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_user_details(self, user_id: UUID) -> User:
+        stmt = select(User).filter(User.id == user_id)
+        result = await self.db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        return user

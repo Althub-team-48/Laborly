@@ -10,9 +10,35 @@ Defines response schemas for admin operations:
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl
 
-from app.database.enums import KYCStatus
+from app.database.enums import KYCStatus, UserRole
+
+
+# -----------------------------------------------------
+# Schema for Admin View of User Details
+# -----------------------------------------------------
+class AdminUserView(BaseModel):
+    """
+    Detailed view of a user account for administrators.
+    """
+
+    id: UUID = Field(..., description="User's unique identifier")
+    email: EmailStr = Field(..., description="User's email address")
+    phone_number: str = Field(..., description="User's phone number")
+    role: UserRole = Field(..., description="User's role (CLIENT, WORKER, ADMIN)")
+    first_name: str = Field(..., description="User's first name")
+    last_name: str = Field(..., description="User's last name")
+    location: str | None = Field(None, description="User's location")
+    is_active: bool = Field(..., description="Whether the user account is currently active")
+    is_frozen: bool = Field(..., description="Whether the user account is temporarily frozen")
+    is_banned: bool = Field(..., description="Whether the user account is banned")
+    is_deleted: bool = Field(..., description="Whether the user account is marked as deleted")
+    is_verified: bool = Field(..., description="Whether the user has verified their email")
+    created_at: datetime = Field(..., description="Timestamp when the user was created")
+    updated_at: datetime = Field(..., description="Timestamp when the user was last updated")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -----------------------------------------------------

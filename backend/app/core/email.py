@@ -27,11 +27,10 @@ from app.core.email_config import conf
 # ---------------------------------------------------
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------
 # Internal Email Sender
 # ---------------------------------------------------
-
-
 async def _send_email(
     to_email: EmailStr,
     subject: str,
@@ -81,8 +80,6 @@ async def _send_email(
 # ---------------------------------------------------
 # Public Email Sending Functions
 # ---------------------------------------------------
-
-
 async def send_email_verification(to_email: EmailStr, token: str) -> None:
     """
     Send an email verification link to a user's email during registration.
@@ -92,7 +89,7 @@ async def send_email_verification(to_email: EmailStr, token: str) -> None:
     template_data = {
         "verification_link": verify_url,
         "verification_code": token,
-        "account_verification_ttl_min": settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES or 30,
+        "account_verification_ttl_min": settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES,
     }
     await _send_email(to_email, subject, "verification.html", template_data)
 
@@ -117,7 +114,7 @@ async def send_password_reset_email(to_email: EmailStr, token: str) -> None:
     subject = f"Reset Your Password - {settings.MAIL_FROM_NAME or 'Laborly'}"
     template_data = {
         "reset_link": reset_url,
-        "password_reset_ttl_min": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES or 60,
+        "password_reset_ttl_min": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
     }
     await _send_email(to_email, subject, "password_reset.html", template_data)
 
@@ -131,9 +128,7 @@ async def send_new_email_verification(new_email: EmailStr, token: str) -> None:
     template_data = {
         "verification_link": verify_url,
         "new_email": new_email,
-        "new_email_verification_ttl_min": (
-            settings.NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES or 1440
-        ),
+        "new_email_verification_ttl_min": (settings.NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES,),
     }
     await _send_email(new_email, subject, "new_email_verification.html", template_data)
 

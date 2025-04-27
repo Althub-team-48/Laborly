@@ -76,12 +76,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 FAILED_LOGIN_PREFIX = "failed_logins:ip:"
 # Key prefix for temporary IP blacklisting/penalty
 IP_PENALTY_PREFIX = "ip_penalty:"
-# Number of failed attempts before applying a penalty
-MAX_FAILED_ATTEMPTS = 5
-# Duration of the IP penalty (in seconds) after exceeding the limit
-IP_PENALTY_DURATION = 60 * 5  # 5 minutes
-# Duration for which failed attempts are counted (in seconds)
-FAILED_ATTEMPTS_WINDOW = 60 * 15  # 15 minutes
+
+MAX_FAILED_ATTEMPTS = settings.MAX_FAILED_ATTEMPTS
+IP_PENALTY_DURATION = settings.IP_PENALTY_DURATION
+FAILED_ATTEMPTS_WINDOW = settings.FAILED_ATTEMPTS_WINDOW
 
 
 # ------------------------------------------------

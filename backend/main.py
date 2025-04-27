@@ -15,6 +15,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.core.logging import init_logging
@@ -52,6 +53,27 @@ app.add_exception_handler(429, rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
+
+# -----------------------------
+# Security Headers Middleware
+# -----------------------------
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to add common security headers to responses.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        # Strict-Transport-Security header should only be applied if served over HTTPS
+        # In a typical production deployment, this is handled by the web server (e.g., Nginx, Traefik)
+        # response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 # -----------------------------
 # CORSMiddleware Configuration
 # -----------------------------
@@ -59,7 +81,7 @@ origins = [
     "http://localhost:5000",  # React dev server
     "http://127.0.0.1:5000",  # Localhost alternative
     "http://host.docker.internal",  # Lets Docker access your host machine
-    "https://labourly-frontend-codebase-five.vercel.app", # Temp Laborly Frontend URL
+    "https://labourly-frontend-codebase-five.vercel.app",  # Temp Laborly Frontend URL
 ]
 
 app.add_middleware(

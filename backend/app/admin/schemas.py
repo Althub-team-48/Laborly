@@ -1,10 +1,15 @@
 """
-admin/schemas.py
+backend/app/admin/schemas.py
 
-Defines response schemas for admin operations:
-- KYC review status update
-- User status changes (e.g., freeze, ban, unban)
-- Flagged review information for moderation
+Admin Response Schemas
+
+Defines the schemas used in administrative operations including:
+- User detail views
+- KYC submission and review handling
+- User status updates (freeze, ban, unban, delete)
+- Flagged review management for moderation
+- Pre-signed URL generation for KYC documents
+- Generic success/info message responses
 """
 
 from datetime import datetime
@@ -16,7 +21,7 @@ from app.database.enums import KYCStatus, UserRole
 
 
 # -----------------------------------------------------
-# Schema for Admin View of User Details
+# Admin User View Schema
 # -----------------------------------------------------
 class AdminUserView(BaseModel):
     """
@@ -42,11 +47,11 @@ class AdminUserView(BaseModel):
 
 
 # -----------------------------------------------------
-# Schema for Listing Pending KYC Items
+# Pending KYC Submission Schema
 # -----------------------------------------------------
 class KYCPendingListItem(BaseModel):
     """
-    Schema for items in the list of pending KYC submissions.
+    Schema for listing users with pending KYC submissions.
     """
 
     user_id: UUID = Field(..., description="User ID associated with the KYC submission")
@@ -59,20 +64,18 @@ class KYCPendingListItem(BaseModel):
 
 
 # -----------------------------------------------------
-# Schema for Detailed Admin View of a KYC Record
+# KYC Detail View Schema
 # -----------------------------------------------------
 class KYCDetailAdminView(BaseModel):
     """
-    Detailed view of a specific KYC record for an admin.
+    Detailed view of a specific KYC record for an administrator.
     """
 
     user_id: UUID = Field(..., description="User ID associated with the KYC submission")
     status: KYCStatus = Field(
         ..., description="Current status of the KYC submission (PENDING, APPROVED, REJECTED)"
     )
-    document_type: str = Field(
-        ..., description="Type of document submitted (e.g., Passport, Driver's License)"
-    )
+    document_type: str = Field(..., description="Type of document submitted")
     submitted_at: datetime = Field(..., description="Timestamp when the KYC was submitted")
     reviewed_at: datetime | None = Field(
         None, description="Timestamp when the KYC was reviewed (if applicable)"
@@ -90,12 +93,8 @@ class KYCReviewActionResponse(BaseModel):
     """
 
     user_id: UUID = Field(..., description="User ID whose KYC was reviewed")
-    status: KYCStatus = Field(
-        ..., description="Updated KYC status after review (APPROVED or REJECTED)"
-    )
-    reviewed_at: datetime = Field(
-        ..., description="Timestamp when the KYC review action was performed"
-    )
+    status: KYCStatus = Field(..., description="Updated KYC status after review")
+    reviewed_at: datetime = Field(..., description="Timestamp of the review action")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -105,13 +104,13 @@ class KYCReviewActionResponse(BaseModel):
 # -----------------------------------------------------
 class UserStatusUpdateResponse(BaseModel):
     """
-    Schema returned after an admin updates a user's status (e.g., ban, freeze).
+    Schema returned after an admin updates a user's status (freeze, ban, unban, etc.).
     """
 
     user_id: UUID = Field(..., description="ID of the user affected by the action")
     action: str = Field(..., description="Action taken on the user (e.g., 'frozen', 'banned')")
     success: bool = Field(..., description="Indicates if the action was successful")
-    timestamp: datetime = Field(..., description="Timestamp of when the update occurred")
+    timestamp: datetime = Field(..., description="Timestamp when the update occurred")
 
 
 # -----------------------------------------------------
@@ -119,16 +118,17 @@ class UserStatusUpdateResponse(BaseModel):
 # -----------------------------------------------------
 class FlaggedReviewRead(BaseModel):
     """
-    Schema for reading flagged review information.
+    Schema for reading information about flagged reviews requiring moderation.
     """
 
     id: UUID = Field(..., alias="review_id", description="Unique ID of the flagged review")
-    client_id: UUID = Field(..., alias="user_id", description="ID of the user who wrote the review")
+    client_id: UUID = Field(..., description="ID of the user who wrote the review")
+    worker_id: UUID = Field(..., description="ID of the worker being reviewed")
     job_id: UUID = Field(..., description="ID of the job associated with the review")
     rating: int | None = Field(None, description="Star rating given in the review")
-    review_text: str | None = Field(None, alias="content", description="Text content of the review")
-    is_flagged: bool = Field(..., description="Indicates whether the review is flagged")
-    created_at: datetime = Field(..., description="Date and time the review was created")
+    review_text: str | None = Field(None, description="Content of the review text")
+    is_flagged: bool = Field(..., description="Whether the review has been flagged for moderation")
+    created_at: datetime = Field(..., description="Timestamp when the review was created")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -138,10 +138,10 @@ class FlaggedReviewRead(BaseModel):
 # -----------------------------------------------------
 class MessageResponse(BaseModel):
     """
-    Generic response schema for simple success or info messages.
+    Schema for returning simple success or informational messages.
     """
 
-    detail: str = Field(..., description="Description of the operation result")
+    detail: str = Field(..., description="Message describing the operation result")
 
 
 # -----------------------------------------------------
@@ -149,7 +149,7 @@ class MessageResponse(BaseModel):
 # -----------------------------------------------------
 class PresignedUrlResponse(BaseModel):
     """
-    Schema for returning a generated pre-signed S3 URL.
+    Schema for returning a generated pre-signed URL for temporary S3 document access.
     """
 
-    url: HttpUrl = Field(..., description="Temporary pre-signed URL to access the S3 object")
+    url: HttpUrl = Field(..., description="Temporary pre-signed URL to access a protected resource")

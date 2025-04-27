@@ -1,44 +1,61 @@
 """
-client/routes.py
+backend/app/client/routes.py
 
-Defines routes under the Client module for:
-- Profile management
+Client Routes
+Defines API routes under the Client module for:
+- Profile management (authenticated and public)
 - Favorite worker handling
 - Client job history and job details
 """
 
 import logging
-from uuid import UUID
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.schemas import PresignedUrlResponse
 from app.client import schemas
-from app.client.schemas import MessageResponse
+from app.client.schemas import MessageResponse, PublicClientRead
 from app.client.services import ClientService
-from app.core.dependencies import get_db, get_current_user
+from app.core.dependencies import get_current_user_with_role, PaginationParams
 from app.core.limiter import limiter
+from app.core.upload import upload_file_to_s3
+from app.core.schemas import PaginatedResponse
 from app.database.enums import UserRole
 from app.database.models import User
-from app.core.upload import upload_file_to_s3
+from app.database.session import get_db
 
-# ---------------------------------------------------
-# Router Configuration
-# ---------------------------------------------------
 router = APIRouter(prefix="/client", tags=["Client"])
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------
-# Dependencies
-# ---------------------------------------------------
-ClientDep = Annotated[User, Depends(get_current_user)]
 DBDep = Annotated[AsyncSession, Depends(get_db)]
+AuthenticatedClientDep = Annotated[User, Depends(get_current_user_with_role(UserRole.CLIENT))]
 
 
 # ---------------------------------------------------
-# Client Profile Endpoints
+# Public Client Profile Endpoint
+# ---------------------------------------------------
+@router.get(
+    "/{user_id}/public",
+    response_model=PublicClientRead,
+    status_code=status.HTTP_200_OK,
+    summary="Get Public Client Profile",
+    description="Retrieve publicly available profile information for a specific client.",
+)
+@limiter.limit("30/minute")
+async def get_public_client_profile(
+    request: Request,
+    user_id: UUID,
+    db: DBDep,
+) -> PublicClientRead:
+    """Retrieve public client profile by user ID (no authentication required)."""
+    return await ClientService(db).get_public_client_profile(user_id)
+
+
+# ---------------------------------------------------
+# Authenticated Client Profile Endpoints
 # ---------------------------------------------------
 @router.get(
     "/profile",
@@ -51,11 +68,9 @@ DBDep = Annotated[AsyncSession, Depends(get_db)]
 async def get_my_client_profile(
     request: Request,
     db: DBDep,
-    current_user: ClientDep,
+    current_user: AuthenticatedClientDep,
 ) -> schemas.ClientProfileRead:
-    """
-    Retrieves the client profile for the authenticated user.
-    """
+    """Retrieve the authenticated client's profile."""
     return await ClientService(db).get_profile(current_user.id)
 
 
@@ -71,11 +86,9 @@ async def update_my_client_profile(
     request: Request,
     data: schemas.ClientProfileUpdate,
     db: DBDep,
-    current_user: ClientDep,
+    current_user: AuthenticatedClientDep,
 ) -> schemas.ClientProfileRead:
-    """
-    Updates the client profile fields (non-picture) for the authenticated user.
-    """
+    """Update the authenticated client's profile information."""
     return await ClientService(db).update_profile(current_user.id, data)
 
 
@@ -90,14 +103,12 @@ async def update_my_client_profile(
 async def update_my_client_profile_picture(
     request: Request,
     db: DBDep,
-    current_user: ClientDep,
+    current_user: AuthenticatedClientDep,
     profile_picture: UploadFile = File(
         ..., description="New profile picture file (JPG, PNG). Max 10MB."
     ),
 ) -> schemas.MessageResponse:
-    """
-    Handles uploading and setting a new profile picture.
-    """
+    """Upload and set a new profile picture for the authenticated client."""
     logger.info(f"Client {current_user.id} attempting to update profile picture.")
 
     picture_url = await upload_file_to_s3(profile_picture, subfolder="profile_pictures")
@@ -113,22 +124,17 @@ async def update_my_client_profile_picture(
     response_model=PresignedUrlResponse | None,
     status_code=status.HTTP_200_OK,
     summary="Get Pre-signed URL for My Profile Picture",
-    description="Retrieves a temporary, secure URL to view the authenticated client's profile picture.",
+    description="Retrieve a temporary, secure URL to view the authenticated client's profile picture.",
 )
 @limiter.limit("30/minute")
 async def get_my_client_profile_picture_url(
     request: Request,
     db: DBDep,
-    current_user: ClientDep,
+    current_user: AuthenticatedClientDep,
 ) -> PresignedUrlResponse | None:
-    """
-    Generates and returns a pre-signed URL for the client's profile picture.
-    Returns null if the user has no profile picture set.
-    """
-    if current_user.role != UserRole.CLIENT:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
-
+    """Generate a pre-signed URL for the client's profile picture."""
     logger.info(f"Client {current_user.id} requesting pre-signed URL for their profile picture.")
+
     presigned_url = await ClientService(db).get_profile_picture_presigned_url(current_user.id)
 
     if not presigned_url:
@@ -138,11 +144,11 @@ async def get_my_client_profile_picture_url(
 
 
 # ---------------------------------------------------
-# Favorite Workers Endpoints (Keep as is, use ClientDep)
+# Favorite Workers Endpoints (Authenticated Client)
 # ---------------------------------------------------
 @router.get(
     "/favorites",
-    response_model=list[schemas.FavoriteRead],
+    response_model=PaginatedResponse[schemas.FavoriteRead],
     status_code=status.HTTP_200_OK,
     summary="List My Favorite Workers",
     description="Retrieve a list of workers the authenticated client has marked as favorites.",
@@ -151,10 +157,18 @@ async def get_my_client_profile_picture_url(
 async def list_my_favorite_workers(
     request: Request,
     db: DBDep,
-    current_user: ClientDep,
-) -> list[schemas.FavoriteRead]:
-    favorites = await ClientService(db).list_favorites(current_user.id)
-    return [schemas.FavoriteRead.model_validate(fav, from_attributes=True) for fav in favorites]
+    current_user: AuthenticatedClientDep,
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.FavoriteRead]:
+    """List all favorite workers for the authenticated client with pagination."""
+    favorites, total_count = await ClientService(db).list_favorites(
+        current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[schemas.FavoriteRead.model_validate(fav, from_attributes=True) for fav in favorites],
+    )
 
 
 @router.post(
@@ -169,16 +183,17 @@ async def add_my_favorite_worker(
     request: Request,
     worker_id: UUID,
     db: DBDep,
-    current_user: ClientDep,
+    current_user: AuthenticatedClientDep,
 ) -> schemas.FavoriteRead:
+    """Add a worker to the authenticated client's favorites."""
     fav = await ClientService(db).add_favorite(current_user.id, worker_id)
     return schemas.FavoriteRead.model_validate(fav, from_attributes=True)
 
 
 @router.delete(
     "/favorites/{worker_id}",
-    status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
     summary="Remove Favorite Worker",
     description="Remove a worker from the authenticated client's list of favorites.",
 )
@@ -187,18 +202,19 @@ async def remove_my_favorite_worker(
     request: Request,
     worker_id: UUID,
     db: DBDep,
-    current_user: ClientDep,
+    current_user: AuthenticatedClientDep,
 ) -> MessageResponse:
+    """Remove a worker from the authenticated client's favorites."""
     await ClientService(db).remove_favorite(current_user.id, worker_id)
     return MessageResponse(detail="Favorite worker removed successfully.")
 
 
 # ---------------------------------------------------
-# Job History Endpoints
+# Job History Endpoints (Authenticated Client)
 # ---------------------------------------------------
 @router.get(
     "/jobs",
-    response_model=list[schemas.ClientJobRead],
+    response_model=PaginatedResponse[schemas.ClientJobRead],
     status_code=status.HTTP_200_OK,
     summary="List My Client Jobs",
     description="List all jobs created by the authenticated client user.",
@@ -207,10 +223,18 @@ async def remove_my_favorite_worker(
 async def list_my_client_jobs(
     request: Request,
     db: DBDep,
-    current_user: ClientDep,
-) -> list[schemas.ClientJobRead]:
-    jobs = await ClientService(db).get_jobs(current_user.id)
-    return [schemas.ClientJobRead.model_validate(job, from_attributes=True) for job in jobs]
+    current_user: AuthenticatedClientDep,
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.ClientJobRead]:
+    """List all jobs posted by the authenticated client with pagination."""
+    jobs, total_count = await ClientService(db).get_jobs(
+        current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[schemas.ClientJobRead.model_validate(job, from_attributes=True) for job in jobs],
+    )
 
 
 @router.get(
@@ -218,14 +242,15 @@ async def list_my_client_jobs(
     response_model=schemas.ClientJobRead,
     status_code=status.HTTP_200_OK,
     summary="Get My Job Detail",
-    description="Get detailed information for a specific job posted by the authenticated client.",
+    description="Retrieve detailed information for a specific job posted by the authenticated client.",
 )
 @limiter.limit("10/minute")
 async def get_my_client_job_detail(
     request: Request,
     job_id: UUID,
     db: DBDep,
-    current_user: ClientDep,
+    current_user: AuthenticatedClientDep,
 ) -> schemas.ClientJobRead:
+    """Retrieve details for a specific job posted by the authenticated client."""
     job = await ClientService(db).get_job_detail(current_user.id, job_id)
     return schemas.ClientJobRead.model_validate(job, from_attributes=True)

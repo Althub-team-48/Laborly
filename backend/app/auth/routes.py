@@ -43,7 +43,8 @@ from app.auth.services import (
     verify_new_email,
 )
 
-from app.core.dependencies import get_db, oauth2_scheme, get_current_user
+from app.core.dependencies import oauth2_scheme, get_current_user
+from app.database.session import get_db
 from app.core.limiter import limiter
 from app.database.models import User
 

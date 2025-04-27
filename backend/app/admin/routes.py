@@ -33,8 +33,9 @@ from app.admin.schemas import (
     UserStatusUpdateResponse,
 )
 from app.admin.services import AdminService, UserService
-from app.core.dependencies import get_current_user_with_role
+from app.core.dependencies import PaginationParams, get_current_user_with_role
 from app.core.limiter import limiter
+from app.core.schemas import PaginatedResponse
 from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
@@ -74,7 +75,7 @@ def build_status_response(user_id: UUID, action: str) -> UserStatusUpdateRespons
 
 @router.get(
     "/kyc/pending",
-    response_model=list[KYCPendingListItem],
+    response_model=PaginatedResponse[KYCPendingListItem],
     status_code=status.HTTP_200_OK,
     summary="List Pending KYC Submissions",
     description="Retrieve users with pending KYC submissions. Requires Admin role.",
@@ -84,15 +85,23 @@ async def get_pending_kyc_list(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedAdminDep,
-) -> list[KYCPendingListItem]:
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[KYCPendingListItem]:
     """
     Retrieve a list of users with pending KYC submissions.
     """
     logger.info(f"[KYC] Admin {current_user.id} requested pending KYC list.")
-    pending_kyc_models = await AdminService(db).list_pending_kyc()
-    return [
-        KYCPendingListItem.model_validate(kyc, from_attributes=True) for kyc in pending_kyc_models
-    ]
+    pending_kyc_models, total_count = await AdminService(db).list_pending_kyc(
+        skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[
+            KYCPendingListItem.model_validate(kyc, from_attributes=True)
+            for kyc in pending_kyc_models
+        ],
+    )
 
 
 @router.get(
@@ -377,7 +386,7 @@ async def delete_user_account(
 
 @router.get(
     "/reviews/flagged",
-    response_model=list[FlaggedReviewRead],
+    response_model=PaginatedResponse[FlaggedReviewRead],
     summary="List Flagged Reviews",
     description="Retrieve a list of reviews flagged for moderation. Requires Admin role.",
 )
@@ -386,13 +395,22 @@ async def get_flagged_reviews(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedAdminDep,
-) -> list[FlaggedReviewRead]:
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[FlaggedReviewRead]:
     """
-    Retrieve a list of reviews flagged for moderation.
+    Retrieve a list of reviews flagged for moderation with pagination.
     """
     logger.info(f"[REVIEW] Admin {current_user.id} requested flagged reviews.")
-    reviews = await AdminService(db).list_flagged_reviews()
-    return [FlaggedReviewRead.model_validate(review, from_attributes=True) for review in reviews]
+    reviews, total_count = await AdminService(db).list_flagged_reviews(
+        skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[
+            FlaggedReviewRead.model_validate(review, from_attributes=True) for review in reviews
+        ],
+    )
 
 
 @router.delete(

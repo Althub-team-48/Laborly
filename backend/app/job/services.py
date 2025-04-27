@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.enums import UserRole
@@ -42,7 +42,6 @@ class JobService:
     # ---------------------------------------------------
     # Job Creation (Client)
     # ---------------------------------------------------
-
     async def create_job(self, client_id: UUID, payload: schemas.JobCreate) -> models.Job:
         """Client initiates a new job associated with a service and thread."""
         logger.info(
@@ -111,7 +110,6 @@ class JobService:
     # ---------------------------------------------------
     # Job Acceptance (Worker)
     # ---------------------------------------------------
-
     async def accept_job(self, worker_id: UUID, job_id: UUID) -> models.Job:
         """Worker accepts an assigned job."""
         logger.info(f"Worker {worker_id} accepting job {job_id}")
@@ -150,7 +148,6 @@ class JobService:
     # ---------------------------------------------------
     # Job Completion (Worker)
     # ---------------------------------------------------
-
     async def complete_job(self, worker_id: UUID, job_id: UUID) -> models.Job:
         """Worker marks an accepted job as completed."""
         logger.info(f"Worker {worker_id} completing job {job_id}")
@@ -189,7 +186,6 @@ class JobService:
     # ---------------------------------------------------
     # Job Cancellation (Client)
     # ---------------------------------------------------
-
     async def cancel_job(self, user_id: UUID, job_id: UUID, cancel_reason: str) -> models.Job:
         """Client cancels a job and records a cancellation reason."""
         logger.info(f"Client {user_id} cancelling job {job_id}")
@@ -229,20 +225,31 @@ class JobService:
     # ---------------------------------------------------
     # Job Retrieval (Client/Worker)
     # ---------------------------------------------------
-
-    async def get_all_jobs_for_user(self, user_id: UUID) -> list[models.Job]:
-        """Returns all jobs where the user is a client or worker."""
+    async def get_all_jobs_for_user(
+        self, user_id: UUID, skip: int = 0, limit: int = 100
+    ) -> tuple[list[models.Job], int]:
+        """Returns all jobs where the user is a client or worker with pagination and total count."""
         logger.info(f"Fetching job list for user_id={user_id}")
 
+        # Count total records
+        count_stmt = select(func.count()).filter(
+            (models.Job.client_id == user_id) | (models.Job.worker_id == user_id)
+        )
+        total_count_result = await self.db.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # Fetch paginated records
         result = await self.db.execute(
             select(models.Job)
             .filter((models.Job.client_id == user_id) | (models.Job.worker_id == user_id))
             .order_by(models.Job.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         )
         jobs = result.scalars().all()
 
-        logger.info(f"Found {len(jobs)} job(s) for user_id={user_id}")
-        return list(jobs)
+        logger.info(f"Found {len(jobs)} job(s) for user_id={user_id} (Total: {total_count}).")
+        return list(jobs), total_count
 
     async def get_job_detail(self, user_id: UUID, job_id: UUID) -> models.Job:
         """Retrieve detailed information about a specific job for an authenticated user."""

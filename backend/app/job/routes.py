@@ -19,8 +19,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_with_role, require_roles
+from app.core.dependencies import PaginationParams, get_current_user_with_role, require_roles
 from app.core.limiter import limiter
+from app.core.schemas import PaginatedResponse
 from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
@@ -132,11 +133,9 @@ async def complete_job(
 # ---------------------------------------------------
 # Shared Endpoints (Client or Worker)
 # ---------------------------------------------------
-
-
 @router.get(
     "",
-    response_model=list[schemas.JobRead],
+    response_model=PaginatedResponse[schemas.JobRead],
     status_code=status.HTTP_200_OK,
     summary="List My Jobs",
     description="List all jobs for the authenticated user (client or worker).",
@@ -146,10 +145,17 @@ async def get_jobs_for_user(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedClientOrWorkerDep,
-) -> list[schemas.JobRead]:
-    """List all jobs where the authenticated user is involved (client or worker)."""
-    jobs = await JobService(db).get_all_jobs_for_user(current_user.id)
-    return [schemas.JobRead.model_validate(job) for job in jobs]
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.JobRead]:
+    """List all jobs where the authenticated user is involved (client or worker) with pagination."""
+    jobs, total_count = await JobService(db).get_all_jobs_for_user(
+        current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[schemas.JobRead.model_validate(job) for job in jobs],
+    )
 
 
 @router.get(

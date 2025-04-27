@@ -22,11 +22,10 @@ from app.service.models import Service
 
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------
 # Thread and Messaging Services
 # ---------------------------------------------------
-
-
 async def create_thread(
     db: AsyncSession,
     sender_id: UUID,
@@ -153,11 +152,23 @@ async def send_message(
     return message
 
 
-async def get_user_threads(db: AsyncSession, user_id: UUID) -> list[models.MessageThread]:
+async def get_user_threads(
+    db: AsyncSession, user_id: UUID, skip: int = 0, limit: int = 100
+) -> tuple[list[models.MessageThread], int]:
     """
-    Retrieve all threads involving the user, ordered by latest message timestamp.
+    Retrieve all threads involving the user, ordered by latest message timestamp, with pagination and total count.
     """
     logger.info(f"[THREAD] Fetching threads for user_id={user_id}")
+
+    # Count total records
+    count_stmt = (
+        select(func.count())
+        .select_from(models.MessageThread)
+        .join(models.ThreadParticipant)
+        .filter(models.ThreadParticipant.user_id == user_id)
+    )
+    total_count_result = await db.execute(count_stmt)
+    total_count = total_count_result.scalar_one()
 
     latest_message_subq = (
         select(
@@ -185,13 +196,17 @@ async def get_user_threads(db: AsyncSession, user_id: UUID) -> list[models.Messa
             latest_message_subq.c.latest_timestamp.desc().nulls_last(),
             models.MessageThread.created_at.desc(),
         )
+        .offset(skip)
+        .limit(limit)
     )
 
     result = await db.execute(stmt)
     threads = list(result.unique().scalars().all())
 
-    logger.info(f"[THREAD] Found {len(threads)} threads for user_id={user_id}")
-    return threads
+    logger.info(
+        f"[THREAD] Found {len(threads)} threads for user_id={user_id} (Total: {total_count})."
+    )
+    return threads, total_count
 
 
 async def get_thread_detail(

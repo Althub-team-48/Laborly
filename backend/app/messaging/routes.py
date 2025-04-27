@@ -18,8 +18,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, PaginationParams
 from app.core.limiter import limiter
+from app.core.schemas import PaginatedResponse
 from app.database.models import User
 from app.database.session import get_db
 from app.messaging import schemas, services
@@ -35,11 +36,10 @@ router = APIRouter(prefix="/messages", tags=["Messaging"])
 DBDep = Annotated[AsyncSession, Depends(get_db)]
 AuthenticatedUserDep = Annotated[User, Depends(get_current_user)]
 
+
 # ---------------------------------------------------
 # Messaging Endpoints (Authenticated Users Only)
 # ---------------------------------------------------
-
-
 @router.post(
     "/initiate",
     response_model=schemas.MessageRead,
@@ -105,7 +105,7 @@ async def reply_message(
 
 @router.get(
     "/threads",
-    response_model=list[schemas.ThreadRead],
+    response_model=PaginatedResponse[schemas.ThreadRead],
     status_code=status.HTTP_200_OK,
     summary="List My Threads",
     description="Retrieve all message threads involving the authenticated user, ordered by latest activity.",
@@ -115,12 +115,19 @@ async def get_my_threads(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedUserDep,
-) -> list[schemas.ThreadRead]:
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.ThreadRead]:
     """
-    Retrieve all threads involving the authenticated user.
+    Retrieve all threads involving the authenticated user with pagination.
     """
-    thread_models = await services.get_user_threads(db, current_user.id)
-    return [schemas.ThreadRead.model_validate(t, from_attributes=True) for t in thread_models]
+    thread_models, total_count = await services.get_user_threads(
+        db, current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[schemas.ThreadRead.model_validate(t, from_attributes=True) for t in thread_models],
+    )
 
 
 @router.get(

@@ -15,8 +15,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_with_role
+from app.core.dependencies import get_current_user_with_role, PaginationParams
 from app.core.limiter import limiter
+from app.core.schemas import PaginatedResponse
 from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
@@ -32,11 +33,9 @@ AuthenticatedClientDep = Annotated[User, Depends(get_current_user_with_role(User
 # ----------------------------------------------------
 # Public Review Endpoints
 # ----------------------------------------------------
-
-
 @router.get(
     "/worker/{worker_id}/public",
-    response_model=list[schemas.PublicReviewRead],
+    response_model=PaginatedResponse[schemas.PublicReviewRead],
     status_code=status.HTTP_200_OK,
     summary="Public Worker Reviews",
     description="Fetch all reviews received by a specific worker (publicly accessible).",
@@ -46,12 +45,20 @@ async def get_public_worker_reviews(
     request: Request,
     worker_id: UUID,
     db: DBDep,
-) -> list[schemas.PublicReviewRead]:
-    """Retrieve all public reviews for a specific worker."""
-    reviews = await ReviewService(db).get_reviews_for_worker(worker_id=worker_id)
-    return [
-        schemas.PublicReviewRead.model_validate(review, from_attributes=True) for review in reviews
-    ]
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.PublicReviewRead]:
+    """Retrieve all public reviews for a specific worker with pagination."""
+    reviews, total_count = await ReviewService(db).get_reviews_for_worker(
+        worker_id=worker_id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[
+            schemas.PublicReviewRead.model_validate(review, from_attributes=True)
+            for review in reviews
+        ],
+    )
 
 
 @router.get(
@@ -74,8 +81,6 @@ async def get_worker_review_summary(
 # ----------------------------------------------------
 # Authenticated Review Endpoints (Client)
 # ----------------------------------------------------
-
-
 @router.post(
     "/{job_id}",
     response_model=schemas.ReviewRead,
@@ -102,7 +107,7 @@ async def submit_review(
 
 @router.get(
     "/my",
-    response_model=list[schemas.ReviewRead],
+    response_model=PaginatedResponse[schemas.ReviewRead],
     status_code=status.HTTP_200_OK,
     summary="My Submitted Reviews",
     description="Retrieve all reviews submitted by the authenticated client.",
@@ -112,7 +117,16 @@ async def get_my_reviews(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedClientDep,
-) -> list[schemas.ReviewRead]:
-    """Retrieve all reviews submitted by the authenticated client."""
-    reviews = await ReviewService(db).get_reviews_by_client(client_id=current_user.id)
-    return [schemas.ReviewRead.model_validate(review, from_attributes=True) for review in reviews]
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.ReviewRead]:
+    """Retrieve all reviews submitted by the authenticated client with pagination."""
+    reviews, total_count = await ReviewService(db).get_reviews_by_client(
+        client_id=current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[
+            schemas.ReviewRead.model_validate(review, from_attributes=True) for review in reviews
+        ],
+    )

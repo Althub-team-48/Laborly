@@ -13,7 +13,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.client import models, schemas
@@ -56,7 +56,6 @@ class ClientService:
     # ---------------------------------------------------
     # Utility Methods
     # ---------------------------------------------------
-
     async def _get_user_or_404(self, user_id: UUID) -> User:
         """Retrieve a user or raise 404 if not found."""
         user = await self.db.get(User, user_id)
@@ -106,7 +105,6 @@ class ClientService:
     # ---------------------------------------------------
     # Client Profile Management (Authenticated)
     # ---------------------------------------------------
-
     async def get_profile(self, user_id: UUID) -> schemas.ClientProfileRead:
         """Retrieve or create a client profile for the authenticated user."""
         logger.info(f"Fetching client profile for user_id={user_id}")
@@ -187,7 +185,6 @@ class ClientService:
     # ---------------------------------------------------
     # Client Profile Management (Public)
     # ---------------------------------------------------
-
     async def get_public_client_profile(self, user_id: UUID) -> schemas.PublicClientRead:
         """Retrieve public view of a client profile."""
         logger.info(f"Fetching public profile for user_id={user_id}")
@@ -217,14 +214,27 @@ class ClientService:
     # ---------------------------------------------------
     # Favorite Worker Management (Authenticated Client)
     # ---------------------------------------------------
-
-    async def list_favorites(self, client_id: UUID) -> list[models.FavoriteWorker]:
-        """List all favorite workers for the authenticated client."""
+    async def list_favorites(
+        self, client_id: UUID, skip: int = 0, limit: int = 100
+    ) -> tuple[list[models.FavoriteWorker], int]:
+        """List all favorite workers for the authenticated client with pagination and total count."""
         logger.info(f"Listing favorite workers for client_id={client_id}")
+
+        # Count total records
+        count_stmt = select(func.count()).filter(models.FavoriteWorker.client_id == client_id)
+        total_count_result = await self.db.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # Fetch paginated records
         result = await self.db.execute(
-            select(models.FavoriteWorker).filter(models.FavoriteWorker.client_id == client_id)
+            select(models.FavoriteWorker)
+            .filter(models.FavoriteWorker.client_id == client_id)
+            .offset(skip)
+            .limit(limit)
         )
-        return list(result.scalars().all())
+        favorites = list(result.scalars().all())
+
+        return favorites, total_count
 
     async def add_favorite(self, client_id: UUID, worker_id: UUID) -> models.FavoriteWorker:
         """Add a worker to the authenticated client's favorites."""
@@ -271,14 +281,29 @@ class ClientService:
     # ---------------------------------------------------
     # Job History (Authenticated Client)
     # ---------------------------------------------------
-
-    async def get_jobs(self, client_id: UUID) -> list[Job]:
-        """Retrieve list of jobs posted by the authenticated client."""
+    async def get_jobs(
+        self, client_id: UUID, skip: int = 0, limit: int = 100
+    ) -> tuple[list[Job], int]:
+        """Retrieve list of jobs posted by the authenticated client with pagination and total count."""
         logger.info(f"Fetching jobs for client_id={client_id}")
+
+        # Count total records
+        count_stmt = select(func.count()).filter(Job.client_id == client_id)
+        total_count_result = await self.db.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # Fetch paginated records
         result = await self.db.execute(
-            select(Job).filter(Job.client_id == client_id).order_by(Job.created_at.desc())
+            select(Job)
+            .filter(Job.client_id == client_id)
+            .order_by(Job.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         )
-        return list(result.unique().scalars().all())
+        jobs = list(result.unique().scalars().all())
+
+        logger.info(f"Found {len(jobs)} job(s) for client_id={client_id} (Total: {total_count}).")
+        return jobs, total_count
 
     async def get_job_detail(self, client_id: UUID, job_id: UUID) -> Job:
         """Retrieve detailed information about a specific job posted by the client."""

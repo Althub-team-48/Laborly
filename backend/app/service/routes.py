@@ -20,7 +20,8 @@ from app.service.services import ServiceListingService
 from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
-from app.core.dependencies import get_current_user_with_role, require_roles
+from app.core.dependencies import get_current_user_with_role, require_roles, PaginationParams
+from app.core.schemas import PaginatedResponse
 
 router = APIRouter(prefix="/services", tags=["Services"])
 
@@ -34,11 +35,9 @@ AuthenticatedWorkerDep = Annotated[User, Depends(get_current_user_with_role(User
 # ----------------------------------------------------
 # Public Service Endpoints
 # ----------------------------------------------------
-
-
 @router.get(
     "/search",
-    response_model=list[schemas.ServiceRead],
+    response_model=PaginatedResponse[schemas.ServiceRead],
     status_code=status.HTTP_200_OK,
     summary="Search Services",
     description="Search public service listings by title and/or location.",
@@ -48,12 +47,20 @@ async def search_services(
     db: DBDep,
     title: str | None = Query(default=None, description="Filter by service title"),
     location: str | None = Query(default=None, description="Filter by service location"),
-) -> list[schemas.ServiceRead]:
-    """Search publicly available services by title and/or location."""
-    services = await ServiceListingService(db).search_services(title=title, location=location)
-    return [
-        schemas.ServiceRead.model_validate(service, from_attributes=True) for service in services
-    ]
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.ServiceRead]:
+    """Search publicly available services by title and/or location with pagination."""
+    services, total_count = await ServiceListingService(db).search_services(
+        title=title, location=location, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[
+            schemas.ServiceRead.model_validate(service, from_attributes=True)
+            for service in services
+        ],
+    )
 
 
 @router.get(
@@ -76,8 +83,6 @@ async def get_public_service_detail(
 # ----------------------------------------------------
 # Authenticated Service Endpoints (Worker/Admin)
 # ----------------------------------------------------
-
-
 @router.post(
     "",
     response_model=schemas.ServiceRead,
@@ -135,7 +140,7 @@ async def delete_service(
 
 @router.get(
     "/my",
-    response_model=list[schemas.ServiceRead],
+    response_model=PaginatedResponse[schemas.ServiceRead],
     status_code=status.HTTP_200_OK,
     summary="List My Services",
     description="List all services created by the authenticated worker.",
@@ -144,9 +149,17 @@ async def list_my_services(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedWorkerDep,
-) -> list[schemas.ServiceRead]:
-    """List all services created by the authenticated worker."""
-    services = await ServiceListingService(db).get_my_services(current_user.id)
-    return [
-        schemas.ServiceRead.model_validate(service, from_attributes=True) for service in services
-    ]
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.ServiceRead]:
+    """List all services created by the authenticated worker with pagination."""
+    services, total_count = await ServiceListingService(db).get_my_services(
+        current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[
+            schemas.ServiceRead.model_validate(service, from_attributes=True)
+            for service in services
+        ],
+    )

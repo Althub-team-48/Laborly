@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.upload import generate_presigned_url, get_s3_key_from_url
@@ -32,7 +32,6 @@ class WorkerService:
     # ---------------------------------------------
     # Internal Utility Methods
     # ---------------------------------------------
-
     async def _get_user_or_404(self, user_id: UUID) -> User:
         """Helper method to retrieve a user or raise 404 if not found."""
         user = await self.db.get(User, user_id)
@@ -64,7 +63,6 @@ class WorkerService:
     # ---------------------------------------------
     # Worker Profile Methods (Authenticated)
     # ---------------------------------------------
-
     async def get_profile_picture_presigned_url(self, user_id: UUID) -> str | None:
         """Generate a pre-signed S3 URL for a worker's profile picture."""
         logger.info(f"Requesting pre-signed URL for profile picture: user_id={user_id}")
@@ -192,7 +190,6 @@ class WorkerService:
     # ---------------------------------------------
     # Worker Profile Methods (Public)
     # ---------------------------------------------
-
     async def get_public_worker_profile(self, user_id: UUID) -> schemas.PublicWorkerRead:
         """Retrieve public view of a worker profile."""
         logger.info(f"Fetching public profile for user_id={user_id}")
@@ -251,7 +248,6 @@ class WorkerService:
     # ---------------------------------------------
     # KYC Management Methods
     # ---------------------------------------------
-
     async def get_kyc(self, user_id: UUID) -> KYC | None:
         """Retrieve KYC record for the authenticated worker."""
         logger.info(f"Fetching KYC for user_id={user_id}")
@@ -301,16 +297,28 @@ class WorkerService:
     # ---------------------------------------------
     # Job Management Methods (Authenticated Worker)
     # ---------------------------------------------
-
-    async def get_jobs(self, user_id: UUID) -> list[Job]:
-        """Retrieve list of jobs assigned to a worker."""
+    async def get_jobs(
+        self, user_id: UUID, skip: int = 0, limit: int = 100
+    ) -> tuple[list[Job], int]:
+        """Retrieve list of jobs assigned to a worker with pagination and total count."""
         logger.info(f"Fetching jobs for user_id={user_id}")
+
+        # Count total records
+        count_stmt = select(func.count()).filter(Job.worker_id == user_id)
+        total_count_result = await self.db.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # Fetch paginated records
         result = await self.db.execute(
-            select(Job).filter_by(worker_id=user_id).order_by(Job.created_at.desc())
+            select(Job)
+            .filter_by(worker_id=user_id)
+            .order_by(Job.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         )
         jobs = list(result.unique().scalars().all())
-        logger.info(f"Found {len(jobs)} jobs for user_id={user_id}")
-        return jobs
+        logger.info(f"Found {len(jobs)} jobs for user_id={user_id} (Total: {total_count}).")
+        return jobs, total_count
 
     async def get_job_detail(self, user_id: UUID, job_id: UUID) -> Job:
         """Retrieve detailed information for a specific job assigned to a worker."""

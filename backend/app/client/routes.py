@@ -19,9 +19,10 @@ from app.admin.schemas import PresignedUrlResponse
 from app.client import schemas
 from app.client.schemas import MessageResponse, PublicClientRead
 from app.client.services import ClientService
-from app.core.dependencies import get_current_user_with_role
+from app.core.dependencies import get_current_user_with_role, PaginationParams
 from app.core.limiter import limiter
 from app.core.upload import upload_file_to_s3
+from app.core.schemas import PaginatedResponse
 from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
@@ -36,8 +37,6 @@ AuthenticatedClientDep = Annotated[User, Depends(get_current_user_with_role(User
 # ---------------------------------------------------
 # Public Client Profile Endpoint
 # ---------------------------------------------------
-
-
 @router.get(
     "/{user_id}/public",
     response_model=PublicClientRead,
@@ -58,8 +57,6 @@ async def get_public_client_profile(
 # ---------------------------------------------------
 # Authenticated Client Profile Endpoints
 # ---------------------------------------------------
-
-
 @router.get(
     "/profile",
     response_model=schemas.ClientProfileRead,
@@ -149,11 +146,9 @@ async def get_my_client_profile_picture_url(
 # ---------------------------------------------------
 # Favorite Workers Endpoints (Authenticated Client)
 # ---------------------------------------------------
-
-
 @router.get(
     "/favorites",
-    response_model=list[schemas.FavoriteRead],
+    response_model=PaginatedResponse[schemas.FavoriteRead],
     status_code=status.HTTP_200_OK,
     summary="List My Favorite Workers",
     description="Retrieve a list of workers the authenticated client has marked as favorites.",
@@ -163,10 +158,17 @@ async def list_my_favorite_workers(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedClientDep,
-) -> list[schemas.FavoriteRead]:
-    """List all favorite workers for the authenticated client."""
-    favorites = await ClientService(db).list_favorites(current_user.id)
-    return [schemas.FavoriteRead.model_validate(fav, from_attributes=True) for fav in favorites]
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.FavoriteRead]:
+    """List all favorite workers for the authenticated client with pagination."""
+    favorites, total_count = await ClientService(db).list_favorites(
+        current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[schemas.FavoriteRead.model_validate(fav, from_attributes=True) for fav in favorites],
+    )
 
 
 @router.post(
@@ -210,11 +212,9 @@ async def remove_my_favorite_worker(
 # ---------------------------------------------------
 # Job History Endpoints (Authenticated Client)
 # ---------------------------------------------------
-
-
 @router.get(
     "/jobs",
-    response_model=list[schemas.ClientJobRead],
+    response_model=PaginatedResponse[schemas.ClientJobRead],
     status_code=status.HTTP_200_OK,
     summary="List My Client Jobs",
     description="List all jobs created by the authenticated client user.",
@@ -224,10 +224,17 @@ async def list_my_client_jobs(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedClientDep,
-) -> list[schemas.ClientJobRead]:
-    """List all jobs posted by the authenticated client."""
-    jobs = await ClientService(db).get_jobs(current_user.id)
-    return [schemas.ClientJobRead.model_validate(job, from_attributes=True) for job in jobs]
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[schemas.ClientJobRead]:
+    """List all jobs posted by the authenticated client with pagination."""
+    jobs, total_count = await ClientService(db).get_jobs(
+        current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[schemas.ClientJobRead.model_validate(job, from_attributes=True) for job in jobs],
+    )
 
 
 @router.get(

@@ -25,8 +25,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------
 # Review Service
 # ---------------------------------------------------
-
-
 class ReviewService:
     """Service layer for managing job reviews."""
 
@@ -37,7 +35,6 @@ class ReviewService:
     # ---------------------------------------------------
     # Review Submission
     # ---------------------------------------------------
-
     async def submit_review(
         self, job_id: UUID, reviewer_id: UUID, data: schemas.ReviewWrite
     ) -> models.Review:
@@ -78,24 +75,49 @@ class ReviewService:
     # ---------------------------------------------------
     # Review Retrieval
     # ---------------------------------------------------
-
-    async def get_reviews_for_worker(self, worker_id: UUID) -> list[models.Review]:
+    async def get_reviews_for_worker(
+        self, worker_id: UUID, skip: int = 0, limit: int = 100
+    ) -> tuple[list[models.Review], int]:
         """
-        Fetch all reviews received by a specific worker.
+        Fetch all reviews received by a specific worker with pagination and total count.
         (Used for public and authenticated views)
         """
         logger.info(f"[LIST] Retrieving reviews for worker_id={worker_id}")
-        result = await self.db.execute(select(models.Review).filter_by(worker_id=worker_id))
-        return list(result.scalars().all())
 
-    async def get_reviews_by_client(self, client_id: UUID) -> list[models.Review]:
+        # Count total records
+        count_stmt = select(func.count()).filter(models.Review.worker_id == worker_id)
+        total_count_result = await self.db.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # Fetch paginated records
+        result = await self.db.execute(
+            select(models.Review).filter_by(worker_id=worker_id).offset(skip).limit(limit)
+        )
+        reviews = list(result.scalars().all())
+
+        return reviews, total_count
+
+    async def get_reviews_by_client(
+        self, client_id: UUID, skip: int = 0, limit: int = 100
+    ) -> tuple[list[models.Review], int]:
         """
-        Fetch all reviews submitted by a specific client.
+        Fetch all reviews submitted by a specific client with pagination and total count.
         (Authenticated client action)
         """
         logger.info(f"[LIST] Retrieving reviews by client_id={client_id}")
-        result = await self.db.execute(select(models.Review).filter_by(client_id=client_id))
-        return list(result.scalars().all())
+
+        # Count total records
+        count_stmt = select(func.count()).filter(models.Review.client_id == client_id)
+        total_count_result = await self.db.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # Fetch paginated records
+        result = await self.db.execute(
+            select(models.Review).filter_by(client_id=client_id).offset(skip).limit(limit)
+        )
+        reviews = list(result.scalars().all())
+
+        return reviews, total_count
 
     # ---------------------------------------------------
     # Review Summary Calculation

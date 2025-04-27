@@ -14,7 +14,8 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.schemas import PresignedUrlResponse
-from app.core.dependencies import get_current_user_with_role
+from app.core.dependencies import get_current_user_with_role, PaginationParams
+from app.core.schemas import PaginatedResponse
 from app.core.limiter import limiter
 from app.core.upload import upload_file_to_s3
 from app.database.enums import UserRole
@@ -35,8 +36,6 @@ AuthenticatedWorkerDep = Annotated[User, Depends(get_current_user_with_role(User
 # ----------------------------------------------------
 # Public Profile Endpoints
 # ----------------------------------------------------
-
-
 @router.get(
     "/{user_id}/public",
     response_model=PublicWorkerRead,
@@ -60,8 +59,6 @@ async def get_public_worker_profile(
 # ----------------------------------------------------
 # Authenticated Profile Endpoints
 # ----------------------------------------------------
-
-
 @router.get(
     "/profile",
     response_model=schemas.WorkerProfileRead,
@@ -160,8 +157,6 @@ async def get_my_worker_profile_picture_url(
 # ----------------------------------------------------
 # KYC Endpoints (Authenticated Worker)
 # ----------------------------------------------------
-
-
 @router.get(
     "/kyc",
     response_model=KYCRead | None,
@@ -223,11 +218,9 @@ async def submit_my_kyc(
 # ----------------------------------------------------
 # Job History Endpoints (Authenticated Worker)
 # ----------------------------------------------------
-
-
 @router.get(
     "/jobs",
-    response_model=list[JobRead],
+    response_model=PaginatedResponse[JobRead],
     status_code=status.HTTP_200_OK,
     summary="List My Worker Jobs",
     description="Return a list of all jobs assigned to the currently authenticated worker.",
@@ -237,12 +230,19 @@ async def list_my_worker_jobs(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedWorkerDep,
-) -> list[JobRead]:
+    pagination: PaginationParams = Depends(),
+) -> PaginatedResponse[JobRead]:
     """
-    List all jobs assigned to the authenticated worker.
+    List all jobs assigned to the authenticated worker with pagination.
     """
-    job_models = await WorkerService(db).get_jobs(current_user.id)
-    return [JobRead.model_validate(job, from_attributes=True) for job in job_models]
+    job_models, total_count = await WorkerService(db).get_jobs(
+        current_user.id, skip=pagination.skip, limit=pagination.limit
+    )
+    return PaginatedResponse(
+        total_count=total_count,
+        has_next_page=(pagination.skip + pagination.limit) < total_count,
+        items=[JobRead.model_validate(job, from_attributes=True) for job in job_models],
+    )
 
 
 @router.get(

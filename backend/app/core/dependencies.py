@@ -8,13 +8,16 @@ Provides authentication and role-based access control (RBAC) for FastAPI routes:
 - Checks against blacklisted tokens (logout protection)
 - Retrieves authenticated user from the database
 - Restricts access based on user roles
+
+Pagination Dependency:
+- Provides reusable dependency for pagination (skip, limit).
 """
 
 import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from fastapi import Depends, HTTPException, WebSocket, status
+from fastapi import Depends, HTTPException, Query, WebSocket, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -36,6 +39,24 @@ logger = logging.getLogger(__name__)
 # OAuth2 Configuration
 # ---------------------------------------------------
 oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(tokenUrl="/auth/login/oauth")
+
+
+# ---------------------------------------------------
+# Pagination Dependency
+# ---------------------------------------------------
+class PaginationParams:
+    """
+    Dependency that provides pagination parameters from query parameters.
+    """
+
+    def __init__(
+        self,
+        skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+        limit: int = Query(100, ge=1, le=500, description="Maximum number of records to return"),
+    ):
+        self.skip = skip
+        self.limit = limit
+
 
 # ---------------------------------------------------
 # Authentication Functions

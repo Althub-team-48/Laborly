@@ -18,7 +18,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.upload import generate_presigned_url, get_s3_key_from_url
@@ -84,16 +84,28 @@ class AdminService:
     # KYC Verification (Admin Only)
     # ---------------------------------------------------
 
-    async def list_pending_kyc(self) -> list[KYC]:
+    async def list_pending_kyc(self, skip: int = 0, limit: int = 100) -> tuple[list[KYC], int]:
         """
-        Retrieve all KYC records that are currently pending approval.
+        Retrieve all KYC records that are currently pending approval with pagination and total count.
         """
-        result = await self.db.execute(
-            select(KYC).filter(KYC.status == KYCStatus.PENDING).order_by(KYC.submitted_at.asc())
+        # Count total records
+        count_stmt = select(func.count()).filter(KYC.status == KYCStatus.PENDING)
+        total_count_result = await self.db.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # Fetch paginated records
+        stmt = (
+            select(KYC)
+            .filter(KYC.status == KYCStatus.PENDING)
+            .order_by(KYC.submitted_at.asc())
+            .offset(skip)
+            .limit(limit)
         )
+        result = await self.db.execute(stmt)
         records = list(result.scalars())
-        logger.info(f"[KYC] Fetched {len(records)} pending KYC submissions.")
-        return records
+
+        logger.info(f"[KYC] Fetched {len(records)} pending KYC submissions (Total: {total_count}).")
+        return records, total_count
 
     async def get_kyc_details_for_admin(self, user_id: UUID) -> KYC:
         """
@@ -340,14 +352,24 @@ class AdminService:
     # Flagged Review Moderation (Admin Only)
     # ---------------------------------------------------
 
-    async def list_flagged_reviews(self) -> list[Review]:
+    async def list_flagged_reviews(
+        self, skip: int = 0, limit: int = 100
+    ) -> tuple[list[Review], int]:
         """
-        Retrieve all reviews flagged for moderation.
+        Retrieve all reviews flagged for moderation with pagination and total count.
         """
-        result = await self.db.execute(select(Review).filter(Review.is_flagged.is_(True)))
+        # Count total records
+        count_stmt = select(func.count()).filter(Review.is_flagged.is_(True))
+        total_count_result = await self.db.execute(count_stmt)
+        total_count = total_count_result.scalar_one()
+
+        # Fetch paginated records
+        result = await self.db.execute(
+            select(Review).filter(Review.is_flagged.is_(True)).offset(skip).limit(limit)
+        )
         reviews = list(result.scalars())
-        logger.info(f"[REVIEW] Fetched {len(reviews)} flagged reviews.")
-        return reviews
+        logger.info(f"[REVIEW] Fetched {len(reviews)} flagged reviews (Total: {total_count}).")
+        return reviews, total_count
 
     async def delete_review(self, review_id: UUID) -> None:
         """

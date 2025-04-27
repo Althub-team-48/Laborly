@@ -14,6 +14,7 @@ import logging
 import os
 import random
 import string
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, cast
 
@@ -61,11 +62,26 @@ from app.core.tokens import (
     decode_verification_token,
 )
 from app.database.models import User
-from app.core.blacklist import blacklist_token
+from app.core.blacklist import blacklist_token, redis_client
 
 
 logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+# ------------------------------------------------
+# Brute-Force Protection Settings (Redis Keys and Thresholds)
+# ------------------------------------------------
+# Key prefix for failed login attempts per IP
+FAILED_LOGIN_PREFIX = "failed_logins:ip:"
+# Key prefix for temporary IP blacklisting/penalty
+IP_PENALTY_PREFIX = "ip_penalty:"
+# Number of failed attempts before applying a penalty
+MAX_FAILED_ATTEMPTS = 5
+# Duration of the IP penalty (in seconds) after exceeding the limit
+IP_PENALTY_DURATION = 60 * 5  # 5 minutes
+# Duration for which failed attempts are counted (in seconds)
+FAILED_ATTEMPTS_WINDOW = 60 * 15  # 15 minutes
 
 
 # ------------------------------------------------
@@ -234,48 +250,104 @@ async def request_new_verification_email(email: EmailStr, db: AsyncSession) -> M
 # ------------------------------------------------
 # Login (JSON and OAuth2)
 # ------------------------------------------------
-async def _authenticate_user(email: str, password: str | None, db: AsyncSession) -> User:
+async def _authenticate_user(
+    email: str, password: str | None, db: AsyncSession, client_ip: str
+) -> User:
     """Helper function to fetch and validate user credentials."""
+    # Check for IP penalty first
+    penalty_key = f"{IP_PENALTY_PREFIX}{client_ip}"
+    if redis_client and redis_client.exists(penalty_key):
+        logger.warning(f"Login attempt from penalized IP: {client_ip}")
+        # Optionally add a small delay even on penalty check to slow down attackers
+        await asyncio.sleep(random.uniform(1, 3))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+        )
     user = (
         (await db.execute(select(User).filter(User.email == email))).unique().scalar_one_or_none()
     )
+    is_password_correct = False
+    if user and password:
+        is_password_correct = verify_password(password, user.hashed_password)
 
     # Check if user exists and password is correct (if password provided)
-    if not user or (password and not verify_password(password, user.hashed_password)):
-        logger.warning(f"Failed login attempt for email: {email}")
+    if not user or not is_password_correct:
+        logger.warning(f"Failed login attempt for email: {email} from IP: {client_ip}")
+
+        if redis_client:
+            failed_attempts_key = f"{FAILED_LOGIN_PREFIX}{client_ip}"
+            # Increment failed attempts counter and set expiration if it's a new key
+            redis_client.incr(failed_attempts_key)
+            # Set TTL only if key is newly created or doesn't have one
+            if redis_client.ttl(failed_attempts_key) == -1:  # -1 means key exists but has no TTL
+                redis_client.expire(failed_attempts_key, FAILED_ATTEMPTS_WINDOW)
+
+            failed_attempts = int(redis_client.get(failed_attempts_key) or 0)
+
+            if failed_attempts >= MAX_FAILED_ATTEMPTS:
+                # Apply penalty - set a temporary key for the IP
+                redis_client.setex(penalty_key, IP_PENALTY_DURATION, "penalized")
+                logger.warning(f"IP address penalized due to too many failed attempts: {client_ip}")
+                # Add a longer delay when penalty is applied
+                await asyncio.sleep(random.uniform(5, 10))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many failed login attempts. Please try again later.",
+                )
+            else:
+                # Add a small delay on incorrect attempts below the threshold
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check if email is verified
+    # Check if email is verified (only after successful authentication)
     if not user.is_verified:
-        logger.warning(f"Login attempt by unverified user: {email}")
+        logger.warning(f"Login attempt by unverified user: {user.email}")
+        # Optionally add a small delay even for unverified users
+        await asyncio.sleep(random.uniform(0.5, 1.5))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email before logging in.",
         )
 
+    # If authentication is successful, reset failed attempts counter for this IP
+    if redis_client:
+        failed_attempts_key = f"{FAILED_LOGIN_PREFIX}{client_ip}"
+        redis_client.delete(failed_attempts_key)
+        logger.debug(f"Resetting failed login attempts for IP: {client_ip}")
+
     return user
 
 
-async def login_user_json(payload: LoginRequest, db: AsyncSession) -> AuthSuccessResponse:
+async def login_user_json(
+    payload: LoginRequest, db: AsyncSession, client_ip: str
+) -> AuthSuccessResponse:  # Add client_ip parameter
     """Authenticates a user via JSON email/password."""
-    user = await _authenticate_user(payload.email, payload.password, db)
+    user = await _authenticate_user(
+        payload.email, payload.password, db, client_ip
+    )  # Pass client_ip
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    logger.info(f"User logged in successfully: {user.email}")
+    logger.info(f"User logged in successfully: {user.email} from IP: {client_ip}")
     return AuthSuccessResponse(
         access_token=access_token, user=AuthUserResponse.model_validate(user)
     )
 
 
-async def login_user_oauth(form_data: Any, db: AsyncSession) -> AuthSuccessResponse:
+async def login_user_oauth(
+    form_data: Any, db: AsyncSession, client_ip: str
+) -> AuthSuccessResponse:  # Add client_ip parameter
     """Authenticates a user via OAuth2 form data (username=email)."""
     # OAuth2PasswordRequestForm uses 'username' field for the identifier
-    user = await _authenticate_user(form_data.username, form_data.password, db)
+    user = await _authenticate_user(
+        form_data.username, form_data.password, db, client_ip
+    )  # Pass client_ip
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    logger.info(f"User logged in successfully (OAuth form): {user.email}")
+    logger.info(f"User logged in successfully (OAuth form): {user.email} from IP: {client_ip}")
     return AuthSuccessResponse(
         access_token=access_token, user=AuthUserResponse.model_validate(user)
     )

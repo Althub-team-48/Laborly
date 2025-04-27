@@ -16,7 +16,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Updated Schema Imports
 from app.auth.schemas import (
     AuthSuccessResponse,
     ForgotPasswordRequest,
@@ -27,7 +26,6 @@ from app.auth.schemas import (
     UpdateEmailRequest,
 )
 
-# Updated Service Imports
 from app.auth.services import (
     handle_google_callback,
     handle_google_login,
@@ -65,7 +63,7 @@ logger = logging.getLogger(__name__)
     summary="Register New User",
     description="Registers a new user and sends a verification email.",
 )
-@limiter.limit("5/minute")  # Rate limit signup
+@limiter.limit("5/minute")
 async def signup(
     request: Request,
     payload: SignupRequest,
@@ -87,16 +85,17 @@ async def signup(
     summary="Login with JSON",
     description="Authenticates user using email and password via JSON request body. Requires email verification.",
 )
-@limiter.limit("10/minute")
+@limiter.limit("10/minute")  # Keep existing rate limit
 async def login_json(
     request: Request,
     payload: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> AuthSuccessResponse:
     """
-    Authenticates a user using email and password from a JSON request.
+    Authenticates a user using email and password from a JSON request with brute-force protection.
     """
-    return await login_user_json(payload, db)
+    client_ip = request.client.host if request.client else "unknown"  # Get client IP
+    return await login_user_json(payload, db, client_ip)  # Pass client_ip
 
 
 # ---------------------------------------------------
@@ -109,16 +108,17 @@ async def login_json(
     summary="Login with OAuth2 Form",
     description="Authenticates user using OAuth2-compatible form data (username = email). Requires email verification.",
 )
-@limiter.limit("10/minute")  # Rate limit login attempts
+@limiter.limit("10/minute")  # Keep existing rate limit
 async def login_oauth(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ) -> AuthSuccessResponse:
     """
-    Authenticates a user using OAuth2 form data.
+    Authenticates a user using OAuth2 form data with brute-force protection.
     """
-    return await login_user_oauth(form_data, db)
+    client_ip = request.client.host if request.client else "unknown"  # Get client IP
+    return await login_user_oauth(form_data, db, client_ip)  # Pass client_ip
 
 
 # ---------------------------------------------------

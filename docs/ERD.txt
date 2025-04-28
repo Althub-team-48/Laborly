@@ -1,117 +1,161 @@
-// Laborly Backend ERD
+// Laborly Backend ERD - Updated on (April 28, 2025)
 // https://dbdiagram.io/d/New-Laborly-ERD-67ee7c514f7afba1843a37a0
 
-// Core Tables (Users and KYC)
+// ---- Enums ----
+Enum UserRole {
+  CLIENT
+  WORKER
+  ADMIN
+}
+
+Enum KYCStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+Enum JobStatus {
+  NEGOTIATING
+  ACCEPTED
+  COMPLETED
+  FINALIZED
+  CANCELLED
+  REJECTED
+}
+
+// ---- Tables ----
 Table users {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the user']
-  email varchar(255) [unique, not null, note: 'User’s email address']
-  phone_number varchar(20) [unique, not null, note: 'User’s phone number']
-  hashed_password varchar [not null, note: 'Hashed password for authentication']
-  role enum('CLIENT', 'WORKER', 'ADMIN') [not null, note: 'User role']
-  first_name varchar(100) [not null, note: 'User’s first name']
-  last_name varchar(100) [not null, note: 'User’s last name']
-  middle_name varchar(100) [note: 'User’s middle name (optional)']
-  profile_picture varchar [note: 'Path to user’s profile picture (optional)']
-  location varchar [note: 'User’s location (optional)']
-  is_active boolean [default: true, note: 'Whether the user account is active']
-  is_frozen boolean [default: false, note: 'Whether the user account is frozen']
-  is_banned boolean [default: false, note: 'Whether the user account is banned']
-  is_deleted boolean [default: false, note: 'Whether the user account is deleted']
-  created_at timestamp [default: `now()`, note: 'Creation timestamp']
-  updated_at timestamp [default: `now()`, note: 'Last update timestamp']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  email varchar(255) [unique, not null]
+  phone_number varchar(20) [unique]
+  hashed_password varchar [not null]
+  role UserRole [not null]
+  first_name varchar(100) [not null]
+  last_name varchar(100) [not null]
+  middle_name varchar(100)
+  profile_picture varchar
+  location varchar
+  is_active boolean [not null, default: true]
+  is_frozen boolean [not null, default: false]
+  is_banned boolean [not null, default: false]
+  is_deleted boolean [not null, default: false]
+  is_verified boolean [not null, default: false]
+  created_at timestamp with time zone [not null, default: `now()`]
+  updated_at timestamp with time zone [not null, default: `now()`]
 }
 
 Table kyc {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the KYC record']
-  user_id uuid [unique, not null, ref: > users.id, note: 'Reference to the associated user']
-  document_type varchar(50) [not null, note: 'Type of identification document']
-  document_path varchar [not null, note: 'Path to the uploaded document']
-  selfie_path varchar [not null, note: 'Path to the uploaded selfie']
-  status enum('PENDING', 'APPROVED', 'REJECTED') [default: 'PENDING', not null, note: 'KYC status']
-  submitted_at timestamp [default: `now()`, note: 'Submission timestamp']
-  reviewed_at timestamp [note: 'Review timestamp (optional)']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  user_id uuid [unique, not null]
+  document_type varchar(50) [not null]
+  document_path varchar [not null]
+  selfie_path varchar [not null]
+  status KYCStatus [not null, default: 'PENDING']
+  submitted_at timestamp with time zone [not null, default: `now()`]
+  reviewed_at timestamp with time zone
 }
 
-// Client Module
 Table client_profiles {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the client profile']
-  user_id uuid [not null, ref: > users.id, note: 'Linked user ID (CLIENT role)']
-  profile_description varchar [note: 'Optional profile description']
-  address varchar [note: 'Optional client address']
-  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  user_id uuid [not null]
+  profile_description varchar
+  address varchar
+  created_at timestamp with time zone [not null, default: `now()`]
 }
 
 Table favorites {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the favorite relationship']
-  client_id uuid [not null, ref: > users.id, note: 'Client who favorited the worker']
-  worker_id uuid [not null, ref: > users.id, note: 'Worker who was favorited']
-  created_at timestamp [default: `now()`, note: 'Creation timestamp']
-  updated_at timestamp [default: `now()`, note: 'Last update timestamp']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  client_id uuid [not null]
+  worker_id uuid [not null]
+  created_at timestamp with time zone [not null, default: `now()`]
+  updated_at timestamp with time zone [not null, default: `now()`]
 }
 
-// Worker Module
 Table worker_profiles {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the worker profile']
-  user_id uuid [not null, ref: > users.id, note: 'Reference to the associated user (WORKER role)']
-  professional_skills varchar [note: 'Comma-separated list of skills']
-  work_experience varchar [note: 'Summary of worker’s experience']
-  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  user_id uuid [not null]
+  professional_skills varchar
+  work_experience varchar
+  years_experience integer
+  availability_note varchar
+  bio varchar
+  created_at timestamp with time zone [not null, default: `now()`]
+  updated_at timestamp with time zone [not null, default: `now()`]
+  is_available boolean [not null, default: false]
+  is_kyc_verified boolean [not null, default: false]
 }
 
 Table services {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the service']
-  worker_id uuid [not null, ref: > users.id, note: 'Worker offering this service']
-  title varchar(100) [not null, note: 'Service title']
-  description text [note: 'Detailed service description']
-  location varchar(100) [note: 'Service location']
-  created_at timestamp [default: `now()`, note: 'Creation timestamp']
-  updated_at timestamp [default: `now()`, note: 'Last update timestamp']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  worker_id uuid [not null]
+  title varchar(100) [not null]
+  description text
+  location varchar(100)
+  created_at timestamp with time zone [not null, default: `now()`]
+  updated_at timestamp with time zone [not null, default: `now()`]
 }
 
-// Job Module
 Table jobs {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the job']
-  client_id uuid [not null, ref: > users.id, note: 'Client who created the job']
-  worker_id uuid [ref: > users.id, note: 'Worker assigned to the job (optional)']
-  service_id uuid [ref: > services.id, note: 'Service associated with the job (optional)']
-  thread_id uuid [unique, ref: > message_threads.id, note: 'Messaging thread for the job (optional)']
-  review_id uuid [unique, ref: > reviews.id, note: 'Review for this job (optional, one-to-one)']
-  status enum('NEGOTIATING', 'ACCEPTED', 'COMPLETED', 'FINALIZED', 'CANCELLED') [default: 'NEGOTIATING', not null, note: 'Job status']
-  started_at timestamp with time zone [note: 'Start timestamp']
-  completed_at timestamp with time zone [note: 'Completion timestamp']
-  cancelled_at timestamp with time zone [note: 'Cancellation timestamp']
-  cancel_reason text [note: 'Reason for cancellation']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  client_id uuid [not null]
+  worker_id uuid
+  service_id uuid
+  status JobStatus [not null, default: 'NEGOTIATING']
+  started_at timestamp with time zone
+  completed_at timestamp with time zone
+  cancelled_at timestamp with time zone
+  cancel_reason text
+  created_at timestamp with time zone [not null, default: `now()`]
+  updated_at timestamp with time zone [not null, default: `now()`]
 }
 
-// Messaging Module
 Table message_threads {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the message thread']
-  created_at timestamp with time zone [default: `now()`, note: 'Creation timestamp']
-  is_closed boolean [default: false, note: 'Whether the thread is closed']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  created_at timestamp with time zone [not null, default: `now()`]
+  is_closed boolean [not null, default: false]
+  job_id uuid [unique]
 }
 
 Table thread_participants {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the thread participant']
-  thread_id uuid [not null, ref: > message_threads.id, note: 'Message thread']
-  user_id uuid [not null, ref: > users.id, note: 'User in the thread']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  thread_id uuid [not null]
+  user_id uuid [not null]
 }
 
 Table messages {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the message']
-  thread_id uuid [not null, ref: > message_threads.id, note: 'Thread this message belongs to']
-  sender_id uuid [not null, ref: > users.id, note: 'User who sent the message']
-  content text [not null, note: 'Message content']
-  timestamp timestamp [default: `now()`, note: 'Send timestamp']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  thread_id uuid [not null]
+  sender_id uuid [not null]
+  content text [not null]
+  timestamp timestamp with time zone [not null, default: `now()`]
 }
 
-// Review Module
 Table reviews {
-  id uuid [pk, default: `uuid_generate_v4()`, note: 'Unique identifier for the review']
-  client_id uuid [not null, ref: > users.id, note: 'Client who submitted the review']
-  worker_id uuid [not null, ref: > users.id, note: 'Worker being reviewed']
-  job_id uuid [not null, ref: > jobs.id, note: 'Job associated with the review']
-  review_text varchar [note: 'Optional review text']
-  rating integer [not null, note: 'Star rating (1-5)']
-  is_flagged boolean [default: false, note: 'Whether the review is flagged']
-  created_at timestamp [default: `now()`, note: 'Creation timestamp']
+  id uuid [pk, default: `uuid_generate_v4()`]
+  review_text varchar
+  rating integer [not null]
+  client_id uuid [not null]
+  worker_id uuid [not null]
+  job_id uuid [not null]
+  is_flagged boolean [not null, default: false]
+  created_at timestamp with time zone [not null, default: `now()`]
 }
+
+// ---- Relationships ----
+Ref: kyc.user_id > users.id
+Ref: client_profiles.user_id > users.id
+Ref: worker_profiles.user_id > users.id
+Ref: favorites.client_id > users.id
+Ref: favorites.worker_id > users.id
+Ref: services.worker_id > users.id
+Ref: jobs.client_id > users.id
+Ref: jobs.worker_id > users.id
+Ref: jobs.service_id > services.id
+Ref: messages.thread_id > message_threads.id
+Ref: messages.sender_id > users.id
+Ref: thread_participants.thread_id > message_threads.id
+Ref: thread_participants.user_id > users.id
+Ref: message_threads.job_id > jobs.id
+Ref: reviews.client_id > users.id
+Ref: reviews.worker_id > users.id
+Ref: reviews.job_id > jobs.id

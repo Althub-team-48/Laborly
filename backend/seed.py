@@ -86,7 +86,7 @@ NIGERIAN_STATES = [
     "Taraba",
     "Yobe",
     "Zamfara",
-    "FCT",  # Federal Capital Territory
+    "FCT",
 ]
 
 

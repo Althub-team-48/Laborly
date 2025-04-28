@@ -76,8 +76,7 @@ class Settings(BaseSettings):
     SUPPORT_EMAIL: str
 
     # Frontend/Backend URLs
-    FRONTEND_URL: str
-    BACKEND_URL: str
+    BASE_URL: str
 
     # Bruteforce Protection
     MAX_FAILED_ATTEMPTS: int
@@ -88,6 +87,9 @@ class Settings(BaseSettings):
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int
     NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int
+
+    # OAuth State Token
+    OAUTH_STATE_TOKEN_EXPIRE_MINUTES: int
 
     # CORS
     CORS_ALLOWED_ORIGINS: str
@@ -150,8 +152,7 @@ if TYPE_CHECKING:
         MAIL_USE_CREDENTIALS=True,
         MAIL_VALIDATE_CERTS=True,
         MAIL_TEMPLATE_FOLDER="dummy",
-        FRONTEND_URL="dummy",
-        BACKEND_URL="dummy",
+        BASE_URL="dummy",
         EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=0,
         PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=0,
         NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=0,
@@ -159,6 +160,7 @@ if TYPE_CHECKING:
         IP_PENALTY_DURATION=0,
         FAILED_ATTEMPTS_WINDOW=0,
         CORS_ALLOWED_ORIGINS="dummy",
+        OAUTH_STATE_TOKEN_EXPIRE_MINUTES=0,
     )
 else:
     settings = Settings()

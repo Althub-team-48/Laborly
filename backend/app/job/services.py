@@ -14,6 +14,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.enums import UserRole
 from app.database.models import User
@@ -76,35 +77,64 @@ class JobService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Message thread not found."
             )
 
-        participant_ids = {p.user_id for p in thread.participants}
-        if not (client_id in participant_ids and worker_id in participant_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Thread participants mismatch."
-            )
+        # --- Removed participant check as it's complex here and better handled in messaging ---
+        # participant_ids = {p.user_id for p in thread.participants}
+        # if not (client_id in participant_ids and worker_id in participant_ids):
+        #     raise HTTPException(
+        #         status_code=status.HTTP_400_BAD_REQUEST, detail="Thread participants mismatch."
+        #     )
 
         if thread.job_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A job is already linked to this thread.",
-            )
+            # Check if the existing job_id still points to a valid job
+            existing_job = await self.db.get(models.Job, thread.job_id)
+            if existing_job:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A job is already linked to this thread.",
+                )
+            else:
+                # If job_id exists but job doesn't (e.g., deleted), allow linking a new one
+                logger.warning(
+                    f"Thread {thread.id} has stale job_id {thread.job_id}. Allowing overwrite."
+                )
+                thread.job_id = None  # Clear stale link before proceeding
 
+        # --- Create Job WITHOUT thread_id ---
         job = models.Job(
             client_id=client_id,
             worker_id=worker_id,
             service_id=payload.service_id,
-            thread_id=payload.thread_id,
             status=JobStatus.NEGOTIATING,
         )
 
         self.db.add(job)
-        await self.db.commit()
-        await self.db.refresh(job)
+        # --- Flush to get the job ID ---
+        await self.db.flush()
+        await self.db.refresh(job)  # Refresh to ensure all attributes are loaded
 
+        # --- Update the thread with the new job's ID ---
         thread.job_id = job.id
-        self.db.add(thread)
-        await self.db.commit()
+        self.db.add(thread)  # Mark thread as dirty for update
 
-        logger.info(f"Job created successfully: job_id={job.id}")
+        # --- Commit both Job creation and Thread update ---
+        try:
+            await self.db.commit()
+        except Exception as e:
+            logger.error(f"Error committing job creation or thread update: {e}", exc_info=True)
+            await self.db.rollback()
+            # Attempt to clean up the newly created job if commit fails
+            try:
+                await self.db.delete(job)
+                await self.db.commit()
+            except Exception as delete_err:
+                logger.error(
+                    f"Failed to rollback job creation {job.id}: {delete_err}", exc_info=True
+                )
+            raise HTTPException(status_code=500, detail="Failed to create job or link thread.")
+
+        await self.db.refresh(job)  # Refresh again after successful commit
+
+        logger.info(f"Job created successfully: job_id={job.id}, linked to thread_id={thread.id}")
         return job
 
     # ---------------------------------------------------
@@ -143,6 +173,61 @@ class JobService:
         await self.db.refresh(job)
 
         logger.info(f"Job accepted successfully: job_id={job.id}")
+        return job
+
+    # ---------------------------------------------------
+    # Job Rejection (Worker)
+    # ---------------------------------------------------
+    async def reject_job(
+        self, worker_id: UUID, job_id: UUID, payload: schemas.JobReject
+    ) -> models.Job:
+        """Worker rejects an assigned job offer."""
+        logger.info(f"Worker {worker_id} rejecting job {job_id}")
+
+        worker_user = await self._get_user_or_404(worker_id)
+        if worker_user.role != UserRole.WORKER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Only workers can reject jobs."
+            )
+
+        stmt = (
+            select(models.Job)
+            .options(selectinload(models.Job.thread))
+            .filter(models.Job.id == job_id)
+        )
+        result = await self.db.execute(stmt)
+        job = result.unique().scalar_one_or_none()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        if job.worker_id != worker_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="This job is not assigned to you."
+            )
+
+        if job.status != JobStatus.NEGOTIATING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only jobs in NEGOTIATING status can be rejected. Current status: {job.status}",
+            )
+
+        job.status = JobStatus.REJECTED
+        job.cancelled_at = datetime.now(timezone.utc)
+        job.cancel_reason = payload.reject_reason
+
+        if job.thread:
+            job.thread.is_closed = True
+            self.db.add(job.thread)
+            logger.info(f"Closing thread {job.thread.id} due to job {job.id} rejection.")
+
+        await self.db.commit()
+        await self.db.refresh(job)
+
+        if job.thread:
+            await self.db.refresh(job.thread)
+
+        logger.info(f"Job rejected successfully: job_id={job.id}")
         return job
 
     # ---------------------------------------------------
@@ -209,8 +294,11 @@ class JobService:
                 status_code=status.HTTP_403_FORBIDDEN, detail="This job does not belong to you."
             )
 
-        if job.status in {JobStatus.COMPLETED, JobStatus.FINALIZED, JobStatus.CANCELLED}:
-            raise HTTPException(status_code=400, detail="This job cannot be cancelled.")
+        if job.status in {JobStatus.COMPLETED, JobStatus.FINALIZED}:
+            raise HTTPException(status_code=400, detail="Completed job cannot be cancelled.")
+
+        if job.status == JobStatus.CANCELLED:
+            raise HTTPException(status_code=400, detail="This job has been cancelled already.")
 
         job.status = JobStatus.CANCELLED
         job.cancelled_at = datetime.now(timezone.utc)

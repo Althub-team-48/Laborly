@@ -16,21 +16,22 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from jose import JWTError, ExpiredSignatureError, jwt
-from pydantic import EmailStr
+from pydantic import EmailStr, ValidationError
 
-from app.auth.schemas import VerificationTokenPayload
+from app.auth.schemas import VerificationTokenPayload, OAuthStatePayload
+from app.database.enums import UserRole
 from app.core.config import settings
+
 
 # ---------------------------------------------------
 # Logger Configuration
 # ---------------------------------------------------
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------
 # Access Token Creation
 # ---------------------------------------------------
-
-
 def create_access_token(
     data: dict[str, Any],
     expires_delta: timedelta | None = None,
@@ -64,8 +65,6 @@ def create_access_token(
 # ---------------------------------------------------
 # Verification/Reset Token Creation (Internal Helper)
 # ---------------------------------------------------
-
-
 def _create_verification_token(
     user_id: str,
     token_type: str,
@@ -92,8 +91,6 @@ def _create_verification_token(
 # ---------------------------------------------------
 # Public Token Creation Functions
 # ---------------------------------------------------
-
-
 def create_email_verification_token(user_id: str) -> str:
     """
     Create a token for initial email address verification.
@@ -129,10 +126,68 @@ def create_new_email_verification_token(user_id: str, new_email: EmailStr) -> st
 
 
 # ---------------------------------------------------
+# OAuth State Token Creation
+# ---------------------------------------------------
+def create_oauth_state_token(role: UserRole | None, nonce: str) -> str:
+    """
+    Create a short-lived JWT to be used as the OAuth state parameter.
+    Args:
+        role (UserRole | None): The intended role for signup.
+        nonce (str): A unique nonce for CSRF protection.
+    Returns:
+        str: Encoded state JWT.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.OAUTH_STATE_TOKEN_EXPIRE_MINUTES
+    )
+    payload = OAuthStatePayload(role=role, nonce=nonce)
+    full_payload = {**payload.model_dump(exclude_none=True), "exp": expire}
+
+    token = jwt.encode(full_payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    logger.debug(f"[TOKEN] Issued OAuth state token with nonce {nonce} and role {role}")
+    return str(token)
+
+
+# ---------------------------------------------------
+# OAuth State Token Decoding
+# ---------------------------------------------------
+def decode_oauth_state_token(token: str) -> OAuthStatePayload:
+    """
+    Decode and validate the OAuth state JWT.
+    Args:
+        token (str): The state JWT received from the callback.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired state parameter.",
+    )
+    try:
+        payload_dict = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        payload = OAuthStatePayload(**payload_dict)
+        logger.debug(f"[TOKEN] Successfully decoded OAuth state token for nonce {payload.nonce}")
+        return payload
+
+    except ExpiredSignatureError:
+        logger.warning("[TOKEN] Expired OAuth state token received.")
+        raise credentials_exception
+    except JWTError as e:
+        logger.warning(f"[TOKEN] Invalid OAuth state JWT: {e}")
+        raise credentials_exception
+    except ValidationError as e:
+        logger.warning(f"[TOKEN] OAuth state payload validation error: {e}")
+        raise credentials_exception
+    except Exception as e:
+        logger.error(f"[TOKEN] Unexpected error decoding OAuth state token: {e}", exc_info=True)
+        raise credentials_exception
+
+
+# ---------------------------------------------------
 # Token Decoding and Validation
 # ---------------------------------------------------
-
-
 def decode_verification_token(
     token: str,
     expected_type: str,

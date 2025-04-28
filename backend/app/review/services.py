@@ -9,10 +9,9 @@ Business logic for handling job reviews:
 """
 
 import logging
-from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,13 +47,30 @@ class ReviewService:
         job = result.scalars().first()
 
         if not job:
-            logger.warning(f"[SUBMIT] Unauthorized or job not found: job_id={job_id}")
-            raise HTTPException(status_code=403, detail="Unauthorized or job not found")
+            logger.warning(
+                f"[SUBMIT] Unauthorized or job not found: job_id={job_id}, client_id={reviewer_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found or you are not authorized to review it.",
+            )
 
-        result = await self.db.execute(select(models.Review).filter_by(job_id=job_id))
-        if result.scalars().first():
+        if not job.worker_id:
+            logger.error(f"[SUBMIT] Job {job_id} has no worker assigned, cannot submit review.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot review a job with no assigned worker.",
+            )
+
+        existing_review_result = await self.db.execute(
+            select(models.Review).filter_by(job_id=job_id)
+        )
+        if existing_review_result.scalars().first():
             logger.warning(f"[SUBMIT] Duplicate review attempt: job_id={job_id}")
-            raise HTTPException(status_code=400, detail="Review already submitted for this job")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Review already submitted for this job",
+            )
 
         review = models.Review(
             client_id=reviewer_id,
@@ -62,9 +78,8 @@ class ReviewService:
             job_id=job_id,
             rating=data.rating,
             review_text=data.text,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
         )
+
         self.db.add(review)
         await self.db.commit()
         await self.db.refresh(review)

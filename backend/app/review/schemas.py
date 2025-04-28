@@ -37,14 +37,13 @@ class ReviewRead(BaseModel):
     """Full review response schema returned to authenticated users, including moderation flags."""
 
     id: UUID = Field(..., description="Review ID")
-    reviewer_id: UUID = Field(..., description="ID of the user who submitted the review")
+    client_id: UUID = Field(..., description="ID of the user (client) who submitted the review")
     worker_id: UUID = Field(..., description="ID of the worker being reviewed")
     job_id: UUID = Field(..., description="ID of the associated job")
     rating: int = Field(..., description="Star rating given by the client (1–5)")
     text: str | None = Field(default=None, description="Optional textual feedback")
     is_flagged: bool = Field(..., description="Whether the review is flagged for moderation")
     created_at: datetime = Field(..., description="Timestamp when the review was created")
-    updated_at: datetime = Field(..., description="Timestamp when the review was last updated")
 
     model_config = ConfigDict(from_attributes=True)
 

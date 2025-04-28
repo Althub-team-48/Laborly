@@ -10,7 +10,7 @@ Handles authentication routes including:
 
 import logging
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, status, Query
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import EmailStr
@@ -42,6 +42,7 @@ from app.auth.services import (
 )
 
 from app.core.dependencies import oauth2_scheme, get_current_user
+from app.database.enums import UserRole
 from app.database.session import get_db
 from app.core.limiter import limiter
 from app.database.models import User
@@ -85,7 +86,7 @@ async def signup(
     summary="Login with JSON",
     description="Authenticates user using email and password via JSON request body. Requires email verification.",
 )
-@limiter.limit("10/minute")  # Keep existing rate limit
+@limiter.limit("10/minute")
 async def login_json(
     request: Request,
     payload: LoginRequest,
@@ -94,8 +95,8 @@ async def login_json(
     """
     Authenticates a user using email and password from a JSON request with brute-force protection.
     """
-    client_ip = request.client.host if request.client else "unknown"  # Get client IP
-    return await login_user_json(payload, db, client_ip)  # Pass client_ip
+    client_ip = request.client.host if request.client else "unknown"
+    return await login_user_json(payload, db, client_ip)
 
 
 # ---------------------------------------------------
@@ -108,7 +109,7 @@ async def login_json(
     summary="Login with OAuth2 Form",
     description="Authenticates user using OAuth2-compatible form data (username = email). Requires email verification.",
 )
-@limiter.limit("10/minute")  # Keep existing rate limit
+@limiter.limit("10/minute")
 async def login_oauth(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -117,8 +118,8 @@ async def login_oauth(
     """
     Authenticates a user using OAuth2 form data with brute-force protection.
     """
-    client_ip = request.client.host if request.client else "unknown"  # Get client IP
-    return await login_user_oauth(form_data, db, client_ip)  # Pass client_ip
+    client_ip = request.client.host if request.client else "unknown"
+    return await login_user_oauth(form_data, db, client_ip)
 
 
 # ---------------------------------------------------
@@ -132,11 +133,17 @@ async def login_oauth(
     response_description="Redirects to Google authentication page.",
 )
 @limiter.limit("10/minute")
-async def google_login(request: Request) -> RedirectResponse:
+async def google_login(
+    request: Request,
+    role: UserRole | None = Query(
+        None, description="The role the user intends to sign up as (CLIENT or WORKER)"
+    ),
+) -> RedirectResponse:
     """
     Initiates the Google OAuth2 login flow by redirecting to Google.
+    Includes the intended role in the state parameter if provided.
     """
-    return await handle_google_login(request)
+    return await handle_google_login(request, role)
 
 
 @router.get(
@@ -170,7 +177,7 @@ async def google_callback(
 @limiter.limit("20/minute")
 async def logout(
     request: Request,
-    token: str = Depends(oauth2_scheme),  # Requires Authorization: Bearer <token> header
+    token: str = Depends(oauth2_scheme),
 ) -> dict[str, str]:
     """
     Logs out a user by blacklisting their JWT access token.
@@ -189,7 +196,7 @@ async def logout(
     description="Verifies a user's email using a token sent during registration.",
 )
 async def verify_initial_email(
-    token: str,  # Token comes as a query parameter, e.g., /auth/verify-email?token=...
+    token: str,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     """
@@ -293,7 +300,7 @@ async def post_update_email(
     description="Verifies a new email address using a token sent to it, completing the email update process.",
 )
 async def get_verify_new_email(
-    token: str,  # Token comes as a query parameter, e.g., /auth/verify-new-email?token=...
+    token: str,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     """

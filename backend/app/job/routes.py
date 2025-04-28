@@ -88,7 +88,7 @@ async def cancel_job(
 
 
 # ---------------------------------------------------
-# Worker Endpoints (Accept, Complete Job)
+# Worker Endpoints (Accept, Complete Job, Reject Job)
 # ---------------------------------------------------
 
 
@@ -127,6 +127,26 @@ async def complete_job(
 ) -> schemas.JobRead:
     """Authenticated worker marks a job as completed."""
     job = await JobService(db).complete_job(worker_id=current_user.id, job_id=job_id)
+    return schemas.JobRead.model_validate(job)
+
+
+@router.put(
+    "/{job_id}/reject",
+    response_model=schemas.JobRead,
+    status_code=status.HTTP_200_OK,
+    summary="Reject Job Offer",
+    description="Worker rejects a job offer currently in negotiation. Requires Worker role.",
+)
+@limiter.limit("5/minute")
+async def reject_job(
+    request: Request,
+    job_id: UUID,
+    payload: schemas.JobReject,
+    db: DBDep,
+    current_user: AuthenticatedWorkerDep,
+) -> schemas.JobRead:
+    """Authenticated worker rejects an assigned job offer."""
+    job = await JobService(db).reject_job(worker_id=current_user.id, job_id=job_id, payload=payload)
     return schemas.JobRead.model_validate(job)
 
 

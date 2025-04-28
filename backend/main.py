@@ -6,21 +6,24 @@ Application entrypoint for the Laborly API.
 - Sets up FastAPI application and middlewares
 - Registers all API routers
 - Integrates rate limiting via SlowAPI
+- Adds common security headers
+- Configures CORS
 """
 
 from typing import Any
+from collections.abc import Callable, Awaitable
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.core.logging import init_logging
 from app.core.config import settings
 
-# Routers
 from app.auth.routes import router as auth_router
 from app.client.routes import router as client_router
 from app.worker.routes import router as worker_router
@@ -50,21 +53,36 @@ async def rate_limit_exceeded_handler(request: Request, exc: Exception) -> Respo
 
 app.add_exception_handler(429, rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+
+
+# -----------------------------
+# Security Headers Middleware
+# -----------------------------
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to add common security headers to responses.
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response: Response = await call_next(request)
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        # response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # -----------------------------
 # CORSMiddleware Configuration
 # -----------------------------
-origins = [
-    "http://localhost:5000",  # React dev server
-    "http://127.0.0.1:5000",  # Localhost alternative
-    "http://host.docker.internal",  # Lets Docker access your host machine
-    "https://labourly-frontend-codebase-five.vercel.app", # Temp Laborly Frontend URL
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

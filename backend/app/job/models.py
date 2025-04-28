@@ -39,6 +39,7 @@ class JobStatus(str, enum.Enum):
     COMPLETED = "COMPLETED"
     FINALIZED = "FINALIZED"
     CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
 
 
 # ---------------------------------------------------

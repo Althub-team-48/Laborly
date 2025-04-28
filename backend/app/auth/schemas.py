@@ -139,7 +139,6 @@ class VerificationTokenPayload(BaseModel):
         description="Type of verification token (e.g., 'email_verification', 'password_reset', 'new_email_verification')",
     )
     exp: int = Field(..., description="Expiration timestamp of the token")
-    # Optional field for new email verification
     new_email: EmailStr | None = Field(
         None, description="The new email address being verified (used for email updates)"
     )
@@ -155,7 +154,7 @@ class AuthUserResponse(BaseModel):
 
     id: UUID = Field(..., description="Unique identifier for the user")
     email: EmailStr = Field(..., description="User's email address")
-    phone_number: str = Field(..., description="User's phone number")
+    phone_number: str | None = Field(None, description="User's phone number")
     first_name: str = Field(..., description="User's first name")
     last_name: str = Field(..., description="User's last name")
     role: UserRole = Field(..., description="User's role in the system")
@@ -184,6 +183,19 @@ class MessageResponse(BaseModel):
 
 
 # --------------------------------------------------
+# OAuth State Token Schema
+# --------------------------------------------------
+class OAuthStatePayload(BaseModel):
+    """
+    Payload for the short-lived JWT used as the OAuth state parameter.
+    """
+
+    role: UserRole | None = Field(None, description="Intended user role for signup")
+    nonce: str = Field(..., description="Cryptographic nonce for CSRF protection")
+    # 'jti': str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+
+# --------------------------------------------------
 # GOOGLE OAUTH FACTORY SCHEMA
 # --------------------------------------------------
 class UserCreate(BaseModel):
@@ -194,7 +206,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     first_name: str
     last_name: str
-    phone_number: str
+    phone_number: str | None
     hashed_password: str
     role: UserRole
 
@@ -203,7 +215,7 @@ class UserCreate(BaseModel):
         cls,
         user_info: dict[str, Any],
         hashed_password: str,
-        default_role: str = "CLIENT",
+        assigned_role: UserRole,
     ) -> "UserCreate":
         """
         Factory method to generate user data from Google OAuth2 payload.
@@ -212,7 +224,7 @@ class UserCreate(BaseModel):
             email=user_info.get("email", ""),
             first_name=user_info.get("given_name", ""),
             last_name=user_info.get("family_name", ""),
-            phone_number=user_info.get("phone_number") or "0000000000",
+            phone_number=user_info.get("phone_number") or None,
             hashed_password=hashed_password,
-            role=getattr(UserRole, default_role.upper(), UserRole.CLIENT),
+            role=getattr(UserRole, assigned_role.upper(), UserRole.CLIENT),
         )

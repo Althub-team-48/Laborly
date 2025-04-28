@@ -14,6 +14,8 @@ import logging
 import os
 import random
 import string
+import asyncio
+import secrets
 from datetime import datetime, timezone
 from typing import Any, cast
 
@@ -59,13 +61,29 @@ from app.core.tokens import (
     create_password_reset_token,
     create_new_email_verification_token,
     decode_verification_token,
+    create_oauth_state_token,
+    decode_oauth_state_token,
 )
+from app.database.enums import UserRole
 from app.database.models import User
-from app.core.blacklist import blacklist_token
+from app.core.blacklist import blacklist_token, redis_client
 
 
 logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+# ------------------------------------------------
+# Brute-Force Protection Settings (Redis Keys and Thresholds)
+# ------------------------------------------------
+# Key prefix for failed login attempts per IP
+FAILED_LOGIN_PREFIX = "failed_logins:ip:"
+# Key prefix for temporary IP blacklisting/penalty
+IP_PENALTY_PREFIX = "ip_penalty:"
+
+MAX_FAILED_ATTEMPTS = settings.MAX_FAILED_ATTEMPTS
+IP_PENALTY_DURATION = settings.IP_PENALTY_DURATION
+FAILED_ATTEMPTS_WINDOW = settings.FAILED_ATTEMPTS_WINDOW
 
 
 # ------------------------------------------------
@@ -234,48 +252,104 @@ async def request_new_verification_email(email: EmailStr, db: AsyncSession) -> M
 # ------------------------------------------------
 # Login (JSON and OAuth2)
 # ------------------------------------------------
-async def _authenticate_user(email: str, password: str | None, db: AsyncSession) -> User:
+async def _authenticate_user(
+    email: str, password: str | None, db: AsyncSession, client_ip: str
+) -> User:
     """Helper function to fetch and validate user credentials."""
+    # Check for IP penalty first
+    penalty_key = f"{IP_PENALTY_PREFIX}{client_ip}"
+    if redis_client and redis_client.exists(penalty_key):
+        logger.warning(f"Login attempt from penalized IP: {client_ip}")
+        # Optionally add a small delay even on penalty check to slow down attackers
+        await asyncio.sleep(random.uniform(1, 3))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+        )
     user = (
         (await db.execute(select(User).filter(User.email == email))).unique().scalar_one_or_none()
     )
+    is_password_correct = False
+    if user and password:
+        is_password_correct = verify_password(password, user.hashed_password)
 
     # Check if user exists and password is correct (if password provided)
-    if not user or (password and not verify_password(password, user.hashed_password)):
-        logger.warning(f"Failed login attempt for email: {email}")
+    if not user or not is_password_correct:
+        logger.warning(f"Failed login attempt for email: {email} from IP: {client_ip}")
+
+        if redis_client:
+            failed_attempts_key = f"{FAILED_LOGIN_PREFIX}{client_ip}"
+            # Increment failed attempts counter and set expiration if it's a new key
+            redis_client.incr(failed_attempts_key)
+            # Set TTL only if key is newly created or doesn't have one
+            if redis_client.ttl(failed_attempts_key) == -1:  # -1 means key exists but has no TTL
+                redis_client.expire(failed_attempts_key, FAILED_ATTEMPTS_WINDOW)
+
+            failed_attempts = int(redis_client.get(failed_attempts_key) or 0)
+
+            if failed_attempts >= MAX_FAILED_ATTEMPTS:
+                # Apply penalty - set a temporary key for the IP
+                redis_client.setex(penalty_key, IP_PENALTY_DURATION, "penalized")
+                logger.warning(f"IP address penalized due to too many failed attempts: {client_ip}")
+                # Add a longer delay when penalty is applied
+                await asyncio.sleep(random.uniform(5, 10))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many failed login attempts. Please try again later.",
+                )
+            else:
+                # Add a small delay on incorrect attempts below the threshold
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check if email is verified
+    # Check if email is verified (only after successful authentication)
     if not user.is_verified:
-        logger.warning(f"Login attempt by unverified user: {email}")
+        logger.warning(f"Login attempt by unverified user: {user.email}")
+        # Optionally add a small delay even for unverified users
+        await asyncio.sleep(random.uniform(0.5, 1.5))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email before logging in.",
         )
 
+    # If authentication is successful, reset failed attempts counter for this IP
+    if redis_client:
+        failed_attempts_key = f"{FAILED_LOGIN_PREFIX}{client_ip}"
+        redis_client.delete(failed_attempts_key)
+        logger.debug(f"Resetting failed login attempts for IP: {client_ip}")
+
     return user
 
 
-async def login_user_json(payload: LoginRequest, db: AsyncSession) -> AuthSuccessResponse:
+async def login_user_json(
+    payload: LoginRequest, db: AsyncSession, client_ip: str
+) -> AuthSuccessResponse:  # Add client_ip parameter
     """Authenticates a user via JSON email/password."""
-    user = await _authenticate_user(payload.email, payload.password, db)
+    user = await _authenticate_user(
+        payload.email, payload.password, db, client_ip
+    )  # Pass client_ip
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    logger.info(f"User logged in successfully: {user.email}")
+    logger.info(f"User logged in successfully: {user.email} from IP: {client_ip}")
     return AuthSuccessResponse(
         access_token=access_token, user=AuthUserResponse.model_validate(user)
     )
 
 
-async def login_user_oauth(form_data: Any, db: AsyncSession) -> AuthSuccessResponse:
+async def login_user_oauth(
+    form_data: Any, db: AsyncSession, client_ip: str
+) -> AuthSuccessResponse:  # Add client_ip parameter
     """Authenticates a user via OAuth2 form data (username=email)."""
     # OAuth2PasswordRequestForm uses 'username' field for the identifier
-    user = await _authenticate_user(form_data.username, form_data.password, db)
+    user = await _authenticate_user(
+        form_data.username, form_data.password, db, client_ip
+    )  # Pass client_ip
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    logger.info(f"User logged in successfully (OAuth form): {user.email}")
+    logger.info(f"User logged in successfully (OAuth form): {user.email} from IP: {client_ip}")
     return AuthSuccessResponse(
         access_token=access_token, user=AuthUserResponse.model_validate(user)
     )
@@ -513,38 +587,96 @@ if settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET:
         client_id=settings.GOOGLE_CLIENT_ID,
         client_secret=settings.GOOGLE_CLIENT_SECRET,
         client_kwargs={"scope": "openid email profile"},
-        api_base_url="https://www.googleapis.com/oauth2/v3/",  # Check if still correct
     )
 else:
     logger.warning("Google OAuth2 credentials not configured. Google login disabled.")
 
 
-async def handle_google_login(request: Request) -> RedirectResponse:
-    """Initiates the Google OAuth2 login flow."""
+async def handle_google_login(request: Request, role: UserRole | None) -> RedirectResponse:
+    """Initiates the Google OAuth2 login flow, encoding role in state."""
     if not (settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET):
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Google login is not configured."
         )
     redirect_uri = request.url_for("google_callback")
-    logger.info(f"Redirecting to Google OAuth2 login: {redirect_uri}")
-    return cast(RedirectResponse, await oauth.google.authorize_redirect(request, redirect_uri))
+
+    # --- Generate Nonce and State JWT ---
+    nonce = secrets.token_hex(16)
+    # Store the nonce in the server-side session for later verification
+    request.session["oauth_nonce"] = nonce
+    logger.debug(f"Stored nonce {nonce} in session for Google OAuth")
+
+    # Create the signed JWT containing role and nonce
+    state_jwt = create_oauth_state_token(role=role, nonce=nonce)
+
+    logger.info(
+        f"Redirecting to Google OAuth2 login. Redirect URI: {redirect_uri}. State includes role: {role}"
+    )
+    # Pass the state JWT to authorize_redirect
+    return cast(
+        RedirectResponse,
+        await oauth.google.authorize_redirect(request, redirect_uri, state=state_jwt),
+    )
 
 
 async def handle_google_callback(request: Request, db: AsyncSession) -> RedirectResponse:
-    """Handles the callback from Google after OAuth2 authentication."""
+    """Handles the callback from Google using JWT state for role and CSRF check."""
     if not (settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET):
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Google login is not configured."
         )
+
+    # --- Validate State and Nonce ---
+    returned_state_jwt = request.query_params.get('state')
+    session_nonce = request.session.pop("oauth_nonce", None)  # Get and remove nonce from session
+
+    if not returned_state_jwt or not session_nonce:
+        logger.error("Missing state parameter or session nonce during Google callback.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state or session."
+        )
+
+    try:
+        state_payload = decode_oauth_state_token(returned_state_jwt)
+    except HTTPException as e:
+        logger.error(f"Failed to decode state JWT: {e.detail}")
+        raise
+
+    # Verify the nonce from the state against the one stored in the session (CSRF check)
+    if state_payload.nonce != session_nonce:
+        logger.error(
+            f"OAuth nonce mismatch. Session: {session_nonce}, State: {state_payload.nonce}. Potential CSRF."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="State parameter mismatch (CSRF protection).",
+        )
+
+    # Get the requested role from the validated state payload
+    requested_role = state_payload.role
+    # Define a safe default if role wasn't in state
+    default_role_on_error = UserRole.ADMIN
+    if requested_role is None:
+        logger.warning(
+            f"Role missing from state payload (nonce: {state_payload.nonce}). Defaulting to {default_role_on_error}."
+        )
+        requested_role = default_role_on_error
+
+    logger.info(
+        f"Google callback state validated. Nonce: {state_payload.nonce}, Requested role: {requested_role}"
+    )
+
+    # --- Proceed with Google Token Exchange and User Info Fetch ---
     try:
         token = await oauth.google.authorize_access_token(request)
-        resp = await oauth.google.get("userinfo", token=token)
-        resp.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        user_info = resp.json()
+        if not token or 'access_token' not in token:
+            raise ValueError("Invalid access token received from Google.")
+        resp = await oauth.google.userinfo(token=token)
+        user_info = resp
     except Exception as e:
-        logger.error(f"Error during Google OAuth callback: {e}")
+        logger.error(f"Error during Google OAuth token exchange/userinfo: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Could not verify Google account."
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Could not verify Google account: {e}"
         )
 
     user_email = user_info.get("email")
@@ -554,61 +686,62 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email not provided by Google."
         )
 
-    # Find existing user by email
+    # --- User Lookup / Creation ---
     user = (
         (await db.execute(select(User).filter(User.email == user_email)))
         .unique()
         .scalar_one_or_none()
     )
+    is_new_user = False
 
     if not user:
-        # If user doesn't exist, create a new one
-        logger.info(f"Creating new user via Google OAuth: {user_email}")
-        password = generate_strong_password()  # Generate a secure random password
+        logger.info(f"Creating new user via Google OAuth: {user_email} with role {requested_role}")
+        password = generate_strong_password()
         hashed_password = get_password_hash(password)
-        user_obj = UserCreate.from_google(user_info, hashed_password=hashed_password)
 
-        # Ensure only valid User model fields are passed
+        # Use the validated role from the state payload
+        user_obj = UserCreate.from_google(
+            user_info, hashed_password=hashed_password, assigned_role=requested_role
+        )
         user_fields = {c.key for c in inspect(User).mapper.column_attrs}
         user_data = {k: v for k, v in user_obj.model_dump().items() if k in user_fields}
-
-        user = User(**user_data, is_verified=True)  # Google users are implicitly verified
+        user = User(**user_data, is_verified=True)
         db.add(user)
         await db.commit()
         await db.refresh(user)
-        logger.info(f"New user created and verified via Google: {user.email} (ID: {user.id})")
+        logger.info(
+            f"New user created and verified via Google: {user.email} (ID: {user.id}) with role {user.role}"
+        )
         is_new_user = True
-
+        # Send welcome email
         try:
             await send_welcome_email(user.email, user.first_name)
-            logger.info(f"Welcome email sent to: {user.email}")
+            logger.info(f"Welcome email sent to new Google user: {user.email}")
         except Exception as e:
             logger.error(f"Failed to send welcome email to {user.email}: {e}")
+
     elif not user.is_verified:
-        # If user exists but isn't verified, mark them as verified now
-        logger.info(f"Existing user {user.email} verified via Google login.")
         user.is_verified = True
         await db.commit()
         await db.refresh(user)
+        logger.info(f"Existing user {user.email} verified via Google login.")
 
-    # If it's a *new* user created via Google, send a password reset email
+    # --- Send password setup email only for new users ---
     if is_new_user:
         try:
             reset_token = create_password_reset_token(str(user.id))
             await send_password_reset_email(user.email, reset_token)
-            logger.info(f"Sent password reset email to new Google user: {user.email}")
+            logger.info(f"Sent initial password setup email to new Google user: {user.email}")
         except Exception as e:
             logger.error(
-                f"Failed to send password reset email to new Google user {user.email}: {e}"
+                f"Failed to send password setup email to new Google user {user.email}: {e}"
             )
 
-    # User exists (or was just created) and is verified, issue access token
+    # --- Issue Access Token and Redirect ---
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    logger.info(f"Google login successful for user: {user.email}")
+    logger.info(f"Google login successful for user: {user.email} (Role: {user.role.value})")
 
-    # Redirect to frontend, passing token
-    # Consider using state parameter for better security and redirect flexibility
-    # Temp
-    backend_url = settings.BACKEND_URL or "/"
-    redirect_url = f"{backend_url}?token={access_token}"
+    url = settings.BASE_URL.rstrip('/')
+    redirect_url = f"{url}/auth/callback?token={access_token}"
+    logger.debug(f"Redirecting user to frontend: {redirect_url}")
     return RedirectResponse(url=redirect_url)

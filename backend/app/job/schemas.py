@@ -19,8 +19,6 @@ from app.job.models import JobStatus
 # ---------------------------------------------------
 # Shared Fields Schema
 # ---------------------------------------------------
-
-
 class JobBase(BaseModel):
     """Base schema containing shared fields for job-related payloads."""
 
@@ -31,8 +29,6 @@ class JobBase(BaseModel):
 # ---------------------------------------------------
 # Job Creation Schema (Authenticated Client)
 # ---------------------------------------------------
-
-
 class JobCreate(JobBase):
     """Schema used when a client creates a new job."""
 
@@ -42,23 +38,24 @@ class JobCreate(JobBase):
 # ---------------------------------------------------
 # Accept Job Schema (Authenticated Worker)
 # ---------------------------------------------------
-
-
 class JobAccept(BaseModel):
     """Schema used when a worker accepts an assigned job."""
 
     job_id: UUID = Field(..., description="UUID of the job to accept")
-    worker_id: UUID | None = Field(
-        None,
-        description="UUID of the worker accepting the job (optional; may be inferred from auth)",
-    )
+
+
+# ---------------------------------------------------
+# Reject Job Schema (Authenticated Worker)
+# ---------------------------------------------------
+class JobReject(BaseModel):
+    """Schema used when a worker rejects an assigned job."""
+
+    reject_reason: str | None = Field(None, description="Reason for rejecting the job")
 
 
 # ---------------------------------------------------
 # Complete Job Schema (Authenticated Worker)
 # ---------------------------------------------------
-
-
 class JobComplete(BaseModel):
     """Schema used when a worker marks a job as completed (no payload needed)."""
 
@@ -68,8 +65,6 @@ class JobComplete(BaseModel):
 # ---------------------------------------------------
 # Cancel Job Schema (Authenticated Client)
 # ---------------------------------------------------
-
-
 class CancelJobRequest(BaseModel):
     """Schema used when a client cancels a job and provides a cancellation reason."""
 
@@ -81,8 +76,6 @@ class CancelJobRequest(BaseModel):
 # ---------------------------------------------------
 # Read Job Schema (Authenticated Output)
 # ---------------------------------------------------
-
-
 class JobRead(BaseModel):
     """Schema returned when reading job details (authenticated users)."""
 

@@ -27,11 +27,10 @@ from app.core.email_config import conf
 # ---------------------------------------------------
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------
 # Internal Email Sender
 # ---------------------------------------------------
-
-
 async def _send_email(
     to_email: EmailStr,
     subject: str,
@@ -81,18 +80,16 @@ async def _send_email(
 # ---------------------------------------------------
 # Public Email Sending Functions
 # ---------------------------------------------------
-
-
 async def send_email_verification(to_email: EmailStr, token: str) -> None:
     """
     Send an email verification link to a user's email during registration.
     """
-    verify_url = f"{settings.BACKEND_URL}/auth/verify-email?token={token}"
+    verify_url = f"{settings.BASE_URL}/auth/verify-email?token={token}"
     subject = f"Verify Your Email - {settings.MAIL_FROM_NAME or 'Laborly'}"
     template_data = {
         "verification_link": verify_url,
         "verification_code": token,
-        "account_verification_ttl_min": settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES or 30,
+        "account_verification_ttl_min": settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES,
     }
     await _send_email(to_email, subject, "verification.html", template_data)
 
@@ -104,7 +101,7 @@ async def send_welcome_email(to_email: EmailStr, first_name: str) -> None:
     subject = f"Welcome to {settings.MAIL_FROM_NAME or 'Laborly'} 🎉"
     template_data = {
         "first_name": first_name,
-        "login_url": f"{settings.BACKEND_URL}",
+        "login_url": f"{settings.BASE_URL}",
     }
     await _send_email(to_email, subject, "welcome.html", template_data)
 
@@ -113,11 +110,11 @@ async def send_password_reset_email(to_email: EmailStr, token: str) -> None:
     """
     Send a password reset link to the user's email address.
     """
-    reset_url = f"{settings.BACKEND_URL}/reset-password?token={token}"
+    reset_url = f"{settings.BASE_URL}/reset-password?token={token}"
     subject = f"Reset Your Password - {settings.MAIL_FROM_NAME or 'Laborly'}"
     template_data = {
         "reset_link": reset_url,
-        "password_reset_ttl_min": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES or 60,
+        "password_reset_ttl_min": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
     }
     await _send_email(to_email, subject, "password_reset.html", template_data)
 
@@ -126,14 +123,12 @@ async def send_new_email_verification(new_email: EmailStr, token: str) -> None:
     """
     Send a verification link to a new email address during email update process.
     """
-    verify_url = f"{settings.BACKEND_URL}/auth/verify-new-email?token={token}"
+    verify_url = f"{settings.BASE_URL}/auth/verify-new-email?token={token}"
     subject = f"Confirm Your New Email Address - {settings.MAIL_FROM_NAME or 'Laborly'}"
     template_data = {
         "verification_link": verify_url,
         "new_email": new_email,
-        "new_email_verification_ttl_min": (
-            settings.NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES or 1440
-        ),
+        "new_email_verification_ttl_min": (settings.NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES,),
     }
     await _send_email(new_email, subject, "new_email_verification.html", template_data)
 
@@ -157,7 +152,7 @@ async def send_password_reset_confirmation(to_email: EmailStr) -> None:
     """
     subject = f"Your Password Has Been Reset - {settings.MAIL_FROM_NAME or 'Laborly'}"
     template_data = {
-        "login_url": f"{settings.BACKEND_URL}",
+        "login_url": f"{settings.BASE_URL}",
         "support_email": settings.SUPPORT_EMAIL or "support@example.com",
     }
     await _send_email(to_email, subject, "password_reset_confirmation.html", template_data)
@@ -170,6 +165,6 @@ async def send_new_email_confirmed(to_email: EmailStr) -> None:
     subject = f"Your Email Address Has Been Updated - {settings.MAIL_FROM_NAME or 'Laborly'}"
     template_data = {
         "new_email": to_email,
-        "profile_url": f"{settings.BACKEND_URL}",
+        "profile_url": f"{settings.BASE_URL}",
     }
     await _send_email(to_email, subject, "new_email_confirmed.html", template_data)

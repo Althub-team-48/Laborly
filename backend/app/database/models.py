@@ -55,7 +55,7 @@ class User(Base):
         String(255), unique=True, nullable=False, comment="User's email address"
     )
     phone_number: Mapped[str] = mapped_column(
-        String(20), unique=True, nullable=False, comment="User's phone number"
+        String(20), unique=True, nullable=True, comment="User's phone number"
     )
     hashed_password: Mapped[str] = mapped_column(
         String, nullable=False, comment="Hashed password for authentication"

@@ -1,25 +1,31 @@
-# tests/worker/test_worker_routes.py
+"""
+tests/worker/test_worker_routes.py
+
+Test cases for worker profile, KYC, and job-related API endpoints.
+Covers public profile access, authenticated worker actions, KYC submission, and job history.
+"""
+
 import pytest
 from httpx import AsyncClient
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 from fastapi import status, HTTPException
 from io import BytesIO
-from datetime import datetime, timezone, timedelta  # Import timedelta
+from datetime import datetime, timezone, timedelta
 
 from app.worker import schemas as worker_schemas
 from app.worker import services as worker_services
-from app.database.models import User, KYC  # Import models if needed
+from app.database.models import User, KYC
 from app.database.enums import KYCStatus
-from app.job.models import Job, JobStatus  # Import models if needed
+from app.job.models import Job, JobStatus
 
-# --- Helper ---
+# Helper functions
 
 
 def create_db_job_for_worker(worker_id: UUID) -> Job:
-    """Creates a mock Job DB model instance assigned to a worker"""
+    """Create a mock Job DB model instance assigned to a worker."""
     now = datetime.now(timezone.utc)
-    job = Job(
+    return Job(
         id=uuid4(),
         client_id=uuid4(),
         worker_id=worker_id,
@@ -29,10 +35,9 @@ def create_db_job_for_worker(worker_id: UUID) -> Job:
         updated_at=now,
         started_at=now - timedelta(hours=12),
     )
-    return job
 
 
-# --- Public Profile Endpoint ---
+# Public Profile Endpoints
 
 
 @pytest.mark.asyncio
@@ -43,6 +48,7 @@ async def test_get_public_worker_profile(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving a public worker profile."""
     test_user_id = fake_public_worker_read.user_id
     mock_get_public_profile.return_value = fake_public_worker_read
 
@@ -63,6 +69,7 @@ async def test_get_public_worker_profile_not_found(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving a public worker profile that does not exist."""
     test_user_id = uuid4()
     mock_get_public_profile.side_effect = HTTPException(status_code=404, detail="Worker not found")
 
@@ -73,7 +80,7 @@ async def test_get_public_worker_profile_not_found(
     mock_get_public_profile.assert_awaited_once_with(test_user_id)
 
 
-# --- Authenticated Profile Endpoints ---
+# Authenticated Profile Endpoints
 
 
 @pytest.mark.asyncio
@@ -85,7 +92,8 @@ async def test_get_my_worker_profile(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
-    fake_worker_profile_read.user_id = mock_current_worker_user.id  # Match user
+    """Test retrieving the authenticated worker's profile."""
+    fake_worker_profile_read.user_id = mock_current_worker_user.id
     mock_get_profile.return_value = fake_worker_profile_read
 
     response = await async_client.get("/worker/profile")
@@ -99,15 +107,16 @@ async def test_get_my_worker_profile(
 
 @pytest.mark.asyncio
 @patch.object(worker_services.WorkerService, "update_profile", new_callable=AsyncMock)
-async def test_update_my_worker_profile(  # Renamed test
+async def test_update_my_worker_profile(
     mock_update_profile: AsyncMock,
     fake_worker_profile_read: worker_schemas.WorkerProfileRead,
     mock_current_worker_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test updating the authenticated worker's profile."""
     fake_worker_profile_read.user_id = mock_current_worker_user.id
-    fake_worker_profile_read.is_available = False  # Simulate update
+    fake_worker_profile_read.is_available = False
     mock_update_profile.return_value = fake_worker_profile_read
 
     payload_schema = worker_schemas.WorkerProfileUpdate(is_available=False)
@@ -120,7 +129,7 @@ async def test_update_my_worker_profile(  # Renamed test
     assert data["user_id"] == str(mock_current_worker_user.id)
     assert data["is_available"] is False
     mock_update_profile.assert_awaited_once()
-    call_args, call_kwargs = mock_update_profile.call_args
+    call_args, _ = mock_update_profile.call_args
     assert call_args[0] == mock_current_worker_user.id
     assert call_args[1].is_available == payload_schema.is_available
 
@@ -135,6 +144,7 @@ async def test_update_my_worker_profile_picture(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test updating the worker's profile picture."""
     fake_s3_url = "https://fake-bucket.s3.amazonaws.com/profile_pictures/fake_worker_pic.png"
     mock_upload.return_value = fake_s3_url
     mock_update_pic_service.return_value = worker_schemas.MessageResponse(
@@ -160,6 +170,7 @@ async def test_get_my_worker_profile_picture_url_success(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test getting the presigned URL for profile picture upload."""
     fake_url = f"https://fake-bucket.s3.amazonaws.com/profile_pictures/worker_{mock_current_worker_user.id}?sig=abc"
     mock_get_url.return_value = fake_url
 
@@ -171,7 +182,7 @@ async def test_get_my_worker_profile_picture_url_success(
     mock_get_url.assert_awaited_once_with(mock_current_worker_user.id)
 
 
-# --- KYC Endpoints ---
+# KYC Endpoints
 
 
 @pytest.mark.asyncio
@@ -183,6 +194,7 @@ async def test_get_my_kyc_found(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving KYC details if found."""
     fake_kyc_read.user_id = mock_current_worker_user.id
     mock_get_kyc.return_value = MagicMock(spec=KYC, **fake_kyc_read.model_dump())
 
@@ -203,12 +215,13 @@ async def test_get_my_kyc_not_found(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
-    mock_get_kyc.return_value = None  # Simulate no KYC record
+    """Test retrieving KYC details when none exist."""
+    mock_get_kyc.return_value = None
 
     response = await async_client.get("/worker/kyc")
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.content == b"null"  # Route returns Optional[KYCRead]
+    assert response.content == b"null"
     mock_get_kyc.assert_awaited_once_with(mock_current_worker_user.id)
 
 
@@ -223,19 +236,17 @@ async def test_submit_my_kyc(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
-    # Mock S3 upload responses
+    """Test submitting KYC details."""
     doc_url = f"s3://kyc/doc_{uuid4()}.pdf"
     selfie_url = f"s3://kyc/selfie_{uuid4()}.png"
     mock_upload.side_effect = [doc_url, selfie_url]
 
-    # Mock service response
     fake_kyc_read.user_id = mock_current_worker_user.id
-    fake_kyc_read.status = KYCStatus.PENDING  # Submission sets status to PENDING
+    fake_kyc_read.status = KYCStatus.PENDING
     fake_kyc_read.document_path = doc_url
     fake_kyc_read.selfie_path = selfie_url
     mock_submit_kyc.return_value = MagicMock(spec=KYC, **fake_kyc_read.model_dump())
 
-    # Simulate form data and file upload
     form_data = {"document_type": "National ID"}
     files = {
         "document_file": ("id.pdf", BytesIO(b"fake pdf data"), "application/pdf"),
@@ -250,19 +261,16 @@ async def test_submit_my_kyc(
     assert data["document_path"] == doc_url
     assert data["selfie_path"] == selfie_url
 
-    # Check service call
     mock_submit_kyc.assert_awaited_once_with(
         user_id=mock_current_worker_user.id,
         document_type=form_data["document_type"],
         document_path=doc_url,
         selfie_path=selfie_url,
     )
-
-    # Check S3 upload calls
     assert mock_upload.call_count == 2
 
 
-# --- Job History Endpoints ---
+# Job History Endpoints
 
 
 @pytest.mark.asyncio
@@ -273,6 +281,7 @@ async def test_list_my_worker_jobs(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test listing worker jobs."""
     jobs_list = [create_db_job_for_worker(mock_current_worker_user.id) for _ in range(2)]
     total_count = 7
     mock_get_jobs.return_value = (jobs_list, total_count)
@@ -285,18 +294,18 @@ async def test_list_my_worker_jobs(
     assert len(data["items"]) == len(jobs_list)
     assert data["items"][0]["id"] == str(jobs_list[0].id)
     assert data["items"][0]["worker_id"] == str(mock_current_worker_user.id)
-    # Check mock call signature
     mock_get_jobs.assert_awaited_once_with(mock_current_worker_user.id, skip=0, limit=5)
 
 
 @pytest.mark.asyncio
 @patch.object(worker_services.WorkerService, "get_job_detail", new_callable=AsyncMock)
-async def test_get_my_worker_job_detail(  # Renamed test
+async def test_get_my_worker_job_detail(
     mock_get_job_detail: AsyncMock,
     mock_current_worker_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving a specific worker job detail."""
     job_id = uuid4()
     fake_job = create_db_job_for_worker(mock_current_worker_user.id)
     fake_job.id = job_id
@@ -313,12 +322,13 @@ async def test_get_my_worker_job_detail(  # Renamed test
 
 @pytest.mark.asyncio
 @patch.object(worker_services.WorkerService, "get_job_detail", new_callable=AsyncMock)
-async def test_get_my_worker_job_detail_not_found(  # Renamed test
+async def test_get_my_worker_job_detail_not_found(
     mock_get_job_detail: AsyncMock,
     mock_current_worker_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving a non-existent worker job detail."""
     job_id = uuid4()
     mock_get_job_detail.side_effect = HTTPException(
         status_code=404, detail="Job not found or unauthorized"

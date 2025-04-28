@@ -1,9 +1,15 @@
-# tests/job/test_job_routes.py
+"""
+tests/job/test_job_routes.py
+
+Test cases for job management API endpoints.
+Covers job creation, acceptance, rejection, completion, cancellation, listing, and detail retrieval.
+"""
+
 from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
-from unittest.mock import AsyncMock, patch, MagicMock
-from uuid import UUID, uuid4  # Make sure UUID is imported
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID, uuid4
 from fastapi import status, HTTPException
 
 from app.job import schemas as job_schemas
@@ -11,13 +17,13 @@ from app.job import services as job_services
 from app.job.models import Job, JobStatus
 from app.database.models import User
 
-# --- Helper ---
+# Helper function
 
 
 def create_db_job(
     client_id: UUID, worker_id: UUID, status: JobStatus, service_id: UUID | None = None
-) -> Job:  # Add JobStatus hint
-    """Creates a mock Job DB model instance"""
+) -> Job:
+    """Create a mock Job DB model instance."""
     now = datetime.now(timezone.utc)
     job = Job(
         id=uuid4(),
@@ -28,7 +34,6 @@ def create_db_job(
         created_at=now - timedelta(days=1),
         updated_at=now,
     )
-    # Add conditional timestamps based on status
     if status in [
         JobStatus.ACCEPTED,
         JobStatus.COMPLETED,
@@ -45,7 +50,7 @@ def create_db_job(
     return job
 
 
-# --- Tests ---
+# Job Creation and Management Tests
 
 
 @pytest.mark.asyncio
@@ -53,21 +58,15 @@ def create_db_job(
 async def test_create_job_success(
     mock_create_job: AsyncMock,
     fake_job_read: job_schemas.JobRead,
-    mock_current_client_user: User,  # Needs Client role
+    mock_current_client_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
-    # Set the client_id on the fake response to match the current user
+    """Test creating a job successfully."""
     fake_job_read.client_id = mock_current_client_user.id
-    mock_create_job.return_value = MagicMock(
-        spec=Job, **fake_job_read.model_dump()
-    )  # Mock DB model return
+    mock_create_job.return_value = MagicMock(spec=Job, **fake_job_read.model_dump())
 
-    payload = job_schemas.JobCreate(
-        service_id=uuid4(), thread_id=uuid4()  # Assuming thread_id is needed by JobCreate
-    ).model_dump(
-        mode='json'
-    )  # Add mode='json'
+    payload = job_schemas.JobCreate(service_id=uuid4(), thread_id=uuid4()).model_dump(mode='json')
 
     response = await async_client.post("/jobs/create", json=payload)
 
@@ -75,13 +74,14 @@ async def test_create_job_success(
     data = response.json()
     assert data["id"] is not None
     assert data["client_id"] == str(mock_current_client_user.id)
-    assert data["status"] == JobStatus.NEGOTIATING.value  # Default status
-    # Recreate the expected payload object for comparison
+    assert data["status"] == JobStatus.NEGOTIATING.value
+
     expected_payload = job_schemas.JobCreate(
         service_id=UUID(payload["service_id"]), thread_id=UUID(payload["thread_id"])
     )
     mock_create_job.assert_awaited_once_with(
-        client_id=mock_current_client_user.id, payload=expected_payload
+        client_id=mock_current_client_user.id,
+        payload=expected_payload,
     )
 
 
@@ -90,31 +90,30 @@ async def test_create_job_success(
 async def test_accept_job_success(
     mock_accept_job: AsyncMock,
     fake_job_read: job_schemas.JobRead,
-    mock_current_worker_user: User,  # Needs Worker role
+    mock_current_worker_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test accepting a job successfully."""
     job_id_to_accept = uuid4()
     fake_job_read.id = job_id_to_accept
     fake_job_read.worker_id = mock_current_worker_user.id
-    fake_job_read.status = JobStatus.ACCEPTED  # Update status for response
+    fake_job_read.status = JobStatus.ACCEPTED
     mock_accept_job.return_value = MagicMock(spec=Job, **fake_job_read.model_dump())
 
-    payload = job_schemas.JobAccept(job_id=job_id_to_accept).model_dump(
-        mode='json'
-    )  # Add mode='json'
+    payload = job_schemas.JobAccept(job_id=job_id_to_accept).model_dump(mode='json')
 
-    response = await async_client.post(
-        "/jobs/accept", json=payload
-    )  # Corrected endpoint and method
+    response = await async_client.post("/jobs/accept", json=payload)
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["id"] == str(job_id_to_accept)
     assert data["status"] == JobStatus.ACCEPTED.value
     assert data["worker_id"] == str(mock_current_worker_user.id)
+
     mock_accept_job.assert_awaited_once_with(
-        worker_id=mock_current_worker_user.id, job_id=job_id_to_accept
+        worker_id=mock_current_worker_user.id,
+        job_id=job_id_to_accept,
     )
 
 
@@ -123,16 +122,17 @@ async def test_accept_job_success(
 async def test_reject_job_success(
     mock_reject_job: AsyncMock,
     fake_job_read: job_schemas.JobRead,
-    mock_current_worker_user: User,  # Needs Worker role
+    mock_current_worker_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test rejecting a job successfully."""
     job_id_to_reject = uuid4()
     rejection_reason = "Not available"
     fake_job_read.id = job_id_to_reject
     fake_job_read.worker_id = mock_current_worker_user.id
-    fake_job_read.status = JobStatus.REJECTED  # Update status for response
-    fake_job_read.cancel_reason = rejection_reason  # Add reason
+    fake_job_read.status = JobStatus.REJECTED
+    fake_job_read.cancel_reason = rejection_reason
     mock_reject_job.return_value = MagicMock(spec=Job, **fake_job_read.model_dump())
 
     payload = job_schemas.JobReject(reject_reason=rejection_reason).model_dump()
@@ -145,10 +145,12 @@ async def test_reject_job_success(
     assert data["status"] == JobStatus.REJECTED.value
     assert data["cancel_reason"] == rejection_reason
     assert data["worker_id"] == str(mock_current_worker_user.id)
-    # Capture the actual payload passed to the mock
+
     actual_payload = job_schemas.JobReject(reject_reason=rejection_reason)
     mock_reject_job.assert_awaited_once_with(
-        worker_id=mock_current_worker_user.id, job_id=job_id_to_reject, payload=actual_payload
+        worker_id=mock_current_worker_user.id,
+        job_id=job_id_to_reject,
+        payload=actual_payload,
     )
 
 
@@ -157,14 +159,15 @@ async def test_reject_job_success(
 async def test_complete_job_success(
     mock_complete_job: AsyncMock,
     fake_job_read: job_schemas.JobRead,
-    mock_current_worker_user: User,  # Needs Worker role
+    mock_current_worker_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test completing a job successfully."""
     job_id_to_complete = uuid4()
     fake_job_read.id = job_id_to_complete
     fake_job_read.worker_id = mock_current_worker_user.id
-    fake_job_read.status = JobStatus.COMPLETED  # Update status for response
+    fake_job_read.status = JobStatus.COMPLETED
     mock_complete_job.return_value = MagicMock(spec=Job, **fake_job_read.model_dump())
 
     response = await async_client.put(f"/jobs/{job_id_to_complete}/complete")
@@ -174,8 +177,10 @@ async def test_complete_job_success(
     assert data["id"] == str(job_id_to_complete)
     assert data["status"] == JobStatus.COMPLETED.value
     assert data["worker_id"] == str(mock_current_worker_user.id)
+
     mock_complete_job.assert_awaited_once_with(
-        worker_id=mock_current_worker_user.id, job_id=job_id_to_complete
+        worker_id=mock_current_worker_user.id,
+        job_id=job_id_to_complete,
     )
 
 
@@ -184,16 +189,17 @@ async def test_complete_job_success(
 async def test_cancel_job_success(
     mock_cancel_job: AsyncMock,
     fake_job_read: job_schemas.JobRead,
-    mock_current_client_user: User,  # Needs Client role
+    mock_current_client_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test cancelling a job successfully."""
     job_id_to_cancel = uuid4()
     cancel_reason = "Client unavailable"
     fake_job_read.id = job_id_to_cancel
     fake_job_read.client_id = mock_current_client_user.id
-    fake_job_read.status = JobStatus.CANCELLED  # Update status for response
-    fake_job_read.cancel_reason = cancel_reason  # Add reason
+    fake_job_read.status = JobStatus.CANCELLED
+    fake_job_read.cancel_reason = cancel_reason
     mock_cancel_job.return_value = MagicMock(spec=Job, **fake_job_read.model_dump())
 
     payload = job_schemas.CancelJobRequest(cancel_reason=cancel_reason).model_dump()
@@ -206,9 +212,15 @@ async def test_cancel_job_success(
     assert data["status"] == JobStatus.CANCELLED.value
     assert data["cancel_reason"] == cancel_reason
     assert data["client_id"] == str(mock_current_client_user.id)
+
     mock_cancel_job.assert_awaited_once_with(
-        user_id=mock_current_client_user.id, job_id=job_id_to_cancel, cancel_reason=cancel_reason
+        user_id=mock_current_client_user.id,
+        job_id=job_id_to_cancel,
+        cancel_reason=cancel_reason,
     )
+
+
+# Job Listing and Detail Endpoints
 
 
 @pytest.mark.asyncio
@@ -216,10 +228,11 @@ async def test_cancel_job_success(
 async def test_get_jobs_for_user(
     mock_get_jobs: AsyncMock,
     fake_job_read: job_schemas.JobRead,
-    mock_current_client_user: User,  # Can be client or worker
+    mock_current_client_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving jobs for a user."""
     jobs_list = [MagicMock(spec=Job, **fake_job_read.model_dump()) for _ in range(3)]
     total_count = 10
     mock_get_jobs.return_value = (jobs_list, total_count)
@@ -231,7 +244,12 @@ async def test_get_jobs_for_user(
     assert data["total_count"] == total_count
     assert len(data["items"]) == len(jobs_list)
     assert data["items"][0]["id"] == str(jobs_list[0].id)
-    mock_get_jobs.assert_awaited_once_with(mock_current_client_user.id, skip=0, limit=5)
+
+    mock_get_jobs.assert_awaited_once_with(
+        mock_current_client_user.id,
+        skip=0,
+        limit=5,
+    )
 
 
 @pytest.mark.asyncio
@@ -239,10 +257,11 @@ async def test_get_jobs_for_user(
 async def test_get_job_detail_success(
     mock_get_detail: AsyncMock,
     fake_job_read: job_schemas.JobRead,
-    mock_current_worker_user: User,  # Can be client or worker
+    mock_current_worker_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving job detail successfully."""
     job_id = uuid4()
     fake_job_read.id = job_id
     mock_get_detail.return_value = MagicMock(spec=Job, **fake_job_read.model_dump())
@@ -252,17 +271,22 @@ async def test_get_job_detail_success(
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["id"] == str(job_id)
-    mock_get_detail.assert_awaited_once_with(user_id=mock_current_worker_user.id, job_id=job_id)
+
+    mock_get_detail.assert_awaited_once_with(
+        user_id=mock_current_worker_user.id,
+        job_id=job_id,
+    )
 
 
 @pytest.mark.asyncio
 @patch.object(job_services.JobService, "get_job_detail", new_callable=AsyncMock)
 async def test_get_job_detail_not_found(
     mock_get_detail: AsyncMock,
-    mock_current_client_user: User,  # Can be client or worker
+    mock_current_client_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving job detail when job is not found."""
     job_id = uuid4()
     mock_get_detail.side_effect = HTTPException(status_code=404, detail="Job not found")
 
@@ -270,4 +294,8 @@ async def test_get_job_detail_not_found(
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Job not found"
-    mock_get_detail.assert_awaited_once_with(user_id=mock_current_client_user.id, job_id=job_id)
+
+    mock_get_detail.assert_awaited_once_with(
+        user_id=mock_current_client_user.id,
+        job_id=job_id,
+    )

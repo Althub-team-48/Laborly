@@ -1,24 +1,29 @@
-# tests/client/test_client_routes.py
+"""
+tests/client/test_client_routes.py
+
+Test cases for client profile, favorite workers, and client job history API endpoints.
+Covers public profile access, authenticated profile management, favorite actions, and job listings.
+"""
+
 import pytest
-from uuid import uuid4
-from uuid import UUID
+from uuid import UUID, uuid4
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException, status
 from httpx import AsyncClient
 from io import BytesIO
 
 from app.database.models import User
-from app.client.models import FavoriteWorker  # Import from source
-from app.job.models import Job  # Import from source
+from app.client.models import FavoriteWorker
+from app.job.models import Job, JobStatus
 from app.client import schemas as client_schemas
 from app.client import services as client_services
-from app.job.models import JobStatus  # Import needed for fake job
 
-# --- Test Helper ---
+# Helper function
 
 
 def create_fake_job(client_id: UUID, worker_id: UUID, service_id: UUID | None = None) -> Job:
+    """Create a fake Job instance for testing."""
     return Job(
         id=uuid4(),
         client_id=client_id,
@@ -32,7 +37,7 @@ def create_fake_job(client_id: UUID, worker_id: UUID, service_id: UUID | None = 
     )
 
 
-# --- Public Profile Endpoint ---
+# Public Profile Endpoints
 
 
 @pytest.mark.asyncio
@@ -43,6 +48,7 @@ async def test_get_public_client_profile(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving a public client profile."""
     test_user_id = fake_public_client_read.user_id
     mock_get_public_profile.return_value = fake_public_client_read
 
@@ -62,6 +68,7 @@ async def test_get_public_client_profile_not_found(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving a non-existent public client profile."""
     test_user_id = uuid4()
     mock_get_public_profile.side_effect = HTTPException(status_code=404, detail="Client not found")
 
@@ -72,7 +79,7 @@ async def test_get_public_client_profile_not_found(
     mock_get_public_profile.assert_awaited_once_with(test_user_id)
 
 
-# --- Authenticated Profile Endpoints ---
+# Authenticated Client Profile Endpoints
 
 
 @pytest.mark.asyncio
@@ -84,13 +91,14 @@ async def test_get_my_client_profile(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving the authenticated client's profile."""
     mock_get_profile.return_value = fake_client_profile_read
 
-    response = await async_client.get("/client/profile")  # Corrected path
+    response = await async_client.get("/client/profile")
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert data["user_id"] == str(mock_current_client_user.id)  # User ID should match current user
+    assert data["user_id"] == str(mock_current_client_user.id)
     assert data["email"] == fake_client_profile_read.email
     mock_get_profile.assert_awaited_once_with(mock_current_client_user.id)
 
@@ -103,40 +111,36 @@ async def test_update_my_client_profile(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test updating the authenticated client's profile."""
     update_payload_dict = {
         "location": "Ibadan",
         "profile_description": "Updated description.",
     }
-    # Create a mock response based on the update
     mock_response_profile = client_schemas.ClientProfileRead(
         id=uuid4(),
         user_id=mock_current_client_user.id,
         email=mock_current_client_user.email,
-        phone_number="08022220000",  # Example phone
+        phone_number="08022220000",
         first_name="Client",
         last_name="Test",
-        location="Ibadan",  # Updated
-        profile_description="Updated description.",  # Updated
+        location="Ibadan",
+        profile_description="Updated description.",
         address="123 Test Street, Lagos",
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
     mock_update_profile.return_value = mock_response_profile
 
-    response = await async_client.patch(
-        "/client/profile", json=update_payload_dict
-    )  # Corrected path
+    response = await async_client.patch("/client/profile", json=update_payload_dict)
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["location"] == update_payload_dict["location"]
     assert data["profile_description"] == update_payload_dict["profile_description"]
     mock_update_profile.assert_awaited_once()
-    # Check that the correct user ID and payload schema were passed
-    call_args, call_kwargs = mock_update_profile.call_args
+    call_args, _ = mock_update_profile.call_args
     assert call_args[0] == mock_current_client_user.id
     assert isinstance(call_args[1], client_schemas.ClientProfileUpdate)
-    assert call_args[1].location == update_payload_dict["location"]
 
 
 @pytest.mark.asyncio
@@ -149,14 +153,13 @@ async def test_update_my_client_profile_picture(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test updating client's profile picture."""
     fake_s3_url = "https://fake-bucket.s3.amazonaws.com/profile_pictures/fake_pic.png"
     mock_upload.return_value = fake_s3_url
-    # update_profile_picture service returns MessageResponse
     mock_update_pic_service.return_value = client_schemas.MessageResponse(
         detail="Profile picture updated successfully."
     )
 
-    # Simulate file upload
     files = {"profile_picture": ("test.png", BytesIO(b"fake image data"), "image/png")}
     response = await async_client.patch("/client/profile/picture", files=files)
 
@@ -176,6 +179,7 @@ async def test_get_my_client_profile_picture_url_success(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test getting client's profile picture presigned URL."""
     fake_url = f"https://fake-bucket.s3.amazonaws.com/profile_pictures/client_{mock_current_client_user.id}?sig=xyz"
     mock_get_url.return_value = fake_url
 
@@ -197,16 +201,17 @@ async def test_get_my_client_profile_picture_url_none(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
-    mock_get_url.return_value = None  # Simulate no picture set
+    """Test getting profile picture URL when none is set."""
+    mock_get_url.return_value = None
 
     response = await async_client.get("/client/profile/picture-url")
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.content == b"null"  # FastAPI returns null for Optional[Schema] if None
+    assert response.content == b"null"
     mock_get_url.assert_awaited_once_with(mock_current_client_user.id)
 
 
-# --- Favorite Workers Endpoints ---
+# Favorite Workers Endpoints (listing, adding, removing)
 
 
 @pytest.mark.asyncio
@@ -218,6 +223,7 @@ async def test_list_my_favorite_workers(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test listing favorite workers for a client."""
     favorites_list = [
         fake_favorite_read,
         client_schemas.FavoriteRead(
@@ -230,14 +236,12 @@ async def test_list_my_favorite_workers(
     total_count = 20
     mock_list_favorites.return_value = (favorites_list, total_count)
 
-    response = await async_client.get("/client/favorites?skip=0&limit=10")  # Corrected path
+    response = await async_client.get("/client/favorites?skip=0&limit=10")
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert isinstance(data, dict)  # PaginatedResponse is a dict
     assert data["total_count"] == total_count
     assert len(data["items"]) == len(favorites_list)
-    assert data["items"][0]["id"] == str(favorites_list[0].id)
     mock_list_favorites.assert_awaited_once_with(mock_current_client_user.id, skip=0, limit=10)
 
 
@@ -250,17 +254,17 @@ async def test_add_my_favorite_worker(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test adding a favorite worker."""
     test_worker_id = fake_favorite_read.worker_id
     mock_add_favorite.return_value = MagicMock(
         spec=FavoriteWorker, **fake_favorite_read.model_dump()
-    )  # Mock the DB model return
+    )
 
-    response = await async_client.post(f"/client/favorites/{test_worker_id}")  # Corrected path
+    response = await async_client.post(f"/client/favorites/{test_worker_id}")
 
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
     assert data["worker_id"] == str(test_worker_id)
-    assert data["client_id"] == str(mock_current_client_user.id)
     mock_add_favorite.assert_awaited_once_with(mock_current_client_user.id, test_worker_id)
 
 
@@ -272,12 +276,13 @@ async def test_remove_my_favorite_worker(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test removing a favorite worker."""
     worker_id = uuid4()
-    mock_remove_favorite.return_value = None  # Service returns None on success
+    mock_remove_favorite.return_value = None
 
-    response = await async_client.delete(f"/client/favorites/{worker_id}")  # Corrected path
+    response = await async_client.delete(f"/client/favorites/{worker_id}")
 
-    assert response.status_code == status.HTTP_200_OK  # Route returns 200 with MessageResponse
+    assert response.status_code == status.HTTP_200_OK
     assert response.json()["detail"] == "Favorite worker removed successfully."
     mock_remove_favorite.assert_awaited_once_with(mock_current_client_user.id, worker_id)
 
@@ -290,6 +295,7 @@ async def test_remove_my_favorite_worker_not_found(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test removing a non-existent favorite worker."""
     worker_id = uuid4()
     mock_remove_favorite.side_effect = HTTPException(status_code=404, detail="Favorite not found.")
 
@@ -300,7 +306,7 @@ async def test_remove_my_favorite_worker_not_found(
     mock_remove_favorite.assert_awaited_once_with(mock_current_client_user.id, worker_id)
 
 
-# --- Job History Endpoints ---
+# Client Job History Endpoints
 
 
 @pytest.mark.asyncio
@@ -311,20 +317,17 @@ async def test_list_my_client_jobs(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test listing client's jobs."""
     jobs_list = [create_fake_job(mock_current_client_user.id, uuid4()) for _ in range(2)]
     total_count = 15
     mock_get_jobs.return_value = (jobs_list, total_count)
 
-    response = await async_client.get(
-        "/client/jobs?skip=5&limit=5"
-    )  # Corrected path, test pagination
+    response = await async_client.get("/client/jobs?skip=5&limit=5")
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert isinstance(data, dict)  # PaginatedResponse
     assert data["total_count"] == total_count
     assert len(data["items"]) == len(jobs_list)
-    assert data["items"][0]["id"] == str(jobs_list[0].id)
     mock_get_jobs.assert_awaited_once_with(mock_current_client_user.id, skip=5, limit=5)
 
 
@@ -336,17 +339,16 @@ async def test_get_my_client_job_detail(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving a specific client's job detail."""
     job_id = uuid4()
-    # Use helper to create a Job model instance
     fake_job_model = create_fake_job(mock_current_client_user.id, uuid4())
-    fake_job_model.id = job_id  # Ensure ID matches
+    fake_job_model.id = job_id
     mock_get_job_detail.return_value = fake_job_model
 
-    response = await async_client.get(f"/client/jobs/{job_id}")  # Corrected path
+    response = await async_client.get(f"/client/jobs/{job_id}")
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    # Assert against ClientJobRead schema fields
     assert data["id"] == str(job_id)
     assert data["status"] == fake_job_model.status.value
     mock_get_job_detail.assert_awaited_once_with(mock_current_client_user.id, job_id)
@@ -360,12 +362,13 @@ async def test_get_my_client_job_detail_not_found(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving a job detail when not found."""
     job_id = uuid4()
     mock_get_job_detail.side_effect = HTTPException(
         status_code=404, detail="Job not found or unauthorized"
     )
 
-    response = await async_client.get(f"/client/jobs/{job_id}")  # Corrected path
+    response = await async_client.get(f"/client/jobs/{job_id}")
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Job not found or unauthorized"

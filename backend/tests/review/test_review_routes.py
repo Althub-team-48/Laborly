@@ -1,24 +1,33 @@
-# tests/review/test_review_routes.py
+"""
+tests/review/test_review_routes.py
+
+Test cases for worker review API endpoints.
+Covers public review fetching, worker review summary, client submitting reviews, and retrieving own reviews.
+"""
+
 import pytest
 from httpx import AsyncClient
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from fastapi import status, HTTPException
 
 from app.review import schemas as review_schemas
 from app.review import services as review_services
-from app.review.models import Review  # Import model if needed
+from app.review.models import Review
 from app.database.models import User
+
+# Public Review Endpoints
 
 
 @pytest.mark.asyncio
 @patch.object(review_services.ReviewService, "get_reviews_for_worker", new_callable=AsyncMock)
 async def test_get_public_worker_reviews(
     mock_get_reviews_for_worker: AsyncMock,
-    fake_public_review_read: review_schemas.PublicReviewRead,  # Use public schema
+    fake_public_review_read: review_schemas.PublicReviewRead,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving public reviews for a worker."""
     worker_id = uuid4()
     reviews_list = [MagicMock(spec=Review, **fake_public_review_read.model_dump())]
     total_count = 1
@@ -31,8 +40,7 @@ async def test_get_public_worker_reviews(
     assert data["total_count"] == total_count
     assert len(data["items"]) == len(reviews_list)
     assert data["items"][0]["id"] == str(fake_public_review_read.id)
-    assert "client_id" not in data["items"][0]  # Check public schema doesn't expose client_id
-    # Check mock call signature
+    assert "client_id" not in data["items"][0]
     mock_get_reviews_for_worker.assert_awaited_once_with(worker_id=worker_id, skip=0, limit=10)
 
 
@@ -44,6 +52,7 @@ async def test_get_worker_review_summary(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test retrieving review summary for a worker."""
     worker_id = uuid4()
     mock_get_review_summary.return_value = fake_review_summary
 
@@ -56,20 +65,23 @@ async def test_get_worker_review_summary(
     mock_get_review_summary.assert_awaited_once_with(worker_id=worker_id)
 
 
+# Authenticated Review Endpoints
+
+
 @pytest.mark.asyncio
 @patch.object(review_services.ReviewService, "submit_review", new_callable=AsyncMock)
 async def test_submit_review_success(
     mock_submit_review: AsyncMock,
     fake_review_read: review_schemas.ReviewRead,
-    mock_current_client_user: User,  # Requires client user
+    mock_current_client_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test client submitting a review successfully."""
     job_id = uuid4()
-    # Adjust fake response to match the current user
     fake_review_read.client_id = mock_current_client_user.id
     fake_review_read.job_id = job_id
-    fake_review_read.text = "Excellent job!"  # Match payload text
+    fake_review_read.text = "Excellent job!"
     mock_submit_review.return_value = MagicMock(spec=Review, **fake_review_read.model_dump())
 
     payload_schema = review_schemas.ReviewWrite(rating=5, text="Excellent job!")
@@ -84,11 +96,12 @@ async def test_submit_review_success(
     assert data["client_id"] == str(mock_current_client_user.id)
     assert data["rating"] == payload_schema.rating
     assert data["text"] == payload_schema.text
-    # Check mock call signature
-    # Recreate the expected payload object for comparison
+
     expected_payload = review_schemas.ReviewWrite(rating=5, text="Excellent job!")
     mock_submit_review.assert_awaited_once_with(
-        job_id=job_id, reviewer_id=mock_current_client_user.id, data=expected_payload
+        job_id=job_id,
+        reviewer_id=mock_current_client_user.id,
+        data=expected_payload,
     )
 
 
@@ -97,10 +110,11 @@ async def test_submit_review_success(
 async def test_get_my_reviews(
     mock_get_reviews_by_client: AsyncMock,
     fake_review_read: review_schemas.ReviewRead,
-    mock_current_client_user: User,  # Requires client user
+    mock_current_client_user: User,
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test client retrieving their submitted reviews."""
     reviews_list = [MagicMock(spec=Review, **fake_review_read.model_dump())]
     total_count = 3
     mock_get_reviews_by_client.return_value = (reviews_list, total_count)
@@ -113,7 +127,6 @@ async def test_get_my_reviews(
     assert len(data["items"]) == len(reviews_list)
     assert data["items"][0]["id"] == str(fake_review_read.id)
     assert data["items"][0]["client_id"] == str(mock_current_client_user.id)
-    # Check mock call signature
     mock_get_reviews_by_client.assert_awaited_once_with(
         client_id=mock_current_client_user.id, skip=0, limit=5
     )
@@ -127,11 +140,13 @@ async def test_submit_review_job_not_found(
     async_client: AsyncClient,
     override_get_db: None,
 ) -> None:
+    """Test submitting a review for a non-existent or unauthorized job."""
     job_id = uuid4()
     mock_submit_review.side_effect = HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Job not found or you are not authorized to review it.",
     )
+
     payload = review_schemas.ReviewWrite(rating=4, text="Good").model_dump(mode='json')
 
     response = await async_client.post(f"/reviews/{job_id}", json=payload)

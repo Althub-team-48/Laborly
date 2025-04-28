@@ -1,13 +1,22 @@
-# tests/admin/test_admin_routes.py
+"""
+tests/admin/test_admin_routes.py
+
+Unit tests for admin/routes.py covering:
+- KYC approvals/rejections
+- User account management (freeze, ban, delete)
+- Review moderation
+- Admin-only restricted access
+"""
+
 import pytest
 from uuid import uuid4
-from datetime import datetime, timezone, timedelta  # Imported timedelta
+from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, AsyncMock
 from fastapi import HTTPException, status
 from httpx import AsyncClient
 
 from app.database.models import User, KYC
-from app.review.models import Review  # Import from source
+from app.review.models import Review
 from app.database.enums import KYCStatus
 from app.admin import services as admin_services
 
@@ -40,8 +49,6 @@ def create_fake_review(flagged: bool = True) -> Review:
 
 
 # --- KYC Endpoints Tests ---
-
-
 @pytest.mark.asyncio
 @patch.object(admin_services.AdminService, "list_pending_kyc", new_callable=AsyncMock)
 async def test_get_pending_kyc_list(
@@ -185,8 +192,6 @@ async def test_get_kyc_presigned_url_not_found(
 
 
 # --- User Management Endpoints Tests ---
-
-
 @pytest.mark.asyncio
 @patch.object(admin_services.AdminService, "freeze_user", new_callable=AsyncMock)
 async def test_freeze_user_account(
@@ -327,8 +332,6 @@ async def test_get_user_details(
 
 
 # --- Review Moderation Endpoints Tests ---
-
-
 @pytest.mark.asyncio
 @patch.object(admin_services.AdminService, "list_flagged_reviews", new_callable=AsyncMock)
 async def test_get_flagged_reviews(
@@ -385,8 +388,6 @@ async def test_delete_flagged_review_not_found(
 
 
 # --- Authorization Test ---
-
-
 @pytest.mark.asyncio
 async def test_non_admin_access_forbidden(
     mock_current_client_user: User, async_client: AsyncClient, override_get_db: None

@@ -51,6 +51,7 @@ jobs:
           FAILED_ATTEMPTS_WINDOW=${{ secrets.FAILED_ATTEMPTS_WINDOW }}
           CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}
           OAUTH_STATE_TOKEN_EXPIRE_MINUTES=${{ secrets.OAUTH_STATE_TOKEN_EXPIRE_MINUTES }}
+          LOG_LEVEL=${{ secrets.LOG_LEVEL }}
           EOF
 
       - name: Stop existing containers

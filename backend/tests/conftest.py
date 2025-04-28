@@ -1,19 +1,26 @@
-import pytest
-import pytest_asyncio
+"""
+tests/conftest.py
+
+Test fixtures for API integration and unit tests.
+Includes async clients, fake users, schema mock data, and dependency overrides.
+"""
+
+# --- Imports ---
+from collections.abc import Generator, AsyncGenerator
+from datetime import datetime, timezone, timedelta
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock
 from uuid import uuid4
-from datetime import datetime, timezone, timedelta
-from collections.abc import Generator, AsyncGenerator
+
+import pytest
+import pytest_asyncio
 
 from main import app
 from app.database.enums import UserRole, KYCStatus
 from app.job.models import JobStatus
 from app.database.session import get_db
 from app.database.models import User
-
 from app.core.dependencies import get_current_user
-
 from app.auth.schemas import AuthSuccessResponse, AuthUserResponse
 from app.job.schemas import JobRead
 from app.client.schemas import ClientProfileRead, ClientJobRead, FavoriteRead, PublicClientRead
@@ -22,16 +29,19 @@ from app.service.schemas import ServiceRead
 from app.review.schemas import ReviewRead, PublicReviewRead, WorkerReviewSummary
 from app.messaging.schemas import MessageRead, ThreadRead, ParticipantInfo, ThreadParticipantRead
 
+
 # --- Core Test Fixtures ---
 
 
 @pytest.fixture(scope="session")
 def transport() -> ASGITransport:
+    """Fixture for ASGI transport."""
     return ASGITransport(app=app)
 
 
 @pytest_asyncio.fixture(scope="function")
 async def async_client(transport: ASGITransport) -> AsyncGenerator[AsyncClient, None]:
+    """Fixture for HTTP async client."""
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
@@ -41,6 +51,7 @@ async def async_client(transport: ASGITransport) -> AsyncGenerator[AsyncClient, 
 
 @pytest.fixture
 def fake_admin_user() -> User:
+    """Fixture for a fake admin user."""
     return User(
         id=uuid4(),
         email="admin.test@example.com",
@@ -62,6 +73,7 @@ def fake_admin_user() -> User:
 
 @pytest.fixture
 def fake_client_user() -> User:
+    """Fixture for a fake client user."""
     return User(
         id=uuid4(),
         email="client.test@example.com",
@@ -83,6 +95,7 @@ def fake_client_user() -> User:
 
 @pytest.fixture
 def fake_worker_user() -> User:
+    """Fixture for a fake worker user."""
     return User(
         id=uuid4(),
         email="worker.test@example.com",
@@ -107,6 +120,8 @@ def fake_worker_user() -> User:
 
 @pytest_asyncio.fixture
 async def override_get_db() -> AsyncGenerator[None, None]:
+    """Override for the database dependency."""
+
     async def _override() -> AsyncGenerator[AsyncMock, None]:
         yield AsyncMock()
 
@@ -117,6 +132,7 @@ async def override_get_db() -> AsyncGenerator[None, None]:
 
 @pytest.fixture
 def override_get_current_user(fake_client_user: User) -> Generator[None, None, None]:
+    """Override for getting the current user as a client."""
     app.dependency_overrides[get_current_user] = lambda: fake_client_user
     yield
     app.dependency_overrides.pop(get_current_user, None)
@@ -124,6 +140,7 @@ def override_get_current_user(fake_client_user: User) -> Generator[None, None, N
 
 @pytest_asyncio.fixture
 async def mock_current_admin_user(fake_admin_user: User) -> AsyncGenerator[User, None]:
+    """Mock the current user as an admin."""
     app.dependency_overrides[get_current_user] = lambda: fake_admin_user
     yield fake_admin_user
     app.dependency_overrides.pop(get_current_user, None)
@@ -131,6 +148,7 @@ async def mock_current_admin_user(fake_admin_user: User) -> AsyncGenerator[User,
 
 @pytest_asyncio.fixture
 async def mock_current_client_user(fake_client_user: User) -> AsyncGenerator[User, None]:
+    """Mock the current user as a client."""
     app.dependency_overrides[get_current_user] = lambda: fake_client_user
     yield fake_client_user
     app.dependency_overrides.pop(get_current_user, None)
@@ -138,6 +156,7 @@ async def mock_current_client_user(fake_client_user: User) -> AsyncGenerator[Use
 
 @pytest_asyncio.fixture
 async def mock_current_worker_user(fake_worker_user: User) -> AsyncGenerator[User, None]:
+    """Mock the current user as a worker."""
     app.dependency_overrides[get_current_user] = lambda: fake_worker_user
     yield fake_worker_user
     app.dependency_overrides.pop(get_current_user, None)
@@ -148,6 +167,7 @@ async def mock_current_worker_user(fake_worker_user: User) -> AsyncGenerator[Use
 
 @pytest.fixture
 def fake_auth_user_response(fake_client_user: User) -> AuthUserResponse:
+    """Fixture for fake AuthUserResponse."""
     return AuthUserResponse(
         id=fake_client_user.id,
         email=fake_client_user.email,
@@ -163,6 +183,7 @@ def fake_auth_user_response(fake_client_user: User) -> AuthUserResponse:
 
 @pytest.fixture
 def fake_token() -> str:
+    """Fixture for a fake JWT token."""
     return "fake-jwt-token"
 
 
@@ -170,11 +191,13 @@ def fake_token() -> str:
 def fake_auth_success_response(
     fake_auth_user_response: AuthUserResponse, fake_token: str
 ) -> AuthSuccessResponse:
+    """Fixture for a fake successful auth response."""
     return AuthSuccessResponse(access_token=fake_token, user=fake_auth_user_response)
 
 
 @pytest.fixture
 def fake_job_read() -> JobRead:
+    """Fixture for a fake JobRead."""
     return JobRead(
         id=uuid4(),
         client_id=uuid4(),
@@ -192,6 +215,7 @@ def fake_job_read() -> JobRead:
 
 @pytest.fixture
 def fake_client_profile_read(fake_client_user: User) -> ClientProfileRead:
+    """Fixture for a fake ClientProfileRead."""
     return ClientProfileRead(
         id=uuid4(),
         user_id=fake_client_user.id,
@@ -209,6 +233,7 @@ def fake_client_profile_read(fake_client_user: User) -> ClientProfileRead:
 
 @pytest.fixture
 def fake_public_client_read(fake_client_user: User) -> PublicClientRead:
+    """Fixture for a fake PublicClientRead."""
     return PublicClientRead(
         user_id=fake_client_user.id,
         first_name=fake_client_user.first_name,
@@ -219,6 +244,7 @@ def fake_public_client_read(fake_client_user: User) -> PublicClientRead:
 
 @pytest.fixture
 def fake_favorite_read(fake_client_user: User, fake_worker_user: User) -> FavoriteRead:
+    """Fixture for a fake FavoriteRead."""
     return FavoriteRead(
         id=uuid4(),
         worker_id=fake_worker_user.id,
@@ -229,6 +255,7 @@ def fake_favorite_read(fake_client_user: User, fake_worker_user: User) -> Favori
 
 @pytest.fixture
 def fake_client_job_read(fake_client_user: User, fake_worker_user: User) -> ClientJobRead:
+    """Fixture for a fake ClientJobRead."""
     return ClientJobRead(
         id=uuid4(),
         service_id=uuid4(),
@@ -243,6 +270,7 @@ def fake_client_job_read(fake_client_user: User, fake_worker_user: User) -> Clie
 
 @pytest.fixture
 def fake_worker_profile_read(fake_worker_user: User) -> WorkerProfileRead:
+    """Fixture for a fake WorkerProfileRead."""
     return WorkerProfileRead(
         id=uuid4(),
         user_id=fake_worker_user.id,
@@ -265,6 +293,7 @@ def fake_worker_profile_read(fake_worker_user: User) -> WorkerProfileRead:
 
 @pytest.fixture
 def fake_public_worker_read(fake_worker_user: User) -> PublicWorkerRead:
+    """Fixture for a fake PublicWorkerRead."""
     return PublicWorkerRead(
         user_id=fake_worker_user.id,
         first_name=fake_worker_user.first_name,
@@ -281,6 +310,7 @@ def fake_public_worker_read(fake_worker_user: User) -> PublicWorkerRead:
 
 @pytest.fixture
 def fake_kyc_read(fake_worker_user: User) -> KYCRead:
+    """Fixture for a fake KYCRead."""
     return KYCRead(
         id=uuid4(),
         user_id=fake_worker_user.id,
@@ -295,6 +325,7 @@ def fake_kyc_read(fake_worker_user: User) -> KYCRead:
 
 @pytest.fixture
 def fake_service_read(fake_worker_user: User) -> ServiceRead:
+    """Fixture for a fake ServiceRead."""
     return ServiceRead(
         id=uuid4(),
         worker_id=fake_worker_user.id,
@@ -308,6 +339,7 @@ def fake_service_read(fake_worker_user: User) -> ServiceRead:
 
 @pytest.fixture
 def fake_review_read(fake_client_user: User, fake_worker_user: User) -> ReviewRead:
+    """Fixture for a fake ReviewRead."""
     return ReviewRead(
         id=uuid4(),
         client_id=fake_client_user.id,
@@ -322,6 +354,7 @@ def fake_review_read(fake_client_user: User, fake_worker_user: User) -> ReviewRe
 
 @pytest.fixture
 def fake_public_review_read(fake_worker_user: User) -> PublicReviewRead:
+    """Fixture for a fake PublicReviewRead."""
     return PublicReviewRead(
         id=uuid4(),
         worker_id=fake_worker_user.id,
@@ -334,11 +367,13 @@ def fake_public_review_read(fake_worker_user: User) -> PublicReviewRead:
 
 @pytest.fixture
 def fake_review_summary() -> WorkerReviewSummary:
+    """Fixture for a fake WorkerReviewSummary."""
     return WorkerReviewSummary(average_rating=4.5, total_reviews=10)
 
 
 @pytest.fixture
 def fake_participant_info(fake_client_user: User) -> ParticipantInfo:
+    """Fixture for a fake ParticipantInfo."""
     return ParticipantInfo(
         id=fake_client_user.id,
         first_name=fake_client_user.first_name,
@@ -349,6 +384,7 @@ def fake_participant_info(fake_client_user: User) -> ParticipantInfo:
 
 @pytest.fixture
 def fake_message_read(fake_participant_info: ParticipantInfo) -> MessageRead:
+    """Fixture for a fake MessageRead."""
     return MessageRead(
         id=uuid4(),
         sender=fake_participant_info,
@@ -362,6 +398,7 @@ def fake_message_read(fake_participant_info: ParticipantInfo) -> MessageRead:
 def fake_thread_read(
     fake_participant_info: ParticipantInfo, fake_message_read: MessageRead
 ) -> ThreadRead:
+    """Fixture for a fake ThreadRead."""
     participant1 = fake_participant_info
     participant2_user = User(
         id=uuid4(),

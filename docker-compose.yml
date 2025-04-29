@@ -65,8 +65,8 @@ services:
       context: ./backend
     container_name: test
     volumes:
-      - ./backend
-    working_dir: /
+      - ./backend:/app
+    working_dir: /app
     env_file: .env
     environment:
       - PYTHONPATH=/app

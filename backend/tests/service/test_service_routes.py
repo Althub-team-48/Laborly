@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from fastapi import status, HTTPException
 
-from myapp.service import schemas as service_schemas
-from myapp.service import services as service_services
-from myapp.service.models import Service
-from myapp.database.models import User
-from myapp.database.enums import UserRole
+from app.service import schemas as service_schemas
+from app.service import services as service_services
+from app.service.models import Service
+from app.database.models import User
+from app.database.enums import UserRole
 
 # Public Endpoints
 

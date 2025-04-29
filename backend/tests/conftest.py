@@ -16,18 +16,18 @@ import pytest
 import pytest_asyncio
 
 from main import app
-from myapp.database.enums import UserRole, KYCStatus
-from myapp.job.models import JobStatus
-from myapp.database.session import get_db
-from myapp.database.models import User
-from myapp.core.dependencies import get_current_user
-from myapp.auth.schemas import AuthSuccessResponse, AuthUserResponse
-from myapp.job.schemas import JobRead
-from myapp.client.schemas import ClientProfileRead, ClientJobRead, FavoriteRead, PublicClientRead
-from myapp.worker.schemas import WorkerProfileRead, PublicWorkerRead, KYCRead
-from myapp.service.schemas import ServiceRead
-from myapp.review.schemas import ReviewRead, PublicReviewRead, WorkerReviewSummary
-from myapp.messaging.schemas import MessageRead, ThreadRead, ParticipantInfo, ThreadParticipantRead
+from app.database.enums import UserRole, KYCStatus
+from app.job.models import JobStatus
+from app.database.session import get_db
+from app.database.models import User
+from app.core.dependencies import get_current_user
+from app.auth.schemas import AuthSuccessResponse, AuthUserResponse
+from app.job.schemas import JobRead
+from app.client.schemas import ClientProfileRead, ClientJobRead, FavoriteRead, PublicClientRead
+from app.worker.schemas import WorkerProfileRead, PublicWorkerRead, KYCRead
+from app.service.schemas import ServiceRead
+from app.review.schemas import ReviewRead, PublicReviewRead, WorkerReviewSummary
+from app.messaging.schemas import MessageRead, ThreadRead, ParticipantInfo, ThreadParticipantRead
 
 
 # --- Core Test Fixtures ---

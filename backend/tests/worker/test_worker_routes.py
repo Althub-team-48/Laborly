@@ -13,11 +13,11 @@ from fastapi import status, HTTPException
 from io import BytesIO
 from datetime import datetime, timezone, timedelta
 
-from myapp.worker import schemas as worker_schemas
-from myapp.worker import services as worker_services
-from myapp.database.models import User, KYC
-from myapp.database.enums import KYCStatus
-from myapp.job.models import Job, JobStatus
+from app.worker import schemas as worker_schemas
+from app.worker import services as worker_services
+from app.database.models import User, KYC
+from app.database.enums import KYCStatus
+from app.job.models import Job, JobStatus
 
 # Helper functions
 

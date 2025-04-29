@@ -11,17 +11,17 @@ from alembic import context
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 # --- Load SQLAlchemy base metadata and engine ---
-from myapp.database.session import engine as async_engine
-from myapp.database.base import Base
+from app.database.session import engine as async_engine
+from app.database.base import Base
 
 # --- Import models to ensure they are registered with SQLAlchemy and visible to Alembic ---
-from myapp.database import models
-from myapp.client import models as client_models
-from myapp.worker import models as worker_models
-from myapp.job import models as job_models
-from myapp.review import models as review_models
-from myapp.service import models as service_models
-from myapp.messaging import models as messaging_models
+from app.database import models
+from app.client import models as client_models
+from app.worker import models as worker_models
+from app.job import models as job_models
+from app.review import models as review_models
+from app.service import models as service_models
+from app.messaging import models as messaging_models
 
 
 # --- Alembic config and logger ---

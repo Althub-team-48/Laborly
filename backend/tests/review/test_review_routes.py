@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from fastapi import status, HTTPException
 
-from myapp.review import schemas as review_schemas
-from myapp.review import services as review_services
-from myapp.review.models import Review
-from myapp.database.models import User
+from app.review import schemas as review_schemas
+from app.review import services as review_services
+from app.review.models import Review
+from app.database.models import User
 
 # Public Review Endpoints
 

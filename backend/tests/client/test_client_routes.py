@@ -13,11 +13,11 @@ from fastapi import HTTPException, status
 from httpx import AsyncClient
 from io import BytesIO
 
-from myapp.database.models import User
-from myapp.client.models import FavoriteWorker
-from myapp.job.models import Job, JobStatus
-from myapp.client import schemas as client_schemas
-from myapp.client import services as client_services
+from app.database.models import User
+from app.client.models import FavoriteWorker
+from app.job.models import Job, JobStatus
+from app.client import schemas as client_schemas
+from app.client import services as client_services
 
 # Helper function
 

@@ -21,18 +21,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from myapp.core.logging import init_logging
-from myapp.core.config import settings
+from app.core.logging import init_logging
+from app.core.config import settings
 
-from myapp.auth.routes import router as auth_router
-from myapp.client.routes import router as client_router
-from myapp.worker.routes import router as worker_router
-from myapp.admin.routes import router as admin_router
-from myapp.service.routes import router as service_router
-from myapp.review.routes import router as review_router
-from myapp.job.routes import router as job_router
-from myapp.messaging.routes import router as messaging_router
-from myapp.core.limiter import limiter
+from app.auth.routes import router as auth_router
+from app.client.routes import router as client_router
+from app.worker.routes import router as worker_router
+from app.admin.routes import router as admin_router
+from app.service.routes import router as service_router
+from app.review.routes import router as review_router
+from app.job.routes import router as job_router
+from app.messaging.routes import router as messaging_router
+from app.core.limiter import limiter
 
 
 # -----------------------------

@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from fastapi import status, HTTPException
 
-from myapp.messaging import schemas as msg_schemas
-from myapp.messaging.models import Message, MessageThread
-from myapp.database.models import User
+from app.messaging import schemas as msg_schemas
+from app.messaging.models import Message, MessageThread
+from app.database.models import User
 
 # Message Initiation and Reply Endpoints
 

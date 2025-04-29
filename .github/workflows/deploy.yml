@@ -55,7 +55,7 @@ jobs:
           EOF
 
       - name: Stop existing containers
-        run: docker compose down || true
+        run: docker-compose down || true
 
       - name: Build and start new containers
         run: docker-compose up -d --build

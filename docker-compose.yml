@@ -60,5 +60,18 @@ services:
     working_dir: /app
     entrypoint: ["pre-commit", "run", "--all-files"]
 
+  test:
+    build:
+      context: ./backend
+    container_name: test
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    env_file: .env
+    depends_on:
+      - redis
+    entrypoint: ["pytest"]
+
+
 volumes:
   redis-data:

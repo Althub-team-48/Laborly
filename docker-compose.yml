@@ -72,8 +72,6 @@ services:
       - PYTHONPATH=/backend
     depends_on:
       - redis
-    entrypoint: ["pytest", "tests/"]
-
-
+    command: ["python", "-m", "pytest", "tests/"]
 volumes:
   redis-data:

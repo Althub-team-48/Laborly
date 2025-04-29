@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
-ENV PYTHONPATH=. pytest 
+ENV PYTHONPATH=/backend
 
 RUN apk update && apk add --no-cache build-base
 

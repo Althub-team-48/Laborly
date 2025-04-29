@@ -75,3 +75,4 @@ services:
     command: ["python", "-m", "pytest", "tests/"]
 volumes:
   redis-data:
+

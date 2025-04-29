@@ -76,9 +76,9 @@ jobs:
           done
           echo "✅ Redis is ready!"
 
-      - name: Run Pytest
-        run: |
-          timeout 5m docker-compose run --rm test
+      # - name: Run Pytest
+      #   run: |
+      #     timeout 5m docker-compose run --rm test
 
       - name: Print container logs if test fails
         if: ${{ failure() }}

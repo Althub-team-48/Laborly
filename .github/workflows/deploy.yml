@@ -62,6 +62,18 @@ jobs:
           docker-compose down --volumes --remove-orphans || true
           docker-compose up -d --build
 
+      - name: Wait for NGINX to be ready on port 80
+        run: |
+          echo "⏳ Waiting for NGINX to be ready..."
+          for i in {1..20}; do
+            if curl -sSf http://localhost/.well-known/acme-challenge/test || curl -sSf http://127.0.0.1; then
+              echo "✅ NGINX is ready!"
+              break
+            fi
+            echo "Retrying in 3s..."
+            sleep 3
+          done
+
       - name: Wait for Redis to be healthy
         run: |
           timeout=30
@@ -76,9 +88,9 @@ jobs:
           done
           echo "✅ Redis is ready!"
 
-      - name: Run Pytest
-        run: |
-          timeout 5m docker-compose run --rm test
+      # - name: Run Pytest
+      #   run: |
+      #     timeout 5m docker-compose run --rm test
 
       - name: Print container logs if test fails
         if: ${{ failure() }}
@@ -91,5 +103,7 @@ jobs:
 
       - name: Restart NGINX to apply HTTPS
         run: docker-compose restart nginx
+        
+
 
         

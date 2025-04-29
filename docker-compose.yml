@@ -68,6 +68,8 @@ services:
       - ./backend:/app
     working_dir: /app
     env_file: .env
+    environment:
+      - PYTHONPATH=/app
     depends_on:
       - redis
     entrypoint: ["pytest"]

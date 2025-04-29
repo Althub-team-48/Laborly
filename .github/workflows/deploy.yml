@@ -57,11 +57,34 @@ jobs:
       - name: Stop existing containers
         run: docker-compose down || true
 
-      - name: Build and start new containers
-        run: docker-compose up -d --build
-      
+      - name: Build and start containers
+        run: |
+          docker-compose down --volumes --remove-orphans || true
+          docker-compose up -d --build
+
+      - name: Wait for Redis to be healthy
+        run: |
+          timeout=30
+          echo "Waiting for Redis to be ready..."
+          while ! docker exec redis redis-cli ping | grep -q 'PONG'; do
+            sleep 1
+            timeout=$((timeout - 1))
+            if [ $timeout -le 0 ]; then
+              echo "Redis failed to start"
+              exit 1
+            fi
+          done
+          echo "✅ Redis is ready!"
+
       - name: Run Pytest
-        run: docker-compose run --rm test
+        run: |
+          timeout 5m docker-compose run --rm test
+
+      - name: Print container logs if test fails
+        if: ${{ failure() }}
+        run: |
+          docker-compose logs test
+          docker-compose logs redis  
 
       - name: Run Certbot for SSL (first time only)
         run: docker-compose run --rm certbot || true

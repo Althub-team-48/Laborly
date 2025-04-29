@@ -15,10 +15,10 @@ from unittest.mock import patch, AsyncMock
 from fastapi import HTTPException, status
 from httpx import AsyncClient
 
-from app.database.models import User, KYC
-from app.review.models import Review
-from app.database.enums import KYCStatus
-from app.admin import services as admin_services
+from myapp.database.models import User, KYC
+from myapp.review.models import Review
+from myapp.database.enums import KYCStatus
+from myapp.admin import services as admin_services
 
 
 def create_fake_kyc(status: KYCStatus = KYCStatus.PENDING) -> KYC:

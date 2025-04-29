@@ -26,18 +26,18 @@ sys.path.insert(0, str(project_root))
 # -------------------------------------------------------
 # App imports
 # -------------------------------------------------------
-from app.database.models import User
-from app.database.enums import UserRole
-from app.core.config import settings
-from app.auth.services import get_password_hash as hash_password
-from app.service.models import Service
-from app.job.models import Job, JobStatus
-from app.messaging.models import MessageThread, Message, ThreadParticipant
-from app.review.models import Review
+from myapp.database.models import User
+from myapp.database.enums import UserRole
+from myapp.core.config import settings
+from myapp.auth.services import get_password_hash as hash_password
+from myapp.service.models import Service
+from myapp.job.models import Job, JobStatus
+from myapp.messaging.models import MessageThread, Message, ThreadParticipant
+from myapp.review.models import Review
 
 # Import profile models explicitly if needed later
-from app.client.models import ClientProfile
-from app.worker.models import WorkerProfile
+from myapp.client.models import ClientProfile
+from myapp.worker.models import WorkerProfile
 
 # -------------------------------------------------------
 # Number of records to seed

@@ -65,11 +65,11 @@ services:
       context: ./backend
     container_name: test
     volumes:
-      - ./backend:/backend
-    working_dir: /backend
+      - ./backend:/app
+    working_dir: /app
     env_file: .env
     environment:
-      - PYTHONPATH=/backend
+      - PYTHONPATH= /app
     depends_on:
       - redis
     command: ["python", "-m", "pytest", "tests/"]

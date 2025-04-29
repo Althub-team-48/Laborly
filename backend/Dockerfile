@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-ENV PYTHONPATH=/backend
+ENV PYTHONPATH=/app
 RUN apk update && apk add --no-cache build-base
 
 COPY requirements.txt .

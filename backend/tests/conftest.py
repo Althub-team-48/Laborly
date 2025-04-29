@@ -4,7 +4,14 @@ tests/conftest.py
 Test fixtures for API integration and unit tests.
 Includes async clients, fake users, schema mock data, and dependency overrides.
 """
+# tests/conftest.py
+import sys
+from pathlib import Path
 
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+    
 # --- Imports ---
 from collections.abc import Generator, AsyncGenerator
 from datetime import datetime, timezone, timedelta

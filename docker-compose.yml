@@ -72,7 +72,7 @@ services:
       - PYTHONPATH=/app
     depends_on:
       - redis
-    entrypoint: ["pytest"]
+    command: ["python", "-m", "pytest", "tests/"]
 
 
 volumes:

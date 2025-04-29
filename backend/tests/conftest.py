@@ -15,7 +15,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
-from main import app
+from app.main import app
 from app.database.enums import UserRole, KYCStatus
 from app.job.models import JobStatus
 from app.database.session import get_db

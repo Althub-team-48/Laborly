@@ -12,6 +12,7 @@ Sets up structured logging for the application:
 This module should be initialized once early in the app startup (e.g., in `main.py`).
 """
 
+import importlib.util
 import logging
 import os
 from logging.config import dictConfig
@@ -21,11 +22,11 @@ from app.core.config import settings
 # ---------------------------------------------------
 # Colorlog Availability Check
 # ---------------------------------------------------
-try:
+if importlib.util.find_spec("colorlog") is not None:
     import colorlog
 
     COLORLOG_AVAILABLE = True
-except ImportError:
+else:
     COLORLOG_AVAILABLE = False
 
 # ---------------------------------------------------

@@ -655,7 +655,7 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
     # Get the requested role from the validated state payload
     requested_role = state_payload.role
     # Define a safe default if role wasn't in state
-    default_role_on_error = UserRole.ADMIN
+    default_role_on_error = UserRole.CLIENT
     if requested_role is None:
         logger.warning(
             f"Role missing from state payload (nonce: {state_payload.nonce}). Defaulting to {default_role_on_error}."

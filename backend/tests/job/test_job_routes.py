@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 from fastapi import status, HTTPException
 
-from app.job import schemas as job_schemas
-from app.job import services as job_services
-from app.job.models import Job, JobStatus
-from app.database.models import User
+from myapp.job import schemas as job_schemas
+from myapp.job import services as job_services
+from myapp.job.models import Job, JobStatus
+from myapp.database.models import User
 
 # Helper function
 

@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi import status, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.auth.schemas import (
+from myapp.auth.schemas import (
     SignupRequest,
     MessageResponse,
     LoginRequest,
@@ -22,8 +22,8 @@ from app.auth.schemas import (
     ResetPasswordRequest,
     UpdateEmailRequest,
 )
-from app.database.enums import UserRole
-from app.database.models import User
+from myapp.database.enums import UserRole
+from myapp.database.models import User
 
 
 # =====================

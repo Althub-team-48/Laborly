@@ -188,20 +188,10 @@ class ClientService:
     async def get_public_client_profile(self, user_id: UUID) -> schemas.PublicClientRead:
         """Retrieve public view of a client profile."""
         logger.info(f"Fetching public profile for user_id={user_id}")
-        user = await self.db.get(User, user_id)
+        user = await self._get_user_or_404(user_id)
 
         if not user or user.role != UserRole.CLIENT:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
-
-        profile_result = await self.db.execute(
-            select(models.ClientProfile).filter(models.ClientProfile.user_id == user_id)
-        )
-        profile = profile_result.unique().scalar_one_or_none()
-
-        if not profile:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Client profile not found"
-            )
 
         public_data = {
             "user_id": user.id,

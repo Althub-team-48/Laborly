@@ -242,6 +242,8 @@ python-dotenv==1.1.0
     # via
     #   laborly-backend
     #   pydantic-settings
+python-http-client==3.3.7
+    # via sendgrid
 python-jose==3.4.0
     # via laborly-backend
 python-multipart==0.0.20
@@ -264,6 +266,8 @@ s3transfer==0.11.4
     # via
     #   boto3
     #   laborly-backend
+sendgrid==6.11.0
+    # via laborly-backend
 setuptools==79.0.0
     # via
     #   laborly-backend
@@ -287,6 +291,8 @@ sqlalchemy==2.0.40
     # via
     #   alembic
     #   laborly-backend
+starkbank-ecdsa==2.2.0
+    # via sendgrid
 starlette==0.46.1
     # via
     #   fastapi

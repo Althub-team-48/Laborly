@@ -47,6 +47,7 @@ from app.core.config import settings
 
 from app.core.email import (
     send_email_verification,
+    send_final_change_notification_to_old_email,
     send_new_email_confirmed,
     send_password_reset_confirmation,
     send_welcome_email,
@@ -166,7 +167,8 @@ async def signup_user(payload: SignupRequest, db: AsyncSession) -> MessageRespon
     # Send verification email
     try:
         token = create_email_verification_token(str(new_user.id))
-        await send_email_verification(new_user.email, token)
+        # Send the personalized verification email
+        await send_email_verification(new_user.email, token, first_name=new_user.first_name)
         logger.info(f"Verification email sent to: {new_user.email}")
     except Exception as e:
         # Log error but don't fail the registration
@@ -239,7 +241,7 @@ async def request_new_verification_email(email: EmailStr, db: AsyncSession) -> M
             # Generate a fresh token
             token = create_email_verification_token(str(user.id))
             # Use the existing email sending function
-            await send_email_verification(user.email, token)
+            await send_email_verification(user.email, token, first_name=user.first_name)
             logger.info(f"New verification email sent to: {user.email}")
         except Exception as e:
             logger.error(f"Failed to send new verification email to {user.email}: {e}")
@@ -411,7 +413,7 @@ async def request_password_reset(
     if user and user.is_verified:
         try:
             token = create_password_reset_token(str(user.id))
-            await send_password_reset_email(user.email, token)
+            await send_password_reset_email(user.email, token, first_name=user.first_name)
             logger.info(f"Password reset email sent to: {user.email}")
         except Exception as e:
             logger.error(f"Failed to send password reset email to {user.email}: {e}")
@@ -446,7 +448,7 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession) -> Mes
     logger.info(f"Password successfully reset for user: {user.email}")
 
     try:
-        await send_password_reset_confirmation(user.email)
+        await send_password_reset_confirmation(user.email, first_name=user.first_name)
         logger.info(f"Password confirmation email sent to: {user.email}")
     except Exception as e:
         logger.error(f"Failed to send password confirmation email to {user.email}: {e}")
@@ -488,12 +490,16 @@ async def request_email_update(
     # Generate a verification token specifically for the new email
     try:
         token = create_new_email_verification_token(str(current_user.id), new_email)
-        await send_new_email_verification(new_email, token)  # Send to NEW email
+        await send_new_email_verification(
+            new_email, token, first_name=current_user.first_name
+        )  # Send to NEW email
         logger.info(f"New email verification sent to {new_email} for user {current_user.id}")
 
         # Optional: Notify the user at their OLD email address
         try:
-            await send_email_change_notification(old_email, new_email)
+            await send_email_change_notification(
+                old_email, new_email, first_name=current_user.first_name
+            )
             logger.info(
                 f"Email change notification sent to old email {old_email} for user {current_user.id}"
             )
@@ -515,12 +521,11 @@ async def request_email_update(
 async def verify_new_email(token: str, db: AsyncSession) -> MessageResponse:
     """Verifies a new email address using the token and updates the user."""
     try:
-        # Decode token, ensuring it's the correct type and contains the new email
         token_payload: VerificationTokenPayload = decode_verification_token(
             token=token, expected_type="new_email_verification"
         )
         user_id = token_payload.sub
-        new_email = token_payload.new_email  # Extract the new email from the token payload
+        new_email = token_payload.new_email
 
         if not new_email:
             logger.error(
@@ -535,7 +540,6 @@ async def verify_new_email(token: str, db: AsyncSession) -> MessageResponse:
         logger.warning(f"New email verification failed: {e.detail}")
         raise e
 
-    # Fetch the user associated with the token
     result = await db.execute(select(User).filter(User.id == user_id))
     user = result.unique().scalar_one_or_none()
 
@@ -560,16 +564,22 @@ async def verify_new_email(token: str, db: AsyncSession) -> MessageResponse:
     # Update the user's email
     old_email = user.email
     user.email = new_email
-    # Ensure user remains verified (or becomes verified if somehow they weren't)
     user.is_verified = True
     await db.commit()
     logger.info(f"User {user.id} successfully updated email from {old_email} to {new_email}")
 
     try:
-        await send_new_email_confirmed(old_email)
-        logger.info(f"Confirmation email sent to: {old_email}")
+        await send_new_email_confirmed(new_email, first_name=user.first_name)
+        logger.info(f"Confirmation email sent to: {new_email}")
     except Exception as e:
-        logger.error(f"Failed to send Confirmation email to {old_email}: {e}")
+        logger.error(f"Failed to send Confirmation email to {new_email}: {e}")
+
+    try:
+        await send_final_change_notification_to_old_email(
+            old_email=old_email, new_email=new_email, first_name=user.first_name
+        )
+    except Exception as e:
+        logger.error(f"Failed to send final change notification to old email {old_email}: {e}")
 
     return MessageResponse(detail="Your email address has been successfully updated.")
 

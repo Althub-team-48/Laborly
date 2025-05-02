@@ -10,9 +10,10 @@ Provides strict type validation and environment-specific handling.
 
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dotenv import load_dotenv
+from pydantic import EmailStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---------------------------------------------------
@@ -20,8 +21,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # ---------------------------------------------------
 logger = logging.getLogger(__name__)
 
-# Load environment variables from `.env` file
-load_dotenv()
+# ---------------------------------------------------
+# Base Directory Calculation
+# ---------------------------------------------------
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DEFAULT_DOTENV_PATH = BASE_DIR / ".env"
 
 
 # ---------------------------------------------------
@@ -32,135 +36,159 @@ class Settings(BaseSettings):
     Application-wide settings loaded from environment variables.
     """
 
-    # General
+    # --- Pydantic Settings Configuration ---
+    model_config = SettingsConfigDict(
+        env_file=str(DEFAULT_DOTENV_PATH),
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # --- General Application Settings ---
     APP_NAME: str
     DEBUG: bool
     LOG_LEVEL: str
+    BASE_URL: str
 
-    # Database
+    # --- Database Settings ---
     DATABASE_URL: str
     TEST_DATABASE_URL: str
 
-    # JWT Authentication
+    # --- JWT Authentication Settings ---
     SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
 
-    # OAuth2 - Google
+    # --- OAuth2 - Google ---
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
 
-    # Redis
+    # --- Redis Settings ---
     REDIS_HOST: str
     REDIS_PORT: int
     REDIS_DB: int
 
-    # AWS S3 Storage
+    # --- AWS S3 Storage Settings ---
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str
     AWS_S3_BUCKET: str
 
-    # Email Service
-    MAIL_USERNAME: str
-    MAIL_PASSWORD: str
-    MAIL_FROM: str
+    # --- Email Service Settings---
+    SENDGRID_API_KEY: str
+    MAIL_FROM: EmailStr
     MAIL_FROM_NAME: str
-    MAIL_SERVER: str
-    MAIL_PORT: int
-    MAIL_STARTTLS: bool
-    MAIL_SSL_TLS: bool
-    MAIL_USE_CREDENTIALS: bool
-    MAIL_VALIDATE_CERTS: bool
-    MAIL_TEMPLATE_FOLDER: str
-    SUPPORT_EMAIL: str
+    EMAILS_ENABLED: bool
+    MAIL_TEMPLATES_DIR: str
+    SUPPORT_EMAIL: EmailStr
 
-    # Frontend/Backend URLs
-    BASE_URL: str
-
-    # Bruteforce Protection
+    # --- Security & Rate Limiting Settings ---
     MAX_FAILED_ATTEMPTS: int
     IP_PENALTY_DURATION: int
     FAILED_ATTEMPTS_WINDOW: int
 
-    # Token Expiration
+    # --- Token Expiration Settings (in minutes) ---
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int
     NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int
-
-    # OAuth State Token
     OAUTH_STATE_TOKEN_EXPIRE_MINUTES: int
 
-    # CORS
+    # --- CORS Settings ---
     CORS_ALLOWED_ORIGINS: str
 
+    # --- Calculated Properties ---
     @property
     def cors_origins(self) -> list[str]:
+        """Parses the CORS_ALLOWED_ORIGINS string into a list."""
+        if not self.CORS_ALLOWED_ORIGINS:
+            return []
         return [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
 
     @property
     def db_url(self) -> str:
         """
-        Resolve the appropriate database URL based on environment.
-        Uses the test database URL if running under pytest.
+        Returns the appropriate database URL as a STRING based on the testing environment.
         """
         is_testing = os.getenv("PYTEST_CURRENT_TEST") is not None
-        url = self.TEST_DATABASE_URL if is_testing else self.DATABASE_URL
-        print("🔍 Using DATABASE URL:", url)  # Optional: remove for production
-        logger.debug(f"[CONFIG] Using DATABASE URL: {url}")
+        url_dsn = self.TEST_DATABASE_URL if is_testing else self.DATABASE_URL
+        url_str = str(url_dsn)
+        if self.DEBUG:
+            print("🔍 Using DATABASE URL:", url_str)
+            logger.debug(f"[CONFIG] Using DATABASE URL: {url_str}")
+        return url_str
 
-        if not url:
-            raise RuntimeError("Database URL is not set for the current environment.")
+    @property
+    def mail_templates_path(self) -> Path:
+        """Returns the absolute path to the mail templates directory."""
+        path = BASE_DIR / self.MAIL_TEMPLATES_DIR
+        return path
 
-        return url
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    @property
+    def redis_url(self) -> str:
+        """Constructs Redis URL from individual components if needed elsewhere."""
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
 
 # ---------------------------------------------------
 # Instantiate Settings Globally
 # ---------------------------------------------------
+
 if TYPE_CHECKING:
     # Stub settings for type hinting and editor assistance
     settings = Settings(
-        APP_NAME="dummy",
+        # General Application Settings
+        APP_NAME="",
         DEBUG=False,
-        DATABASE_URL="dummy",
-        TEST_DATABASE_URL="dummy",
-        SECRET_KEY="dummy",
-        ALGORITHM="dummy",
+        LOG_LEVEL="",
+        BASE_URL="",
+        # Database Settings
+        DATABASE_URL="",
+        TEST_DATABASE_URL="",
+        # JWT Authentication Settings
+        SECRET_KEY="",
+        ALGORITHM="",
         ACCESS_TOKEN_EXPIRE_MINUTES=0,
-        GOOGLE_CLIENT_ID="dummy",
-        GOOGLE_CLIENT_SECRET="dummy",
-        AWS_ACCESS_KEY_ID="dummy",
-        AWS_SECRET_ACCESS_KEY="dummy",
-        AWS_REGION="dummy",
-        AWS_S3_BUCKET="dummy",
-        MAIL_USERNAME="dummy",
-        MAIL_PASSWORD="dummy",
-        MAIL_FROM="dummy",
-        MAIL_FROM_NAME="dummy",
-        SUPPORT_EMAIL="dummy",
-        LOG_LEVEL="dummy",
-        REDIS_HOST="dummy",
+        # OAuth2 - Google
+        GOOGLE_CLIENT_ID="",
+        GOOGLE_CLIENT_SECRET="",
+        # Redis Settings
+        REDIS_HOST="",
         REDIS_PORT=0,
         REDIS_DB=0,
-        MAIL_SERVER="dummy",
-        MAIL_PORT=0,
-        MAIL_STARTTLS=True,
-        MAIL_SSL_TLS=False,
-        MAIL_USE_CREDENTIALS=True,
-        MAIL_VALIDATE_CERTS=True,
-        MAIL_TEMPLATE_FOLDER="dummy",
-        BASE_URL="dummy",
-        EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=0,
-        PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=0,
-        NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=0,
+        # AWS S3 Storage Settings
+        AWS_ACCESS_KEY_ID="",
+        AWS_SECRET_ACCESS_KEY="",
+        AWS_REGION="",
+        AWS_S3_BUCKET="",
+        # Email Service Settings
+        SENDGRID_API_KEY="",
+        MAIL_FROM="",
+        MAIL_FROM_NAME="",
+        EMAILS_ENABLED=False,
+        MAIL_TEMPLATES_DIR="",
+        SUPPORT_EMAIL="",
+        # Security & Rate Limiting Settings
         MAX_FAILED_ATTEMPTS=0,
         IP_PENALTY_DURATION=0,
         FAILED_ATTEMPTS_WINDOW=0,
-        CORS_ALLOWED_ORIGINS="dummy",
+        # Token Expiration Settings (in minutes)
+        EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=0,
+        PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=0,
+        NEW_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=0,
         OAUTH_STATE_TOKEN_EXPIRE_MINUTES=0,
+        # CORS Settings
+        CORS_ALLOWED_ORIGINS="",
     )
 else:
     settings = Settings()
+
+# ---------------------------------------------------
+# Post-Instantiation Validation
+# ---------------------------------------------------
+templates_path = settings.mail_templates_path
+if not templates_path.is_dir():
+    error_message = f"Email templates directory not found at resolved path: {templates_path} (expected value from MAIL_TEMPLATES_DIR in .env)"
+    logger.error(error_message)
+    raise ValueError(error_message)
+else:
+    logger.info(f"✅ Email templates directory found at: {templates_path}")

@@ -10,7 +10,7 @@ Laborly Seeder Script (Fully Populated)
 import sys
 import random
 from uuid import uuid4
-from datetime import datetime, timezone, timedelta  # Import timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session, selectinload
@@ -35,7 +35,6 @@ from app.job.models import Job, JobStatus
 from app.messaging.models import MessageThread, Message, ThreadParticipant
 from app.review.models import Review
 
-# Import profile models explicitly if needed later
 from app.client.models import ClientProfile
 from app.worker.models import WorkerProfile
 
@@ -43,7 +42,7 @@ from app.worker.models import WorkerProfile
 # Number of records to seed
 # -------------------------------------------------------
 NUM_ADMINS = 5
-NUM_CLIENTS = 30
+NUM_CLIENTS = 10
 NUM_WORKERS = 10
 
 # -------------------------------------------------------
@@ -98,7 +97,7 @@ class Seeder:
 
     def _get_sync_engine(self) -> Engine:
         """Creates the synchronous engine for the database."""
-        raw_url = settings.DATABASE_URL
+        raw_url = settings.db_url
         print(f"🔍 Using DATABASE URL: {raw_url}")
         # Ensure psycopg2 is used for sync operations if DATABASE_URL uses asyncpg
         sync_url = raw_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
@@ -363,14 +362,8 @@ class Seeder:
         """Seeds message threads and messages for existing jobs."""
         print("💬 Seeding messages for jobs...")
         jobs_with_threads = (
-            self.db.query(Job)
-            .options(
-                # Eager load thread to avoid separate queries per job
-                selectinload(Job.thread)
-            )
-            .filter(Job.thread.has())
-            .all()
-        )  # Filter jobs that have an associated thread
+            self.db.query(Job).options(selectinload(Job.thread)).filter(Job.thread.has()).all()
+        )
 
         if not jobs_with_threads:
             print("⚠️ No jobs with threads found to seed messages for.")
@@ -378,9 +371,9 @@ class Seeder:
 
         message_count = 0
         for job in jobs_with_threads:
-            thread = job.thread  # Access the eager-loaded thread
+            thread = job.thread
             if not thread:
-                continue  # Skip if thread somehow wasn't loaded
+                continue
 
             thread_id = thread.id
             client_id = job.client_id
@@ -389,7 +382,6 @@ class Seeder:
             if not client_id or not worker_id:
                 continue
 
-            # Add participants (should ideally be handled when thread is created)
             existing_participants_query = self.db.query(ThreadParticipant.user_id).filter(
                 ThreadParticipant.thread_id == thread_id
             )
@@ -477,8 +469,8 @@ class Seeder:
         self.seed_clients()
         self.seed_workers()
         self.seed_services()
-        self.seed_jobs()  # Seeds jobs and creates threads
-        self.seed_messages()  # Seeds messages for the threads created in seed_jobs
+        self.seed_jobs()
+        self.seed_messages()
         self.seed_reviews()
         print("🎉 Seeding completed successfully!")
         print("🔑 Default password for all seeded users: String@123")

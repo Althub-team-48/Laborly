@@ -42,8 +42,8 @@ from app.worker.models import WorkerProfile
 # Number of records to seed
 # -------------------------------------------------------
 NUM_ADMINS = 5
-NUM_CLIENTS = 10
-NUM_WORKERS = 10
+NUM_CLIENTS = 100
+NUM_WORKERS = 300
 
 # -------------------------------------------------------
 # Nigerian States List
@@ -135,7 +135,7 @@ class Seeder:
             first = self.faker.first_name()
             last = self.faker.last_name()
             phone = self.faker.msisdn()[:11]
-            email = f"admin{random.randint(1000, 9999)}@example.com"
+            email = f"admin{uuid4().hex[:8]}@example.com"
             location = random.choice(NIGERIAN_STATES)
 
             user = User(
@@ -168,7 +168,7 @@ class Seeder:
             first = self.faker.first_name()
             last = self.faker.last_name()
             phone = self.faker.msisdn()[:11]
-            email = f"client{random.randint(1000, 9999)}@example.com"
+            email = f"client{uuid4().hex[:8]}@example.com"
             location = random.choice(NIGERIAN_STATES)
             address = f"{self.faker.street_address()}, {location}"
 
@@ -210,7 +210,7 @@ class Seeder:
             first = self.faker.first_name()
             last = self.faker.last_name()
             phone = self.faker.msisdn()[:11]
-            email = f"worker{random.randint(1000, 9999)}@example.com"
+            email = f"worker{uuid4().hex[:8]}@example.com"
             location = random.choice(NIGERIAN_STATES)
 
             user = User(

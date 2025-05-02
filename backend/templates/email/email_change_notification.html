@@ -1,69 +1,95 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Email Change Notification</title>
     <style>
-        body {
-            font-family: sans-serif;
-            line-height: 1.6;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 30px;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #ffc107; /* Example warning color */
-        }
-        .content p {
-            margin-bottom: 15px;
-        }
-        .email-address {
-            font-weight: bold;
-            color: #333;
-        }
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 0.9em;
-            color: #777;
-        }
-         .footer a {
-            color: #0056b3;
-            text-decoration: none;
-        }
+      body {
+        font-family: sans-serif;
+        line-height: 1.6;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f4f4;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        padding: 30px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 20px;
+        color: #ffc107; /* Example warning color */
+      }
+      .content p {
+        margin-bottom: 15px;
+      }
+      .email-address {
+        font-weight: bold;
+        color: #333;
+      }
+      .footer {
+        margin-top: 30px;
+        text-align: center;
+        font-size: 0.9em;
+        color: #777;
+      }
+      .footer a {
+        color: #0056b3;
+        text-decoration: none;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <h1>Security Notification: Email Change Request</h1>
-        </div>
-        <div class="content">
-            <p>Hello,</p>
-            <p>This is a notification that a request was made to change the email address associated with your {{ company_name }} account from <span class="email-address">{{ old_email }}</span> to <span class="email-address">{{ new_email }}</span>.</p>
-            <p>A confirmation email has been sent to the new address (<span class="email-address">{{ new_email }}</span>). The email change will only take effect once it is confirmed via that link.</p>
-            <p><strong>If you requested this change, you can safely ignore this email.</strong> The change will be finalized once you click the link sent to your new address.</p>
-            <p><strong>If you did NOT request this change, please secure your account immediately and contact our support team:</strong></p>
-            <p><a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
-            <p>Ignoring the confirmation link sent to the new email address will prevent the change from occurring.</p>
-            <p>Thanks,<br>The {{ company_name }} Team</p>
-        </div>
-        <div class="footer">
-            <p>&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
-            <p>For security reasons, we notify you of important account changes.</p>
-        </div>
+      <div class="header">
+        <h1>Security Notification: Email Change Request</h1>
+      </div>
+      <div class="content">
+        <p>Hello {{ first_name | default('there') }},</p>
+        <p>
+          This is a notification that a request was made to change the email
+          address associated with your {{ company_name }} account from
+          <span class="email-address">{{ old_email }}</span> to
+          <span class="email-address">{{ new_email }}</span>.
+        </p>
+        <p>
+          A confirmation email has been sent to the new address (<span
+            class="email-address"
+            >{{ new_email }}</span
+          >). The email change will only take effect once it is confirmed via
+          that link.
+        </p>
+        <p>
+          <strong
+            >If you requested this change, you can safely ignore this
+            email.</strong
+          >
+          The change will be finalized once you click the link sent to your new
+          address.
+        </p>
+        <p>
+          <strong
+            >If you did NOT request this change, please secure your account
+            immediately and contact our support team:</strong
+          >
+        </p>
+        <p><a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+        <p>
+          Ignoring the confirmation link sent to the new email address will
+          prevent the change from occurring.
+        </p>
+        <p>Thanks,<br />The {{ company_name }} Team</p>
+      </div>
+      <div class="footer">
+        <p>&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
+        <p>For security reasons, we notify you of important account changes.</p>
+      </div>
     </div>
-</body>
+  </body>
 </html>

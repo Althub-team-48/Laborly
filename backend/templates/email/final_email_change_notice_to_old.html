@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Email Address Changed</title>
+    </head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Security Notification: Email Address Changed</h1>
+        </div>
+        <div class="content">
+            <p>Hello {{ first_name | default('there') }},</p>
+            <p>This email confirms that the email address for your {{ company_name }} account has been successfully changed from <span class="email-address">{{ old_email }}</span> to <span class="email-address">{{ new_email }}</span>.</p>
+            <p>Your old email address, {{ old_email }}, will no longer receive account notifications or be usable for login.</p>
+            <p><strong>If you did NOT authorize this change, please contact our support team immediately:</strong></p>
+            <p><a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+            <p>Thanks,<br>The {{ company_name }} Team</p>
+        </div>
+        <div class="footer">
+            <p>&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

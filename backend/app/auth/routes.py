@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.schemas import (
     AuthSuccessResponse,
     ForgotPasswordRequest,
+    GoogleCodeExchangeRequest,
     LoginRequest,
     MessageResponse,
     ResetPasswordRequest,
@@ -27,6 +28,7 @@ from app.auth.schemas import (
 )
 
 from app.auth.services import (
+    exchange_google_code,
     handle_google_callback,
     handle_google_login,
     login_user_json,
@@ -146,12 +148,14 @@ async def google_login(
     return await handle_google_login(request, role)
 
 
+# Modify this existing route:
 @router.get(
     "/google/callback",
-    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    status_code=status.HTTP_307_TEMPORARY_REDIRECT,  # Keep redirect status
     summary="Handle Google OAuth2 Callback",
-    description="Handles the callback from Google after OAuth2 login, authenticates or registers the user, and redirects.",
-    response_description="Redirects to the frontend application with an access token.",
+    description="Handles the callback from Google, validates state, and redirects to the frontend with the authorization code.",  # Updated description
+    response_description="Redirects to the frontend application callback handler with the authorization code.",  # Updated description
+    response_class=RedirectResponse,  # Explicitly state response class
 )
 @limiter.limit("10/minute")
 async def google_callback(
@@ -159,9 +163,33 @@ async def google_callback(
     db: AsyncSession = Depends(get_db),
 ) -> RedirectResponse:
     """
-    Handles the Google OAuth2 callback and authenticates the user.
+    Handles the Google OAuth2 callback, validates state, and redirects to frontend.
+    Does NOT return application tokens directly.
     """
+    # The service function now returns the RedirectResponse directly
     return await handle_google_callback(request, db)
+
+
+# Add this new route:
+@router.post(
+    "/google/exchange-code",
+    response_model=AuthSuccessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exchange Google Code for Token",
+    description="Exchanges the authorization code (obtained via frontend redirect) for an application JWT.",
+)
+@limiter.limit("10/minute")  # Apply rate limiting
+async def google_exchange_code(
+    request: Request,  # Pass request for potential use in authlib
+    payload: GoogleCodeExchangeRequest,
+    db: AsyncSession = Depends(get_db),
+) -> AuthSuccessResponse:
+    """
+    Receives the authorization code from the frontend, exchanges it with Google
+    server-side, finds/creates the user, and returns the application JWT.
+    """
+    # Pass the request object needed by some authlib methods
+    return await exchange_google_code(payload, db, request)
 
 
 # ---------------------------------------------------

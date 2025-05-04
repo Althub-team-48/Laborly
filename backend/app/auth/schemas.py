@@ -192,7 +192,6 @@ class OAuthStatePayload(BaseModel):
 
     role: UserRole | None = Field(None, description="Intended user role for signup")
     nonce: str = Field(..., description="Cryptographic nonce for CSRF protection")
-    # 'jti': str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 
 # --------------------------------------------------
@@ -228,3 +227,18 @@ class UserCreate(BaseModel):
             hashed_password=hashed_password,
             role=getattr(UserRole, assigned_role.upper(), UserRole.CLIENT),
         )
+
+
+# --------------------------------------------------
+# GOOGLE OAUTH CODE EXCHANGE SCHEMA
+# --------------------------------------------------
+class GoogleCodeExchangeRequest(BaseModel):
+    """
+    Schema for receiving the authorization code from the frontend
+    to be exchanged for tokens at the backend.
+    """
+
+    code: str = Field(
+        ..., description="The authorization code received from Google via frontend redirect"
+    )
+    state: str | None = Field(None, description="State parameter for verification")

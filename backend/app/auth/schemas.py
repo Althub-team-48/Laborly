@@ -70,6 +70,10 @@ class SignupRequest(BaseModel):
 
     @field_validator("email")
     def normalize_email(cls, v):
+        """
+        Normalize the email address by stripping leading/trailing whitespace
+        and converting it to lowercase.
+        """
         return v.strip().lower()
 
 

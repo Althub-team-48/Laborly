@@ -52,6 +52,9 @@ jobs:
           CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}
           OAUTH_STATE_TOKEN_EXPIRE_MINUTES=${{ secrets.OAUTH_STATE_TOKEN_EXPIRE_MINUTES }}
           LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+          SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
+          EMAILS_ENABLED=${{ secrets.EMAILS_ENABLED }}
+          MAIL_TEMPLATES_DIR=${{ secrets.MAIL_TEMPLATES_DIR }}
           EOF
 
       - name: Stop existing containers
@@ -106,4 +109,4 @@ jobs:
         
 
 
-        
+    

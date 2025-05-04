@@ -19,6 +19,7 @@ from pydantic import (
     ConfigDict,
     EmailStr,
     Field,
+    field_validator,
 )
 
 from app.core.validators import password_validator
@@ -53,6 +54,7 @@ class SignupRequest(BaseModel):
     """
 
     email: EmailStr = Field(..., description="Email address for new account")
+
     phone_number: str = Field(
         ..., min_length=10, max_length=15, description="Phone number for the new account"
     )
@@ -65,6 +67,10 @@ class SignupRequest(BaseModel):
     first_name: str = Field(..., max_length=50, description="User's first name")
     last_name: str = Field(..., max_length=50, description="User's last name")
     role: UserRole = Field(..., description="User role: CLIENT, WORKER, or ADMIN")
+
+    @field_validator("email")
+    def normalize_email(cls, v):
+        return v.strip().lower()
 
 
 # --------------------------------------------------

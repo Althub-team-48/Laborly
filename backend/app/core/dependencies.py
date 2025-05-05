@@ -61,14 +61,12 @@ class PaginationParams:
 # ---------------------------------------------------
 # Authentication Functions
 # ---------------------------------------------------
-
-
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
-    Authenticate the current user based on the provided JWT access token.
+    Authenticate the current user based on the provided JWT access token (Async Redis check).
 
     Raises:
         HTTPException: 401 Unauthorized if authentication fails.
@@ -84,19 +82,24 @@ async def get_current_user(
         token_data = TokenPayload(**payload)
 
         jti = payload.get("jti")
-        if jti and is_token_blacklisted(jti):
-            logger.warning(f"[AUTH] Blacklisted token detected: jti={jti}")
-            raise credentials_exception
+        if jti:
+            # Await the async blacklist check
+            token_is_blacklisted = await is_token_blacklisted(jti)
+            if token_is_blacklisted:
+                logger.warning(f"[AUTH ASYNC] Blacklisted token detected: jti={jti}")
+                raise credentials_exception
 
     except (JWTError, ValueError) as e:
-        logger.warning(f"[AUTH] JWT decoding failed: {e}")
+        logger.warning(f"[AUTH ASYNC] JWT decoding failed: {e}")
         raise credentials_exception
 
     result = await db.execute(select(User).filter(User.id == token_data.sub))
     user = result.unique().scalar_one_or_none()
 
     if not user:
-        logger.warning(f"[AUTH] JWT valid but no matching user found: user_id={token_data.sub}")
+        logger.warning(
+            f"[AUTH ASYNC] JWT valid but no matching user found: user_id={token_data.sub}"
+        )
         raise credentials_exception
 
     return user

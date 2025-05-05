@@ -1,16 +1,15 @@
 """
 backend/app/core/blacklist.py
 
-JWT Blacklist Management
+JWT Blacklist Management using Async Redis
 
-Handles JWT token blacklisting using Redis:
+Handles JWT token blacklisting using an asynchronous Redis client:
 - Stores token `jti` (JWT ID) with expiration
 - Allows invalidating tokens on logout or forced expiration
 """
 
 import logging
-
-import redis
+import redis.asyncio as redis
 
 from app.core.config import settings
 
@@ -25,51 +24,50 @@ logger = logging.getLogger(__name__)
 redis_client: redis.Redis | None = None  # type: ignore[type-arg]
 
 try:
+    # Initialize the async client
     redis_client = redis.Redis(
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
         db=settings.REDIS_DB,
-        decode_responses=True,  # Ensure stored values are strings
+        decode_responses=True,
     )
-    # Test Redis connection at startup
-    redis_client.ping()
     logger.info(
-        f"[REDIS] Connected to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+        f"[REDIS ASYNC] Initialized async Redis client for {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
     )
 except redis.RedisError as e:
-    logger.error(f"[REDIS] Connection failed: {e}")
-    redis_client = None  # Safe fallback to prevent import-time failure
+    logger.error(f"[REDIS ASYNC] Initialization failed: {e}")
+    redis_client = None
 
 # Prefix for all blacklist keys
 BLACKLIST_PREFIX = "jwt_blacklist:"
 
+
 # ---------------------------------------------------
 # Blacklist Management Functions
 # ---------------------------------------------------
-
-
-def blacklist_token(jti: str, expires_in: int) -> None:
+async def blacklist_token(jti: str, expires_in: int) -> None:
     """
-    Blacklist a JWT token by storing its `jti` in Redis with TTL.
+    Blacklist a JWT token by storing its `jti` in Redis with TTL (Async).
 
     Args:
         jti (str): Unique JWT ID from the token payload.
         expires_in (int): Expiration time in seconds (matches token lifetime).
     """
     if not redis_client:
-        logger.warning("[BLACKLIST] Redis unavailable: Token not blacklisted.")
+        logger.warning("[BLACKLIST ASYNC] Redis unavailable: Token not blacklisted.")
         return
 
     try:
-        redis_client.setex(f"{BLACKLIST_PREFIX}{jti}", expires_in, "true")
-        logger.debug(f"[BLACKLIST] Token blacklisted: jti={jti} for {expires_in}s")
+        # Use await with the async client's method
+        await redis_client.setex(f"{BLACKLIST_PREFIX}{jti}", expires_in, "true")
+        logger.debug(f"[BLACKLIST ASYNC] Token blacklisted: jti={jti} for {expires_in}s")
     except redis.RedisError as e:
-        logger.error(f"[BLACKLIST] Failed to blacklist token: {e}")
+        logger.error(f"[BLACKLIST ASYNC] Failed to blacklist token: {e}")
 
 
-def is_token_blacklisted(jti: str) -> bool:
+async def is_token_blacklisted(jti: str) -> bool:
     """
-    Check if a JWT token ID (`jti`) is blacklisted.
+    Check if a JWT token ID (`jti`) is blacklisted (Async).
 
     Args:
         jti (str): Token ID to check.
@@ -78,11 +76,13 @@ def is_token_blacklisted(jti: str) -> bool:
         bool: True if blacklisted, False otherwise.
     """
     if not redis_client:
-        logger.warning("[BLACKLIST] Redis unavailable: Assuming token is not blacklisted.")
+        logger.warning("[BLACKLIST ASYNC] Redis unavailable: Assuming token is not blacklisted.")
         return False
 
     try:
-        return redis_client.exists(f"{BLACKLIST_PREFIX}{jti}") == 1
+        # Use await with the async client's method
+        exists = await redis_client.exists(f"{BLACKLIST_PREFIX}{jti}")
+        return exists == 1
     except redis.RedisError as e:
-        logger.error(f"[BLACKLIST] Failed to check token blacklist status: {e}")
+        logger.error(f"[BLACKLIST ASYNC] Failed to check token blacklist status: {e}")
         return False

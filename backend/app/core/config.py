@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from dotenv import load_dotenv
 from pydantic import EmailStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,7 +21,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Logger Configuration
 # ---------------------------------------------------
 logger = logging.getLogger(__name__)
-
+# Load environment variables from `.env` file
+load_dotenv(override=True)
 # ---------------------------------------------------
 # Base Directory Calculation
 # ---------------------------------------------------
@@ -95,6 +97,10 @@ class Settings(BaseSettings):
 
     # --- CORS Settings ---
     CORS_ALLOWED_ORIGINS: str
+
+    # Cache Settings
+    DEFAULT_CACHE_TTL: int
+    CACHE_PREFIX: str
 
     # --- Calculated Properties ---
     @property
@@ -178,6 +184,9 @@ if TYPE_CHECKING:
         OAUTH_STATE_TOKEN_EXPIRE_MINUTES=0,
         # CORS Settings
         CORS_ALLOWED_ORIGINS="",
+        # Cache Settings
+        DEFAULT_CACHE_TTL=0,
+        CACHE_PREFIX="",
     )
 else:
     settings = Settings()

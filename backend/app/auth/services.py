@@ -258,17 +258,25 @@ async def request_new_verification_email(email: EmailStr, db: AsyncSession) -> M
 async def _authenticate_user(
     email: str, password: str | None, db: AsyncSession, client_ip: str
 ) -> User:
-    """Helper function to fetch and validate user credentials."""
+    """Helper function to fetch and validate user credentials (Async Redis)."""
     # Check for IP penalty first
     penalty_key = f"{IP_PENALTY_PREFIX}{client_ip}"
-    if redis_client and redis_client.exists(penalty_key):
-        logger.warning(f"Login attempt from penalized IP: {client_ip}")
-        # Optionally add a small delay even on penalty check to slow down attackers
-        await asyncio.sleep(random.uniform(1, 3))
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many failed login attempts. Please try again later.",
-        )
+    if redis_client:  # Check if client exists
+        try:
+            # Use await with async client method
+            is_penalized = await redis_client.exists(penalty_key)
+            if is_penalized:
+                logger.warning(f"Login attempt from penalized IP: {client_ip}")
+                await asyncio.sleep(random.uniform(1, 3))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many failed login attempts. Please try again later.",
+                )
+        except Exception as e:
+            logger.error(f"[REDIS ASYNC ERROR] Failed checking IP penalty for {client_ip}: {e}")
+            # Decide how to handle - fail open or closed? Fail closed for security.
+            raise HTTPException(status_code=500, detail="Error checking login status.")
+
     user = (
         (await db.execute(select(User).filter(User.email == email))).unique().scalar_one_or_none()
     )
@@ -276,33 +284,42 @@ async def _authenticate_user(
     if user and password:
         is_password_correct = verify_password(password, user.hashed_password)
 
-    # Check if user exists and password is correct (if password provided)
     if not user or not is_password_correct:
         logger.warning(f"Failed login attempt for email: {email} from IP: {client_ip}")
 
         if redis_client:
-            failed_attempts_key = f"{FAILED_LOGIN_PREFIX}{client_ip}"
-            # Increment failed attempts counter and set expiration if it's a new key
-            redis_client.incr(failed_attempts_key)
-            # Set TTL only if key is newly created or doesn't have one
-            if redis_client.ttl(failed_attempts_key) == -1:  # -1 means key exists but has no TTL
-                redis_client.expire(failed_attempts_key, FAILED_ATTEMPTS_WINDOW)
+            try:
+                failed_attempts_key = f"{FAILED_LOGIN_PREFIX}{client_ip}"
+                # Increment failed attempts counter (async)
+                await redis_client.incr(failed_attempts_key)
+                # Set TTL only if key is newly created or doesn't have one (async)
+                ttl_status = await redis_client.ttl(failed_attempts_key)
+                if ttl_status == -1:  # -1 means key exists but has no TTL
+                    await redis_client.expire(failed_attempts_key, FAILED_ATTEMPTS_WINDOW)
 
-            failed_attempts = int(redis_client.get(failed_attempts_key) or 0)
+                # Get failed attempts count (async)
+                failed_attempts_str = await redis_client.get(failed_attempts_key)
+                failed_attempts = int(failed_attempts_str or 0)
 
-            if failed_attempts >= MAX_FAILED_ATTEMPTS:
-                # Apply penalty - set a temporary key for the IP
-                redis_client.setex(penalty_key, IP_PENALTY_DURATION, "penalized")
-                logger.warning(f"IP address penalized due to too many failed attempts: {client_ip}")
-                # Add a longer delay when penalty is applied
-                await asyncio.sleep(random.uniform(5, 10))
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many failed login attempts. Please try again later.",
+                if failed_attempts >= MAX_FAILED_ATTEMPTS:
+                    # Apply penalty - set a temporary key for the IP (async)
+                    await redis_client.setex(penalty_key, IP_PENALTY_DURATION, "penalized")
+                    logger.warning(
+                        f"IP address penalized due to too many failed attempts: {client_ip}"
+                    )
+                    await asyncio.sleep(random.uniform(5, 10))
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Too many failed login attempts. Please try again later.",
+                    )
+                else:
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
+            except Exception as e:
+                logger.error(
+                    f"[REDIS ASYNC ERROR] Failed processing failed login for {client_ip}: {e}"
                 )
-            else:
-                # Add a small delay on incorrect attempts below the threshold
-                await asyncio.sleep(random.uniform(0.5, 1.5))
+                # Fail closed
+                raise HTTPException(status_code=500, detail="Error processing login attempt.")
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -310,21 +327,25 @@ async def _authenticate_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check if email is verified (only after successful authentication)
     if not user.is_verified:
         logger.warning(f"Login attempt by unverified user: {user.email}")
-        # Optionally add a small delay even for unverified users
         await asyncio.sleep(random.uniform(0.5, 1.5))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email before logging in.",
         )
 
-    # If authentication is successful, reset failed attempts counter for this IP
     if redis_client:
-        failed_attempts_key = f"{FAILED_LOGIN_PREFIX}{client_ip}"
-        redis_client.delete(failed_attempts_key)
-        logger.debug(f"Resetting failed login attempts for IP: {client_ip}")
+        try:
+            failed_attempts_key = f"{FAILED_LOGIN_PREFIX}{client_ip}"
+            # Delete failed attempts counter (async)
+            await redis_client.delete(failed_attempts_key)
+            logger.debug(f"Resetting failed login attempts for IP: {client_ip}")
+        except Exception as e:
+            logger.error(
+                f"[REDIS ASYNC ERROR] Failed resetting failed attempts for {client_ip}: {e}"
+            )
+            # Log error but allow login to proceed
 
     return user
 
@@ -361,10 +382,9 @@ async def login_user_oauth(
 # ------------------------------------------------
 # Logout
 # ------------------------------------------------
-def logout_user_token(token: str) -> dict[str, str]:
-    """Blacklists the provided JWT access token."""
+async def logout_user_token(token: str) -> dict[str, str]:
+    """Blacklists the provided JWT access token (Async)."""
     try:
-        # Decode just to get JTI and EXP, validation happens implicitly
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
@@ -372,17 +392,17 @@ def logout_user_token(token: str) -> dict[str, str]:
             options={
                 "verify_signature": False,
                 "verify_aud": False,
-            },  # Don't need full validation here
+            },
         )
         jti = payload.get("jti")
         exp = payload.get("exp")
 
         if jti and exp:
-            # Calculate remaining time to live for the blacklist entry
             now = datetime.now(timezone.utc).timestamp()
-            ttl = max(0, int(exp - now))  # Ensure TTL is not negative
+            ttl = max(0, int(exp - now))
             if ttl > 0:
-                blacklist_token(jti, ttl)
+                # Call the async blacklist function
+                await blacklist_token(jti, ttl)
                 logger.info(f"Access token blacklisted (JTI: {jti}) for {ttl} seconds.")
             else:
                 logger.info(f"Access token already expired (JTI: {jti}). No blacklist needed.")
@@ -390,9 +410,7 @@ def logout_user_token(token: str) -> dict[str, str]:
             logger.warning("Attempted logout with token missing 'jti' or 'exp'.")
 
     except JWTError as e:
-        # Log the error but proceed with logout response
         logger.warning(f"Error decoding token during logout: {e}")
-        # Still return success, as the token is effectively unusable if invalid
 
     return {"detail": "Logout successful"}
 

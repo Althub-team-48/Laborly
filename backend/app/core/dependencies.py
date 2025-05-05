@@ -4,7 +4,7 @@ backend/app/core/dependencies.py
 Authentication and Authorization Dependencies
 
 Provides authentication and role-based access control (RBAC) for FastAPI routes:
-- Validates JWT tokens
+- Validates JWT tokens from Bearer header OR HttpOnly cookie
 - Checks against blacklisted tokens (logout protection)
 - Retrieves authenticated user from the database
 - Restricts access based on user roles
@@ -15,9 +15,9 @@ Pagination Dependency:
 
 import logging
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import Any, Annotated
 
-from fastapi import Depends, HTTPException, Query, WebSocket, status
+from fastapi import Depends, HTTPException, Query, WebSocket, status, Cookie
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -38,7 +38,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------
 # OAuth2 Configuration
 # ---------------------------------------------------
-oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(tokenUrl="/auth/login/oauth")
+# Keep the scheme for potential non-cookie auth, but disable auto_error
+# If auto_error=True, it would raise 401 if header is missing, preventing cookie check
+oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(
+    tokenUrl="/auth/login/oauth", auto_error=False
+)
 
 
 # ---------------------------------------------------
@@ -62,20 +66,33 @@ class PaginationParams:
 # Authentication Functions
 # ---------------------------------------------------
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    # Try Authorization header first (optional)
+    token_header: Annotated[str | None, Depends(oauth2_scheme)] = None,
+    # Fallback to reading from cookie named "access_token"
+    token_cookie: Annotated[str | None, Cookie(alias="access_token")] = None,
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
-    Authenticate the current user based on the provided JWT access token (Async Redis check).
+    Authenticate the current user based on the provided JWT access token,
+    checking Bearer header first, then HttpOnly cookie.
 
     Raises:
         HTTPException: 401 Unauthorized if authentication fails.
     """
+    # Prioritize Authorization header, fallback to cookie
+    token = token_header or token_cookie
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+        # Only include WWW-Authenticate if no token was found at all
+        # or potentially if Bearer specifically failed.
+        headers={"WWW-Authenticate": "Bearer"} if token is None else None,
     )
+
+    if token is None:
+        logger.debug("[AUTH] No token found in Authorization header or access_token cookie.")
+        raise credentials_exception
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -91,6 +108,7 @@ async def get_current_user(
 
     except (JWTError, ValueError) as e:
         logger.warning(f"[AUTH ASYNC] JWT decoding failed: {e}")
+
         raise credentials_exception
 
     result = await db.execute(select(User).filter(User.id == token_data.sub))
@@ -102,6 +120,14 @@ async def get_current_user(
         )
         raise credentials_exception
 
+    # Optionally add checks for user active status etc. here if needed globally
+    if not user.is_active:
+        logger.warning(f"[AUTH] Authentication attempt by inactive user: {user.id}")
+        raise credentials_exception
+
+    logger.debug(
+        f"[AUTH] User {user.id} authenticated successfully via {'Header' if token_header else 'Cookie'}."
+    )
     return user
 
 
@@ -111,17 +137,39 @@ async def get_current_user_from_ws(
 ) -> User:
     """
     Authenticate the current user from a WebSocket connection.
+    Tries Authorization header first, then cookie.
 
     Raises:
         Exception: If token is missing or invalid.
     """
-    token = websocket.headers.get("Authorization")
-    if not token or not token.startswith("Bearer "):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        raise Exception("Missing or invalid token in WebSocket headers.")
+    token_header = websocket.headers.get("Authorization")
+    token_cookie = websocket.cookies.get("access_token")  # Use the same key as set in service
 
-    token = token.replace("Bearer ", "")
-    return await get_current_user(token=token, db=db)
+    token = None
+    if token_header and token_header.startswith("Bearer "):
+        token = token_header.replace("Bearer ", "")
+    elif token_cookie:
+        token = token_cookie
+
+    if not token:
+        await websocket.close(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Authentication token missing."
+        )
+        raise Exception("Missing token in WebSocket headers or cookies.")
+
+    # Use the same core get_current_user logic
+    try:
+        user = await get_current_user(
+            token_header=token if token_header else None,
+            token_cookie=token if token_cookie else None,
+            db=db,
+        )
+        return user
+    except HTTPException as e:
+        await websocket.close(
+            code=status.WS_1008_POLICY_VIOLATION, reason=f"Authentication failed: {e.detail}"
+        )
+        raise Exception(f"Authentication failed: {e.detail}")
 
 
 # ---------------------------------------------------
@@ -132,12 +180,6 @@ async def get_current_user_from_ws(
 def get_current_user_with_role(required_role: UserRole) -> Callable[..., Coroutine[Any, Any, User]]:
     """
     Dependency to restrict access to users with a specific role.
-
-    Args:
-        required_role (UserRole): The role required to access the route.
-
-    Returns:
-        Callable that validates the current user's role.
     """
 
     async def role_dependency(user: User = Depends(get_current_user)) -> User:
@@ -157,12 +199,6 @@ def get_current_user_with_role(required_role: UserRole) -> Callable[..., Corouti
 def require_roles(*roles: UserRole) -> Callable[..., Coroutine[Any, Any, User]]:
     """
     Dependency to restrict access to users having any of the specified roles.
-
-    Args:
-        roles (UserRole): One or more allowed user roles.
-
-    Returns:
-        Callable that validates if user role is among the allowed roles.
     """
 
     async def checker(user: User = Depends(get_current_user)) -> User:

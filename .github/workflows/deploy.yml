@@ -56,7 +56,7 @@ jobs:
           EMAILS_ENABLED=${{ secrets.EMAILS_ENABLED }}
           MAIL_TEMPLATES_DIR=${{ secrets.MAIL_TEMPLATES_DIR }}
           CACHE_PREFIX=${{ secrets.CACHE_PREFIX }}
-          DEFAULT_CACHE_TIMEOUT=${{ secrets.DEFAULT_CACHE_TIMEOUT }}
+          DEFAULT_CACHE_TTL=${{ secrets.DEFAULT_CACHE_TTL }}
           EOF
 
       - name: Stop existing containers

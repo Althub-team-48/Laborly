@@ -15,8 +15,6 @@ from pydantic import BaseModel, ConfigDict, Field
 # ---------------------------------------------------
 # Client Profile Schemas
 # ---------------------------------------------------
-
-
 class ClientProfileBase(BaseModel):
     """Base schema for client profile information."""
 
@@ -47,7 +45,7 @@ class ClientProfileRead(ClientProfileBase):
     id: UUID = Field(..., description="Unique identifier for the client profile")
     user_id: UUID = Field(..., description="UUID of the user this profile belongs to")
     email: str = Field(..., description="Email address of the client")
-    phone_number: str = Field(..., description="Phone number of the client")
+    phone_number: str | None = Field(..., description="Phone number of the client")
     first_name: str = Field(..., description="First name of the client")
     last_name: str = Field(..., description="Last name of the client")
     location: str | None = Field(default=None, description="Location of the client")
@@ -60,8 +58,6 @@ class ClientProfileRead(ClientProfileBase):
 # ---------------------------------------------------
 # Public Client Profile Schema
 # ---------------------------------------------------
-
-
 class PublicClientRead(BaseModel):
     """Schema for a public view of a client profile (excluding sensitive information)."""
 
@@ -76,8 +72,6 @@ class PublicClientRead(BaseModel):
 # ---------------------------------------------------
 # Favorite Worker Schemas
 # ---------------------------------------------------
-
-
 class FavoriteBase(BaseModel):
     """Base schema for favorite worker information."""
 
@@ -97,14 +91,12 @@ class FavoriteRead(FavoriteBase):
 # ---------------------------------------------------
 # Client Job History Schemas
 # ---------------------------------------------------
-
-
 class ClientJobRead(BaseModel):
     """Schema returned when reading a job from the client's job history."""
 
     id: UUID = Field(..., description="Unique identifier of the job")
     service_id: UUID | None = Field(default=None, description="Service related to the job")
-    worker_id: UUID = Field(..., description="Worker assigned to the job")
+    worker_id: UUID | None = Field(None, description="Worker assigned to the job")
     status: str = Field(..., description="Current status of the job")
     started_at: datetime | None = Field(default=None, description="Job start timestamp")
     completed_at: datetime | None = Field(default=None, description="Job completion timestamp")
@@ -114,14 +106,3 @@ class ClientJobRead(BaseModel):
     cancel_reason: str | None = Field(default=None, description="Reason for job cancellation")
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# ---------------------------------------------------
-# Generic Message Response Schema
-# ---------------------------------------------------
-
-
-class MessageResponse(BaseModel):
-    """Generic response schema for simple success or informational messages."""
-
-    detail: str = Field(..., description="Response message detail")

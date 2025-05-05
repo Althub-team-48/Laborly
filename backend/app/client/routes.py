@@ -12,17 +12,18 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import HttpUrl, TypeAdapter, ValidationError
 
 from app.admin.schemas import PresignedUrlResponse
 from app.client import schemas
-from app.client.schemas import MessageResponse, PublicClientRead
+from app.client.schemas import PublicClientRead, FavoriteRead, ClientJobRead
 from app.client.services import ClientService
 from app.core.dependencies import get_current_user_with_role, PaginationParams
 from app.core.limiter import limiter
 from app.core.upload import upload_file_to_s3
-from app.core.schemas import PaginatedResponse
+from app.core.schemas import PaginatedResponse, MessageResponse
 from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
@@ -94,7 +95,7 @@ async def update_my_client_profile(
 
 @router.patch(
     "/profile/picture",
-    response_model=schemas.MessageResponse,
+    response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
     summary="Update My Profile Picture",
     description="Upload and update the profile picture for the authenticated client.",
@@ -107,16 +108,26 @@ async def update_my_client_profile_picture(
     profile_picture: UploadFile = File(
         ..., description="New profile picture file (JPG, PNG). Max 10MB."
     ),
-) -> schemas.MessageResponse:
+) -> MessageResponse:
     """Upload and set a new profile picture for the authenticated client."""
     logger.info(f"Client {current_user.id} attempting to update profile picture.")
 
-    picture_url = await upload_file_to_s3(profile_picture, subfolder="profile_pictures")
+    try:
+        picture_url = await upload_file_to_s3(profile_picture, subfolder="profile_pictures")
+    except HTTPException as e:
+        logger.error(f"Client profile picture upload failed for {current_user.id}: {e.detail}")
+        raise
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during client profile picture upload for {current_user.id}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Profile picture upload failed.",
+        )
 
-    await ClientService(db).update_profile_picture(current_user.id, picture_url)
-
-    logger.info(f"Client {current_user.id} successfully updated profile picture to {picture_url}")
-    return schemas.MessageResponse(detail="Profile picture updated successfully.")
+    return await ClientService(db).update_profile_picture(current_user.id, picture_url)
 
 
 @router.get(
@@ -135,12 +146,17 @@ async def get_my_client_profile_picture_url(
     """Generate a pre-signed URL for the client's profile picture."""
     logger.info(f"Client {current_user.id} requesting pre-signed URL for their profile picture.")
 
-    presigned_url = await ClientService(db).get_profile_picture_presigned_url(current_user.id)
+    presigned_url_str = await ClientService(db).get_profile_picture_presigned_url(current_user.id)
 
-    if not presigned_url:
+    if not presigned_url_str:
         return None
 
-    return PresignedUrlResponse(url=presigned_url)  # type: ignore[arg-type]
+    try:
+        validated_url = TypeAdapter(HttpUrl).validate_python(presigned_url_str)
+        return PresignedUrlResponse(url=validated_url)
+    except ValidationError as e:
+        logger.error(f"Generated presigned URL failed validation for client {current_user.id}: {e}")
+        return None
 
 
 # ---------------------------------------------------
@@ -148,7 +164,7 @@ async def get_my_client_profile_picture_url(
 # ---------------------------------------------------
 @router.get(
     "/favorites",
-    response_model=PaginatedResponse[schemas.FavoriteRead],
+    response_model=PaginatedResponse[FavoriteRead],
     status_code=status.HTTP_200_OK,
     summary="List My Favorite Workers",
     description="Retrieve a list of workers the authenticated client has marked as favorites.",
@@ -159,21 +175,21 @@ async def list_my_favorite_workers(
     db: DBDep,
     current_user: AuthenticatedClientDep,
     pagination: PaginationParams = Depends(),
-) -> PaginatedResponse[schemas.FavoriteRead]:
+) -> PaginatedResponse[FavoriteRead]:
     """List all favorite workers for the authenticated client with pagination."""
-    favorites, total_count = await ClientService(db).list_favorites(
+    favorites_reads, total_count = await ClientService(db).list_favorites(
         current_user.id, skip=pagination.skip, limit=pagination.limit
     )
     return PaginatedResponse(
         total_count=total_count,
         has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=[schemas.FavoriteRead.model_validate(fav, from_attributes=True) for fav in favorites],
+        items=favorites_reads,
     )
 
 
 @router.post(
     "/favorites/{worker_id}",
-    response_model=schemas.FavoriteRead,
+    response_model=FavoriteRead,
     status_code=status.HTTP_201_CREATED,
     summary="Add Favorite Worker",
     description="Add a specific worker to the authenticated client's list of favorites.",
@@ -184,10 +200,9 @@ async def add_my_favorite_worker(
     worker_id: UUID,
     db: DBDep,
     current_user: AuthenticatedClientDep,
-) -> schemas.FavoriteRead:
+) -> FavoriteRead:
     """Add a worker to the authenticated client's favorites."""
-    fav = await ClientService(db).add_favorite(current_user.id, worker_id)
-    return schemas.FavoriteRead.model_validate(fav, from_attributes=True)
+    return await ClientService(db).add_favorite(current_user.id, worker_id)
 
 
 @router.delete(
@@ -214,7 +229,7 @@ async def remove_my_favorite_worker(
 # ---------------------------------------------------
 @router.get(
     "/jobs",
-    response_model=PaginatedResponse[schemas.ClientJobRead],
+    response_model=PaginatedResponse[ClientJobRead],
     status_code=status.HTTP_200_OK,
     summary="List My Client Jobs",
     description="List all jobs created by the authenticated client user.",
@@ -225,21 +240,21 @@ async def list_my_client_jobs(
     db: DBDep,
     current_user: AuthenticatedClientDep,
     pagination: PaginationParams = Depends(),
-) -> PaginatedResponse[schemas.ClientJobRead]:
+) -> PaginatedResponse[ClientJobRead]:
     """List all jobs posted by the authenticated client with pagination."""
-    jobs, total_count = await ClientService(db).get_jobs(
+    job_reads, total_count = await ClientService(db).get_jobs(
         current_user.id, skip=pagination.skip, limit=pagination.limit
     )
     return PaginatedResponse(
         total_count=total_count,
         has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=[schemas.ClientJobRead.model_validate(job, from_attributes=True) for job in jobs],
+        items=job_reads,
     )
 
 
 @router.get(
     "/jobs/{job_id}",
-    response_model=schemas.ClientJobRead,
+    response_model=ClientJobRead,
     status_code=status.HTTP_200_OK,
     summary="Get My Job Detail",
     description="Retrieve detailed information for a specific job posted by the authenticated client.",
@@ -250,7 +265,6 @@ async def get_my_client_job_detail(
     job_id: UUID,
     db: DBDep,
     current_user: AuthenticatedClientDep,
-) -> schemas.ClientJobRead:
+) -> ClientJobRead:
     """Retrieve details for a specific job posted by the authenticated client."""
-    job = await ClientService(db).get_job_detail(current_user.id, job_id)
-    return schemas.ClientJobRead.model_validate(job, from_attributes=True)
+    return await ClientService(db).get_job_detail(current_user.id, job_id)

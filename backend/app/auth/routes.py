@@ -210,7 +210,7 @@ async def logout(
     """
     Logs out a user by blacklisting their JWT access token.
     """
-    return logout_user_token(token)
+    return await logout_user_token(token)
 
 
 # ---------------------------------------------------

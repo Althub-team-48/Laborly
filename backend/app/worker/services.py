@@ -65,7 +65,7 @@ class WorkerService:
             _cache_key("worker_kyc", user_id),
         ]
         try:
-            await self.cache.delete(*keys)  # type: ignore
+            await self.cache.delete(*keys)
             logger.debug(f"[CACHE] Invalidated keys: {keys}")
         except Exception as e:
             logger.error(f"[CACHE] Invalidation failed for {keys}: {e}")
@@ -121,7 +121,7 @@ class WorkerService:
         cache_key = _cache_key("worker_profile", user_id)
         if self.cache:
             try:
-                data = await self.cache.get(cache_key)  # type: ignore
+                data = await self.cache.get(cache_key)
                 if data:
                     return schemas.WorkerProfileRead.model_validate_json(data)
             except Exception:
@@ -133,7 +133,7 @@ class WorkerService:
 
         if self.cache:
             try:
-                await self.cache.set(cache_key, response.model_dump_json(), ex=DEFAULT_CACHE_TTL)  # type: ignore
+                await self.cache.set(cache_key, response.model_dump_json(), ex=DEFAULT_CACHE_TTL)
             except Exception:
                 logger.exception("[CACHE] Write error")
 
@@ -174,7 +174,11 @@ class WorkerService:
 
         if self.cache:
             try:
-                await self.cache.set(_cache_key("worker_profile", user_id), response.model_dump_json(), ex=DEFAULT_CACHE_TTL)  # type: ignore
+                await self.cache.set(
+                    _cache_key("worker_profile", user_id),
+                    response.model_dump_json(),
+                    ex=DEFAULT_CACHE_TTL,
+                )
             except Exception:
                 logger.exception("[CACHE] Post-update write error")
 
@@ -217,7 +221,7 @@ class WorkerService:
         cache_key = _cache_key("public_worker_profile", user_id)
         if self.cache:
             try:
-                data = await self.cache.get(cache_key)  # type: ignore
+                data = await self.cache.get(cache_key)
                 if data:
                     return schemas.PublicWorkerRead.model_validate_json(data)
             except Exception:
@@ -252,7 +256,7 @@ class WorkerService:
 
         if self.cache:
             try:
-                await self.cache.set(cache_key, response.model_dump_json(), ex=DEFAULT_CACHE_TTL)  # type: ignore
+                await self.cache.set(cache_key, response.model_dump_json(), ex=DEFAULT_CACHE_TTL)
             except Exception:
                 logger.exception("[CACHE] Write error")
 
@@ -288,7 +292,7 @@ class WorkerService:
         cache_key = _cache_key("worker_kyc", user_id)
         if self.cache:
             try:
-                data = await self.cache.get(cache_key)  # type: ignore
+                data = await self.cache.get(cache_key)
                 if data:
                     return schemas.KYCRead.model_validate_json(data) if data != "null" else None
             except Exception:
@@ -302,7 +306,7 @@ class WorkerService:
         if self.cache:
             try:
                 to_cache = response.model_dump_json() if response else "null"
-                await self.cache.set(cache_key, to_cache, ex=DEFAULT_CACHE_TTL)  # type: ignore
+                await self.cache.set(cache_key, to_cache, ex=DEFAULT_CACHE_TTL)
             except Exception:
                 logger.exception("[CACHE] Write error")
 
@@ -341,7 +345,11 @@ class WorkerService:
         response = schemas.KYCRead.model_validate(kyc)
         if self.cache:
             try:
-                await self.cache.set(_cache_key("worker_kyc", user_id), response.model_dump_json(), ex=DEFAULT_CACHE_TTL)  # type: ignore
+                await self.cache.set(
+                    _cache_key("worker_kyc", user_id),
+                    response.model_dump_json(),
+                    ex=DEFAULT_CACHE_TTL,
+                )
             except Exception:
                 logger.exception("[CACHE] Write error")
 
@@ -357,7 +365,7 @@ class WorkerService:
         cache_key = _paginated_cache_key("worker_jobs", user_id, skip, limit)
         if self.cache:
             try:
-                data = await self.cache.get(cache_key)  # type: ignore
+                data = await self.cache.get(cache_key)
                 if data:
                     payload = json.loads(data)
                     items = [JobRead.model_validate(i) for i in payload["items"]]
@@ -384,7 +392,7 @@ class WorkerService:
                 payload = json.dumps(
                     {"items": [r.model_dump() for r in reads], "total_count": total}
                 )
-                await self.cache.set(cache_key, payload, ex=DEFAULT_CACHE_TTL)  # type: ignore
+                await self.cache.set(cache_key, payload, ex=DEFAULT_CACHE_TTL)
             except Exception:
                 logger.exception("[CACHE] Write error")
 

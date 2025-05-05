@@ -109,4 +109,3 @@ jobs:
       - name: Restart NGINX to apply HTTPS
         run: docker-compose restart nginx
         
-

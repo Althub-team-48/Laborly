@@ -709,8 +709,8 @@ async def exchange_google_code(
     # --- Perform Code Exchange with Google ---
     try:
         redirect_uri = str(request.url_for("google_callback"))
-        token = await oauth.google.fetch_token(
-            code=payload.code, redirect_uri=redirect_uri, grant_type='authorization_code'
+        token = await oauth.google.authorize_access_token(
+            request, code=payload.code, redirect_uri=redirect_uri
         )
 
         if not token or 'access_token' not in token:

@@ -6,7 +6,7 @@ Handles authentication-related business logic:
 - Password hashing and verification
 - JWT token creation and logout
 - Signup and login (JSON / OAuth2)
-- Google OAuth2 login flow and callback
+- Google OAuth2 login flow and callback (secure backend exchange)
 - Email verification, password reset, and secure email update
 """
 
@@ -35,7 +35,6 @@ from app.auth.schemas import (
     AuthUserResponse,
     AuthSuccessResponse,
     ForgotPasswordRequest,
-    GoogleCodeExchangeRequest,
     LoginRequest,
     MessageResponse,
     ResetPasswordRequest,
@@ -78,9 +77,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ------------------------------------------------
 # Brute-Force Protection Settings (Redis Keys and Thresholds)
 # ------------------------------------------------
-# Key prefix for failed login attempts per IP
 FAILED_LOGIN_PREFIX = "failed_logins:ip:"
-# Key prefix for temporary IP blacklisting/penalty
 IP_PENALTY_PREFIX = "ip_penalty:"
 
 MAX_FAILED_ATTEMPTS = settings.MAX_FAILED_ATTEMPTS
@@ -565,7 +562,10 @@ async def verify_new_email(token: str, db: AsyncSession) -> MessageResponse:
     # Update the user's email
     old_email = user.email
     user.email = new_email
-    user.is_verified = True
+    # Ensure user stays verified if they were already
+    if not user.is_verified:
+        user.is_verified = True
+
     await db.commit()
     logger.info(f"User {user.id} successfully updated email from {old_email} to {new_email}")
 
@@ -617,7 +617,7 @@ async def handle_google_login(request: Request, role: UserRole | None) -> Redire
     # This MUST match the URI registered in Google Cloud Console and used in the callback route
     redirect_uri = str(request.url_for("google_callback"))
     nonce = secrets.token_hex(16)
-    request.session["oauth_nonce"] = nonce
+    request.session["oauth_nonce"] = nonce  # Store nonce in server-side session
 
     logger.debug(f"Stored nonce {nonce} in session for Google OAuth")
 
@@ -633,7 +633,9 @@ async def handle_google_login(request: Request, role: UserRole | None) -> Redire
 async def handle_google_callback(request: Request, db: AsyncSession) -> RedirectResponse:
     """
     Handles the callback from Google.
-    Validates state, extracts authorization code, and redirects to frontend with the code and state.
+    Validates state, exchanges code for tokens, fetches user info,
+    finds/creates the user, issues an application JWT via secure cookie,
+    and redirects to the frontend.
     """
     if not is_google_oauth_configured():
         logger.error("Google OAuth callback attempted but not configured.")
@@ -642,87 +644,60 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         )
 
     returned_state_jwt = request.query_params.get("state")
-    session_nonce = request.session.pop("oauth_nonce", None)
+    session_nonce = request.session.pop("oauth_nonce", None)  # Use pop to remove after use
 
     if not returned_state_jwt or not session_nonce:
         logger.error("Missing state or nonce during Google callback.")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Missing state or nonce."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="State or nonce missing from callback."
         )
 
+    requested_role = UserRole.CLIENT  # Default role
     try:
         state_payload = decode_oauth_state_token(returned_state_jwt)
         if state_payload.nonce != session_nonce:
-            logger.error("OAuth nonce mismatch. Potential CSRF.")
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid nonce.")
-        logger.info("Google callback state validated.")
+            logger.error(
+                f"OAuth nonce mismatch. Session: {session_nonce}, State: {state_payload.nonce}. Potential CSRF."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid state parameter (nonce mismatch).",
+            )
+        requested_role = state_payload.role or UserRole.CLIENT  # Get role from validated state
+        logger.info(
+            f"Google callback state validated. Nonce matched. Requested role: {requested_role}"
+        )
     except HTTPException as e:
-        logger.error(f"Failed to decode state JWT: {e.detail}")
-        raise e
+        logger.error(f"Failed to decode/validate state JWT: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Invalid state: {e.detail}")
     except Exception as e:
         logger.error(f"Unexpected error validating state: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during state validation.",
         )
-
-    code = request.query_params.get("code")
-    if not code:
-        logger.error("Authorization code missing in Google callback.")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Missing authorization code."
-        )
-
-    # --- Redirect to Frontend with Code and State ---
-    # !! IMPORTANT: Replace '/auth/google/handle' with actual frontend route that is designed to receive this code and state, and call the exchange endpoint.
-    frontend_redirect = (
-        f"{settings.BASE_URL.rstrip('/')}/auth/google/handle?code={code}&state={returned_state_jwt}"
-    )
-    logger.debug(f"Redirecting to frontend: {frontend_redirect}")
-    return RedirectResponse(url=frontend_redirect)
-
-
-async def exchange_google_code(
-    payload: GoogleCodeExchangeRequest, db: AsyncSession, request: Request
-) -> AuthSuccessResponse:
-    """
-    Exchanges the Google authorization code (received from frontend) for tokens,
-    fetches user info, finds/creates the user using role from state, and returns the application JWT.
-    """
-    if not is_google_oauth_configured():
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Google login is not configured."
-        )
-
-    requested_role = UserRole.CLIENT
-    try:
-        if payload.state:
-            state_payload = decode_oauth_state_token(payload.state)
-            requested_role = state_payload.role or UserRole.CLIENT
-            logger.info(f"Using role from state: {requested_role}")
-        else:
-            logger.warning("State not provided. Using default role.")
-    except HTTPException as e:
-        logger.warning(f"Invalid state JWT: {e.detail}. Using default role.")
-    except Exception as e:
-        logger.error(f"Error decoding state JWT: {e}", exc_info=True)
 
     # --- Perform Code Exchange with Google ---
     try:
-        redirect_uri = str(request.url_for("google_callback"))
-        token = await oauth.google.authorize_access_token(
-            request, code=payload.code, redirect_uri=redirect_uri
-        )
+        # Use authorize_access_token within the callback context
+        # Authlib uses the request object to get the 'code' query param
+        # and automatically validates the state against the session internally
+        token_dict = await oauth.google.authorize_access_token(request)
 
-        if not token or 'access_token' not in token:
-            raise ValueError("Invalid access token received from Google.")
+        if not token_dict or 'access_token' not in token_dict:
+            raise ValueError("Invalid access token dictionary received from Google.")
 
-        resp = await oauth.google.get('userinfo', token=token)
-        resp.raise_for_status()
+        # Pass the entire token dictionary, Authlib handles using the 'access_token'
+        resp = await oauth.google.get('userinfo', token=token_dict)
+        resp.raise_for_status()  # Raise exception for non-2xx status codes
         user_info = resp.json()
+        logger.debug(f"Received user info from Google: {user_info}")
+
     except Exception as e:
-        logger.error(f"OAuth exchange failed: {e}", exc_info=True)
+        logger.error(f"OAuth token exchange failed during callback: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Could not verify Google account: {e}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not verify Google account with provider: {e}",
         )
 
     user_email = user_info.get("email")
@@ -734,49 +709,82 @@ async def exchange_google_code(
     # --- User Lookup / Creation ---
     result = await db.execute(select(User).filter(User.email == user_email))
     user = result.unique().scalar_one_or_none()
-    is_new_user = False
 
     if not user:
-        logger.info(f"Creating new user: {user_email} with role {requested_role}")
-        password = generate_strong_password()
+        logger.info(f"Creating new user via Google OAuth: {user_email} with role {requested_role}")
+        password = generate_strong_password()  # Generate a random password as Google handles auth
         hashed_password = get_password_hash(password)
         user_obj = UserCreate.from_google(
             user_info, hashed_password=hashed_password, assigned_role=requested_role
         )
 
+        # Ensure only columns present in User model are used
         user_data = {
             k: v
             for k, v in user_obj.model_dump().items()
             if k in {c.key for c in inspect(User).mapper.column_attrs}
         }
-        user = User(**user_data, is_verified=True)
+        user = User(**user_data, is_verified=True)  # Mark Google users as verified
 
         db.add(user)
         await db.commit()
         await db.refresh(user)
-        is_new_user = True
+        logger.info(f"New user {user.id} created via Google OAuth.")
 
+        # Optional: Send welcome email for new Google users
         try:
             await send_welcome_email(user.email, user.first_name)
         except Exception as e:
-            logger.error(f"Failed to send welcome email to {user.email}: {e}")
+            logger.error(f"Failed to send welcome email to new Google user {user.email}: {e}")
 
     elif not user.is_verified:
+        # If user exists but wasn't verified, mark as verified now
         user.is_verified = True
         await db.commit()
         await db.refresh(user)
-        logger.info(f"Verified existing user: {user.email}")
+        logger.info(f"Verified existing user via Google OAuth: {user.email}")
 
-    if is_new_user:
-        try:
-            reset_token = create_password_reset_token(str(user.id))
-            await send_password_reset_email(user.email, reset_token, user.first_name)
-        except Exception as e:
-            logger.error(f"Failed to send password setup email to {user.email}: {e}")
+    # --- Issue Application JWT ---
+    app_token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    logger.info(f"User authenticated via Google: {user.email}, Role: {user.role}")
 
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
-    logger.info(f"User authenticated: {user.email}, Role: {user.role}")
+    # --- Set Cookie and Redirect ---
+    # Define your BASE frontend URL (consider using a dedicated setting for this)
+    # Assuming settings.BASE_URL points to your frontend base URL for this example
+    # e.g., settings.BASE_URL = "https://www.laborly.xyz"
+    base_frontend_url = settings.BASE_URL.rstrip('/')
 
-    return AuthSuccessResponse(
-        access_token=token, user=AuthUserResponse.model_validate(user, from_attributes=True)
+    # Get the user role as a lowercase string
+    user_role_str = user.role.value.lower()  # e.g., "client", "worker", "admin"
+
+    # Construct the role-specific dashboard URL
+    # You might want to add handling for the ADMIN role if they can log in this way
+    if user_role_str in ["client", "worker"]:
+        frontend_success_url = f"{base_frontend_url}/{user_role_str}/dashboard"
+    else:
+        # Default fallback URL if role is unexpected (e.g., admin or error)
+        frontend_success_url = f"{base_frontend_url}/"  # Redirect to homepage?
+        logger.warning(
+            f"Redirecting user {user.id} with unexpected role {user_role_str} to default URL."
+        )
+
+    logger.debug(f"Calculated redirect URL based on role: {frontend_success_url}")
+
+    response = RedirectResponse(url=frontend_success_url)
+
+    # Set the application JWT in a secure HttpOnly cookie
+    response.set_cookie(
+        key="access_token",  # Consistent cookie name
+        value=app_token,
+        httponly=True,  # Prevents client-side script access
+        samesite="lax",  # Good default for CSRF protection
+        secure=not settings.DEBUG,  # Send only over HTTPS in production
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Cookie lifetime in seconds
+        path="/",  # Make cookie available for all API paths
+        domain="laborly.xyz",  # Uncomment and set if frontend/backend are different subdomains
     )
+
+    logger.debug(
+        f"Set HttpOnly cookie and redirecting Google OAuth user to: {frontend_success_url}"
+    )
+    return response  # Return the RedirectResponse with the cookie set

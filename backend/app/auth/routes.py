@@ -3,14 +3,14 @@ auth/routes.py
 
 Handles authentication routes including:
 - User registration and login via JSON or OAuth2
-- Google OAuth2 login flow
+- Google OAuth2 login flow (backend exchange)
 - JWT token issuance and user logout handling
 - Email verification, password reset, and secure email update
 """
 
 import logging
 
-from fastapi import APIRouter, Depends, Request, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import EmailStr
@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.schemas import (
     AuthSuccessResponse,
     ForgotPasswordRequest,
-    GoogleCodeExchangeRequest,
     LoginRequest,
     MessageResponse,
     ResetPasswordRequest,
@@ -28,7 +27,6 @@ from app.auth.schemas import (
 )
 
 from app.auth.services import (
-    exchange_google_code,
     handle_google_callback,
     handle_google_login,
     login_user_json,
@@ -133,6 +131,7 @@ async def login_oauth(
     summary="Start Google OAuth2 Flow",
     description="Redirects the user to Google's OAuth2 consent screen.",
     response_description="Redirects to Google authentication page.",
+    response_class=RedirectResponse,
 )
 @limiter.limit("10/minute")
 async def google_login(
@@ -148,14 +147,13 @@ async def google_login(
     return await handle_google_login(request, role)
 
 
-# Modify this existing route:
+# Modified google_callback route
 @router.get(
     "/google/callback",
-    status_code=status.HTTP_307_TEMPORARY_REDIRECT,  # Keep redirect status
-    summary="Handle Google OAuth2 Callback",
-    description="Handles the callback from Google, validates state, and redirects to the frontend with the authorization code.",  # Updated description
-    response_description="Redirects to the frontend application callback handler with the authorization code.",  # Updated description
-    response_class=RedirectResponse,  # Explicitly state response class
+    response_class=RedirectResponse,
+    summary="Handle Google OAuth2 Callback & Token Exchange",
+    description="Handles callback from Google, validates state, exchanges code, logs in/signs up user, sets auth cookie, and redirects to frontend.",
+    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
 )
 @limiter.limit("10/minute")
 async def google_callback(
@@ -163,33 +161,10 @@ async def google_callback(
     db: AsyncSession = Depends(get_db),
 ) -> RedirectResponse:
     """
-    Handles the Google OAuth2 callback, validates state, and redirects to frontend.
-    Does NOT return application tokens directly.
+    Handles the Google OAuth2 callback, performs code exchange,
+    authenticates/registers the user, sets HttpOnly cookie and redirects to the frontend.
     """
-    # The service function now returns the RedirectResponse directly
     return await handle_google_callback(request, db)
-
-
-# Add this new route:
-@router.post(
-    "/google/exchange-code",
-    response_model=AuthSuccessResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Exchange Google Code for Token",
-    description="Exchanges the authorization code (obtained via frontend redirect) for an application JWT.",
-)
-@limiter.limit("10/minute")  # Apply rate limiting
-async def google_exchange_code(
-    request: Request,  # Pass request for potential use in authlib
-    payload: GoogleCodeExchangeRequest,
-    db: AsyncSession = Depends(get_db),
-) -> AuthSuccessResponse:
-    """
-    Receives the authorization code from the frontend, exchanges it with Google
-    server-side, finds/creates the user, and returns the application JWT.
-    """
-    # Pass the request object needed by some authlib methods
-    return await exchange_google_code(payload, db, request)
 
 
 # ---------------------------------------------------
@@ -208,9 +183,25 @@ async def logout(
     token: str = Depends(oauth2_scheme),
 ) -> dict[str, str]:
     """
-    Logs out a user by blacklisting their JWT access token.
+    Logs out a user by blacklisting their JWT access token (from header or cookie).
+    Note: Dependency get_current_user implicitly handles token extraction now.
+          We might not need the explicit token dependency here if relying solely on cookie/header check in get_current_user.
+          However, keeping it explicit might be clearer for the intent.
+          Let's remove the explicit token dependency for logout and rely on get_current_user's logic,
+          assuming logout requires an authenticated user session.
     """
-    return logout_user_token(token)
+    auth_header = request.headers.get("Authorization")
+    token_from_cookie = request.cookies.get("access_token")
+    token_to_blacklist = None
+    if auth_header and auth_header.startswith("Bearer "):
+        token_to_blacklist = auth_header.replace("Bearer ", "")
+    elif token_from_cookie:
+        token_to_blacklist = token_from_cookie
+
+    if not token_to_blacklist:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    return logout_user_token(token_to_blacklist)
 
 
 # ---------------------------------------------------

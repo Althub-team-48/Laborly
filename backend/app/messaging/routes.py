@@ -57,7 +57,7 @@ async def initiate_message(
     """
     Start a new message thread.
     """
-    message_model = await services.send_message(
+    message_read = await services.send_message(
         db=db,
         sender_id=current_user.id,
         message_data=schemas.MessageCreate(
@@ -68,7 +68,7 @@ async def initiate_message(
         ),
         sender_role=current_user.role.value,
     )
-    return schemas.MessageRead.model_validate(message_model, from_attributes=True)
+    return message_read
 
 
 @router.post(
@@ -89,7 +89,7 @@ async def reply_message(
     """
     Reply to an existing message thread.
     """
-    message_model = await services.send_message(
+    message_read = await services.send_message(
         db=db,
         sender_id=current_user.id,
         message_data=schemas.MessageCreate(
@@ -100,7 +100,7 @@ async def reply_message(
         ),
         sender_role=current_user.role.value,
     )
-    return schemas.MessageRead.model_validate(message_model, from_attributes=True)
+    return message_read
 
 
 @router.get(
@@ -120,13 +120,13 @@ async def get_my_threads(
     """
     Retrieve all threads involving the authenticated user with pagination.
     """
-    thread_models, total_count = await services.get_user_threads(
+    pydantic_threads, total_count = await services.get_user_threads(
         db, current_user.id, skip=pagination.skip, limit=pagination.limit
     )
     return PaginatedResponse(
         total_count=total_count,
         has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=[schemas.ThreadRead.model_validate(t, from_attributes=True) for t in thread_models],
+        items=pydantic_threads,
     )
 
 
@@ -147,5 +147,5 @@ async def get_thread_conversation(
     """
     Retrieve a conversation thread and its participants' details.
     """
-    thread_model = await services.get_thread_detail(db, thread_id, current_user.id)
-    return schemas.ThreadRead.model_validate(thread_model, from_attributes=True)
+    thread_read = await services.get_thread_detail(db, thread_id, current_user.id)
+    return thread_read

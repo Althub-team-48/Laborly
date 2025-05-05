@@ -18,6 +18,7 @@ from app.worker import services as worker_services
 from app.database.models import User, KYC
 from app.database.enums import KYCStatus
 from app.job.models import Job, JobStatus
+from app.core import schemas as core_schema
 
 # Helper functions
 
@@ -147,7 +148,7 @@ async def test_update_my_worker_profile_picture(
     """Test updating the worker's profile picture."""
     fake_s3_url = "https://fake-bucket.s3.amazonaws.com/profile_pictures/fake_worker_pic.png"
     mock_upload.return_value = fake_s3_url
-    mock_update_pic_service.return_value = worker_schemas.MessageResponse(
+    mock_update_pic_service.return_value = core_schema.MessageResponse(
         detail="Profile picture updated successfully."
     )
 

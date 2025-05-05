@@ -10,7 +10,7 @@ Handles authentication routes including:
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi import APIRouter, Depends, Request, status, Query
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import EmailStr
@@ -190,18 +190,7 @@ async def logout(
           Let's remove the explicit token dependency for logout and rely on get_current_user's logic,
           assuming logout requires an authenticated user session.
     """
-    auth_header = request.headers.get("Authorization")
-    token_from_cookie = request.cookies.get("access_token")
-    token_to_blacklist = None
-    if auth_header and auth_header.startswith("Bearer "):
-        token_to_blacklist = auth_header.replace("Bearer ", "")
-    elif token_from_cookie:
-        token_to_blacklist = token_from_cookie
-
-    if not token_to_blacklist:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    return logout_user_token(token_to_blacklist)
+    return await logout_user_token(token)
 
 
 # ---------------------------------------------------

@@ -69,12 +69,13 @@ class SignupRequest(BaseModel):
     role: UserRole = Field(..., description="User role: CLIENT, WORKER, or ADMIN")
 
     @field_validator("email")
-    def normalize_email(cls, v):
+    def normalize_email(cls, v: str) -> str:
         """
         Normalize the email address by stripping leading/trailing whitespace
         and converting it to lowercase.
         """
-        return v.strip().lower()
+        email = str(v.strip().lower())
+        return email
 
 
 # --------------------------------------------------

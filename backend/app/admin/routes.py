@@ -28,14 +28,14 @@ from app.admin.schemas import (
     KYCDetailAdminView,
     KYCPendingListItem,
     KYCReviewActionResponse,
-    MessageResponse,
     PresignedUrlResponse,
     UserStatusUpdateResponse,
 )
+from app.core.schemas import PaginatedResponse, MessageResponse
+
 from app.admin.services import AdminService, UserService
 from app.core.dependencies import PaginationParams, get_current_user_with_role
 from app.core.limiter import limiter
-from app.core.schemas import PaginatedResponse
 from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
@@ -54,12 +54,10 @@ AuthenticatedAdminDep = Annotated[User, Depends(get_current_user_with_role(UserR
 
 
 # ---------------------------------------------------
-# Helper Functions
+# Helper Functions (Route level response building)
 # ---------------------------------------------------
 def build_status_response(user_id: UUID, action: str) -> UserStatusUpdateResponse:
-    """
-    Build a standard response for user status update actions.
-    """
+    """Build a standard response for user status update actions."""
     return UserStatusUpdateResponse(
         user_id=user_id,
         action=action,
@@ -71,8 +69,6 @@ def build_status_response(user_id: UUID, action: str) -> UserStatusUpdateRespons
 # ---------------------------------------------------
 # KYC Endpoints
 # ---------------------------------------------------
-
-
 @router.get(
     "/kyc/pending",
     response_model=PaginatedResponse[KYCPendingListItem],
@@ -87,20 +83,15 @@ async def get_pending_kyc_list(
     current_user: AuthenticatedAdminDep,
     pagination: PaginationParams = Depends(),
 ) -> PaginatedResponse[KYCPendingListItem]:
-    """
-    Retrieve a list of users with pending KYC submissions.
-    """
+    """Retrieve a list of users with pending KYC submissions."""
     logger.info(f"[KYC] Admin {current_user.id} requested pending KYC list.")
-    pending_kyc_models, total_count = await AdminService(db).list_pending_kyc(
+    pending_kyc_items, total_count = await AdminService(db).list_pending_kyc(
         skip=pagination.skip, limit=pagination.limit
     )
     return PaginatedResponse(
         total_count=total_count,
         has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=[
-            KYCPendingListItem.model_validate(kyc, from_attributes=True)
-            for kyc in pending_kyc_models
-        ],
+        items=pending_kyc_items,
     )
 
 
@@ -118,12 +109,9 @@ async def get_kyc_details(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> KYCDetailAdminView:
-    """
-    Retrieve detailed KYC information for a specific user.
-    """
+    """Retrieve detailed KYC information for a specific user."""
     logger.info(f"[KYC] Admin {current_user.id} requesting KYC details for user {user_id}.")
-    kyc_model = await AdminService(db).get_kyc_details_for_admin(user_id)
-    return KYCDetailAdminView.model_validate(kyc_model, from_attributes=True)
+    return await AdminService(db).get_kyc_detail(user_id)
 
 
 @router.put(
@@ -140,12 +128,9 @@ async def approve_user_kyc(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> KYCReviewActionResponse:
-    """
-    Approve a user's KYC submission.
-    """
+    """Approve a user's KYC submission."""
     logger.info(f"[KYC] Admin {current_user.id} approving KYC for user {user_id}.")
-    updated_kyc_model = await AdminService(db).approve_kyc(user_id)
-    return KYCReviewActionResponse.model_validate(updated_kyc_model, from_attributes=True)
+    return await AdminService(db).approve_kyc(user_id)
 
 
 @router.put(
@@ -162,12 +147,9 @@ async def reject_user_kyc(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> KYCReviewActionResponse:
-    """
-    Reject a user's KYC submission.
-    """
+    """Reject a user's KYC submission."""
     logger.info(f"[KYC] Admin {current_user.id} rejecting KYC for user {user_id}.")
-    updated_kyc_model = await AdminService(db).reject_kyc(user_id)
-    return KYCReviewActionResponse.model_validate(updated_kyc_model, from_attributes=True)
+    return await AdminService(db).reject_kyc(user_id)
 
 
 @router.get(
@@ -185,37 +167,33 @@ async def get_kyc_document_presigned_url(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> PresignedUrlResponse | None:
-    """
-    Generate a secure pre-signed URL for accessing a user's KYC document.
-    """
+    """Generate a secure pre-signed URL for accessing a user's KYC document."""
     logger.info(
-        f"[KYC] Admin {current_user.id} requesting pre-signed URL for user {user_id}, doc_type: {doc_type}."
+        f"Admin {current_user.id} requesting presigned URL for user {user_id}, doc_type: {doc_type}."
+    )
+    admin_service = AdminService(db)
+    generated_url_str = await admin_service.get_kyc_presigned_url(
+        user_id=user_id, doc_type=doc_type
     )
 
-    admin_service = AdminService(db)
-    generated_url = await admin_service.get_kyc_presigned_url(user_id=user_id, doc_type=doc_type)
-
-    if not generated_url:
+    if not generated_url_str:
         logger.warning(f"[KYC] No document found for user {user_id} and doc_type {doc_type}.")
-        return None
-
-    try:
-        validated_url = TypeAdapter(HttpUrl).validate_python(generated_url)
-    except ValidationError as e:
-        logger.error(f"[KYC] URL validation failed for generated presigned URL: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate a valid pre-signed URL.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No document found for the specified user and document type.",
         )
 
-    return PresignedUrlResponse(url=validated_url)
+    try:
+        validated_url = TypeAdapter(HttpUrl).validate_python(generated_url_str)
+        return PresignedUrlResponse(url=validated_url)
+    except ValidationError as e:
+        logger.error(f"[KYC] URL validation failed for generated presigned URL: {e}")
+        raise HTTPException(status_code=500, detail="Failed to provide a valid access URL.")
 
 
 # ---------------------------------------------------
 # User Management Endpoints (Admin Only)
 # ---------------------------------------------------
-
-
 @router.get(
     "/users",
     response_model=list[AdminUserView],
@@ -235,12 +213,9 @@ async def list_all_users(
     is_banned: bool | None = Query(None, description="Filter by banned status"),
     is_deleted: bool | None = Query(None, description="Include deleted users if true"),
 ) -> list[AdminUserView]:
-    """
-    Retrieve a paginated and optionally filtered list of users.
-    Requires admin privileges.
-    """
+    """Retrieve a paginated and optionally filtered list of users."""
     service = UserService(db)
-    user_models = await service.list_all_users(
+    return await service.list_users(
         skip=skip,
         limit=limit,
         role=role,
@@ -248,7 +223,6 @@ async def list_all_users(
         is_banned=is_banned,
         is_deleted=is_deleted,
     )
-    return [AdminUserView.model_validate(user, from_attributes=True) for user in user_models]
 
 
 @router.get(
@@ -265,13 +239,9 @@ async def get_user_details(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> AdminUserView:
-    """
-    Retrieve detailed information for a specific user.
-    Requires admin privileges.
-    """
+    """Retrieve detailed information for a specific user."""
     service = UserService(db)
-    user_model = await service.get_user_details(user_id=user_id)
-    return AdminUserView.model_validate(user_model, from_attributes=True)
+    return await service.get_user(user_id=user_id)
 
 
 @router.put(
@@ -287,9 +257,7 @@ async def freeze_user_account(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Freeze a specific user's account.
-    """
+    """Freeze a specific user's account."""
     logger.info(f"[USER] Admin {current_user.id} freezing user {user_id}.")
     await AdminService(db).freeze_user(user_id)
     return build_status_response(user_id, "frozen")
@@ -308,9 +276,7 @@ async def unfreeze_user_account(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Unfreeze a specific user's account.
-    """
+    """Unfreeze a specific user's account."""
     logger.info(f"[USER] Admin {current_user.id} unfreezing user {user_id}.")
     await AdminService(db).unfreeze_user(user_id)
     return build_status_response(user_id, "unfrozen")
@@ -329,9 +295,7 @@ async def ban_user_account(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Ban a specific user from the platform.
-    """
+    """Ban a specific user from the platform."""
     logger.info(f"[USER] Admin {current_user.id} banning user {user_id}.")
     await AdminService(db).ban_user(user_id)
     return build_status_response(user_id, "banned")
@@ -350,9 +314,7 @@ async def unban_user_account(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Unban a specific user from the platform.
-    """
+    """Unban a specific user from the platform."""
     logger.info(f"[USER] Admin {current_user.id} unbanning user {user_id}.")
     await AdminService(db).unban_user(user_id)
     return build_status_response(user_id, "unbanned")
@@ -361,6 +323,7 @@ async def unban_user_account(
 @router.delete(
     "/users/{user_id}",
     response_model=UserStatusUpdateResponse,
+    status_code=status.HTTP_200_OK,
     summary="Soft Delete User Account",
     description="Soft delete a user's account (logical delete). Requires Admin role.",
 )
@@ -371,9 +334,7 @@ async def delete_user_account(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> UserStatusUpdateResponse:
-    """
-    Soft delete a specific user's account.
-    """
+    """Soft delete a specific user's account."""
     logger.info(f"[USER] Admin {current_user.id} soft deleting user {user_id}.")
     await AdminService(db).delete_user(user_id)
     return build_status_response(user_id, "deleted")
@@ -382,11 +343,10 @@ async def delete_user_account(
 # ---------------------------------------------------
 # Review Management Endpoints (Admin Only)
 # ---------------------------------------------------
-
-
 @router.get(
     "/reviews/flagged",
     response_model=PaginatedResponse[FlaggedReviewRead],
+    status_code=status.HTTP_200_OK,
     summary="List Flagged Reviews",
     description="Retrieve a list of reviews flagged for moderation. Requires Admin role.",
 )
@@ -397,9 +357,7 @@ async def get_flagged_reviews(
     current_user: AuthenticatedAdminDep,
     pagination: PaginationParams = Depends(),
 ) -> PaginatedResponse[FlaggedReviewRead]:
-    """
-    Retrieve a list of reviews flagged for moderation with pagination.
-    """
+    """Retrieve a list of reviews flagged for moderation with pagination."""
     logger.info(f"[REVIEW] Admin {current_user.id} requested flagged reviews.")
     reviews, total_count = await AdminService(db).list_flagged_reviews(
         skip=pagination.skip, limit=pagination.limit
@@ -407,15 +365,14 @@ async def get_flagged_reviews(
     return PaginatedResponse(
         total_count=total_count,
         has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=[
-            FlaggedReviewRead.model_validate(review, from_attributes=True) for review in reviews
-        ],
+        items=reviews,
     )
 
 
 @router.delete(
     "/reviews/{review_id}",
     response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
     summary="Delete Flagged Review",
     description="Delete a specific review that was flagged for moderation. Requires Admin role.",
 )
@@ -426,9 +383,7 @@ async def delete_flagged_review(
     db: DBDep,
     current_user: AuthenticatedAdminDep,
 ) -> MessageResponse:
-    """
-    Delete a flagged review from the platform.
-    """
+    """Delete a flagged review from the platform."""
     logger.info(f"[REVIEW] Admin {current_user.id} deleting review {review_id}.")
     await AdminService(db).delete_review(review_id)
     return MessageResponse(detail="Review deleted.")

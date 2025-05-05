@@ -9,7 +9,7 @@ Defines the schemas used in administrative operations including:
 - User status updates (freeze, ban, unban, delete)
 - Flagged review management for moderation
 - Pre-signed URL generation for KYC documents
-- Generic success/info message responses
+- Generic success/info message responses (Imported from core)
 """
 
 from datetime import datetime
@@ -30,7 +30,7 @@ class AdminUserView(BaseModel):
 
     id: UUID = Field(..., description="User's unique identifier")
     email: EmailStr = Field(..., description="User's email address")
-    phone_number: str = Field(..., description="User's phone number")
+    phone_number: str | None = Field(None, description="User's phone number")
     role: UserRole = Field(..., description="User's role (CLIENT, WORKER, ADMIN)")
     first_name: str = Field(..., description="User's first name")
     last_name: str = Field(..., description="User's last name")
@@ -72,10 +72,13 @@ class KYCDetailAdminView(BaseModel):
     """
 
     user_id: UUID = Field(..., description="User ID associated with the KYC submission")
+    id: UUID = Field(..., description="Unique identifier for the KYC record")
     status: KYCStatus = Field(
         ..., description="Current status of the KYC submission (PENDING, APPROVED, REJECTED)"
     )
     document_type: str = Field(..., description="Type of document submitted")
+    document_path: str = Field(..., description="Path to the uploaded identification document")
+    selfie_path: str = Field(..., description="Path to the uploaded selfie")
     submitted_at: datetime = Field(..., description="Timestamp when the KYC was submitted")
     reviewed_at: datetime | None = Field(
         None, description="Timestamp when the KYC was reviewed (if applicable)"
@@ -93,8 +96,9 @@ class KYCReviewActionResponse(BaseModel):
     """
 
     user_id: UUID = Field(..., description="User ID whose KYC was reviewed")
+    id: UUID = Field(..., description="Unique identifier for the KYC record")
     status: KYCStatus = Field(..., description="Updated KYC status after review")
-    reviewed_at: datetime = Field(..., description="Timestamp of the review action")
+    reviewed_at: datetime | None = Field(..., description="Timestamp of the review action")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -105,6 +109,7 @@ class KYCReviewActionResponse(BaseModel):
 class UserStatusUpdateResponse(BaseModel):
     """
     Schema returned after an admin updates a user's status (freeze, ban, unban, etc.).
+    This can be built by the route handler.
     """
 
     user_id: UUID = Field(..., description="ID of the user affected by the action")
@@ -131,17 +136,6 @@ class FlaggedReviewRead(BaseModel):
     created_at: datetime = Field(..., description="Timestamp when the review was created")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-
-
-# -----------------------------------------------------
-# Generic Message Response Schema
-# -----------------------------------------------------
-class MessageResponse(BaseModel):
-    """
-    Schema for returning simple success or informational messages.
-    """
-
-    detail: str = Field(..., description="Message describing the operation result")
 
 
 # -----------------------------------------------------

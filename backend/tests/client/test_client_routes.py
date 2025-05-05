@@ -18,6 +18,7 @@ from app.client.models import FavoriteWorker
 from app.job.models import Job, JobStatus
 from app.client import schemas as client_schemas
 from app.client import services as client_services
+from app.core import schemas as core_schemas
 
 # Helper function
 
@@ -156,7 +157,7 @@ async def test_update_my_client_profile_picture(
     """Test updating client's profile picture."""
     fake_s3_url = "https://fake-bucket.s3.amazonaws.com/profile_pictures/fake_pic.png"
     mock_upload.return_value = fake_s3_url
-    mock_update_pic_service.return_value = client_schemas.MessageResponse(
+    mock_update_pic_service.return_value = core_schemas.MessageResponse(
         detail="Profile picture updated successfully."
     )
 

@@ -65,8 +65,6 @@ class PaginationParams:
 # ---------------------------------------------------
 # Authentication Functions
 # ---------------------------------------------------
-
-
 async def get_current_user(
     # Try Authorization header first (optional)
     token_header: Annotated[str | None, Depends(oauth2_scheme)] = None,
@@ -101,19 +99,25 @@ async def get_current_user(
         token_data = TokenPayload(**payload)
 
         jti = payload.get("jti")
-        if jti and is_token_blacklisted(jti):
-            logger.warning(f"[AUTH] Blacklisted token detected: jti={jti}")
-            raise credentials_exception
+        if jti:
+            # Await the async blacklist check
+            token_is_blacklisted = await is_token_blacklisted(jti)
+            if token_is_blacklisted:
+                logger.warning(f"[AUTH ASYNC] Blacklisted token detected: jti={jti}")
+                raise credentials_exception
 
     except (JWTError, ValueError) as e:
-        logger.warning(f"[AUTH] JWT decoding/validation failed: {e}")
+        logger.warning(f"[AUTH ASYNC] JWT decoding failed: {e}")
+
         raise credentials_exception
 
     result = await db.execute(select(User).filter(User.id == token_data.sub))
     user = result.unique().scalar_one_or_none()
 
     if not user:
-        logger.warning(f"[AUTH] JWT valid but no matching user found: user_id={token_data.sub}")
+        logger.warning(
+            f"[AUTH ASYNC] JWT valid but no matching user found: user_id={token_data.sub}"
+        )
         raise credentials_exception
 
     # Optionally add checks for user active status etc. here if needed globally
@@ -169,7 +173,7 @@ async def get_current_user_from_ws(
 
 
 # ---------------------------------------------------
-# Authorization Functions (Role-Based) - No changes needed here
+# Authorization Functions (Role-Based)
 # ---------------------------------------------------
 
 

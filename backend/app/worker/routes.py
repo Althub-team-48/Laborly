@@ -6,24 +6,25 @@ Defines all public and authenticated endpoints for worker profile management,
 KYC processing, profile picture handling, and job history retrieval.
 """
 
+from datetime import datetime, timezone
 import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.schemas import PresignedUrlResponse
 from app.core.dependencies import get_current_user_with_role, PaginationParams
-from app.core.schemas import PaginatedResponse
+from app.core.schemas import PaginatedResponse, MessageResponse
 from app.core.limiter import limiter
 from app.core.upload import upload_file_to_s3
-from app.database.enums import UserRole
+from app.database.enums import KYCStatus, UserRole
 from app.database.models import User
 from app.database.session import get_db
 from app.job.schemas import JobRead
 from app.worker import schemas
-from app.worker.schemas import KYCRead, PublicWorkerRead
+from app.worker.schemas import KYCRead, PublicWorkerRead, WorkerProfileRead
 from app.worker.services import WorkerService
 
 router = APIRouter(prefix="/worker", tags=["Worker"])
@@ -61,7 +62,7 @@ async def get_public_worker_profile(
 # ----------------------------------------------------
 @router.get(
     "/profile",
-    response_model=schemas.WorkerProfileRead,
+    response_model=WorkerProfileRead,
     status_code=status.HTTP_200_OK,
     summary="Get My Worker Profile",
     description="Retrieve the authenticated worker's profile information.",
@@ -71,7 +72,7 @@ async def get_my_worker_profile(
     request: Request,
     db: DBDep,
     current_user: AuthenticatedWorkerDep,
-) -> schemas.WorkerProfileRead:
+) -> WorkerProfileRead:
     """
     Retrieve the authenticated worker's profile.
     """
@@ -80,7 +81,7 @@ async def get_my_worker_profile(
 
 @router.patch(
     "/profile",
-    response_model=schemas.WorkerProfileRead,
+    response_model=WorkerProfileRead,
     status_code=status.HTTP_200_OK,
     summary="Update My Worker Profile",
     description="Update profile information (excluding profile picture) for the authenticated worker.",
@@ -91,7 +92,7 @@ async def update_my_worker_profile(
     data: schemas.WorkerProfileUpdate,
     db: DBDep,
     current_user: AuthenticatedWorkerDep,
-) -> schemas.WorkerProfileRead:
+) -> WorkerProfileRead:
     """
     Update the authenticated worker's profile.
     """
@@ -99,8 +100,37 @@ async def update_my_worker_profile(
 
 
 @router.patch(
+    "/profile/availability",
+    response_model=WorkerProfileRead,
+    status_code=status.HTTP_200_OK,
+    summary="Toggle My Availability",
+    description="Set the availability status for the authenticated worker.",
+)
+@limiter.limit("10/minute")
+async def toggle_my_availability(
+    request: Request,
+    db: DBDep,
+    current_user: AuthenticatedWorkerDep,
+    status_payload: schemas.WorkerProfileUpdate = Body(
+        ..., description="Payload containing the 'is_available' boolean status."
+    ),
+) -> WorkerProfileRead:
+    """
+    Set the authenticated worker's availability status.
+    Expects a JSON body like: {"is_available": true} or {"is_available": false}
+    """
+    if status_payload.is_available is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The 'is_available' field (true/false) is required in the request body.",
+        )
+
+    return await WorkerService(db).toggle_availability(current_user.id, status_payload)
+
+
+@router.patch(
     "/profile/picture",
-    response_model=schemas.MessageResponse,
+    response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
     summary="Update My Profile Picture",
     description="Upload and update the profile picture for the authenticated worker.",
@@ -113,18 +143,13 @@ async def update_my_worker_profile_picture(
     profile_picture: UploadFile = File(
         ..., description="New profile picture file (JPG, PNG). Max 10MB."
     ),
-) -> schemas.MessageResponse:
+) -> MessageResponse:
     """
     Upload a new profile picture for the authenticated worker.
     """
     logger.info(f"Worker {current_user.id} attempting to update profile picture.")
-
     picture_url = await upload_file_to_s3(profile_picture, subfolder="profile_pictures")
-
-    await WorkerService(db).update_profile_picture(current_user.id, picture_url)
-
-    logger.info(f"Worker {current_user.id} successfully updated profile picture to {picture_url}.")
-    return schemas.MessageResponse(detail="Profile picture updated successfully.")
+    return await WorkerService(db).update_profile_picture(current_user.id, picture_url)
 
 
 @router.get(
@@ -173,10 +198,7 @@ async def get_my_kyc(
     """
     Retrieve KYC information for the authenticated worker.
     """
-    kyc_model = await WorkerService(db).get_kyc(current_user.id)
-    if kyc_model:
-        return KYCRead.model_validate(kyc_model, from_attributes=True)
-    return None
+    return await WorkerService(db).get_kyc(current_user.id)
 
 
 @router.post(
@@ -203,16 +225,33 @@ async def submit_my_kyc(
     """
     Submit KYC documents for the authenticated worker.
     """
-    document_path = await upload_file_to_s3(document_file, subfolder="kyc")
-    selfie_path = await upload_file_to_s3(selfie_file, subfolder="kyc")
+    try:
+        document_path = await upload_file_to_s3(document_file, subfolder="kyc")
+        selfie_path = await upload_file_to_s3(selfie_file, subfolder="kyc")
+    except HTTPException as e:
+        logger.error(f"KYC file upload failed for user {current_user.id}: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"File upload failed: {e.detail}")
+    except Exception as e:
+        logger.error(
+            f"Unexpected KYC file upload error for user {current_user.id}: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during file upload.",
+        )
 
-    kyc_model = await WorkerService(db).submit_kyc(
+    kyc_submission_data = schemas.KYCRead(
+        id=UUID('00000000-0000-0000-0000-000000000000'),
         user_id=current_user.id,
         document_type=document_type,
         document_path=document_path,
         selfie_path=selfie_path,
+        status=KYCStatus.PENDING,
+        submitted_at=datetime.now(timezone.utc),
+        reviewed_at=None,
     )
-    return KYCRead.model_validate(kyc_model, from_attributes=True)
+
+    return await WorkerService(db).submit_kyc(user_id=current_user.id, kyc_data=kyc_submission_data)
 
 
 # ----------------------------------------------------
@@ -235,13 +274,13 @@ async def list_my_worker_jobs(
     """
     List all jobs assigned to the authenticated worker with pagination.
     """
-    job_models, total_count = await WorkerService(db).get_jobs(
+    job_reads, total_count = await WorkerService(db).get_jobs(
         current_user.id, skip=pagination.skip, limit=pagination.limit
     )
     return PaginatedResponse(
         total_count=total_count,
         has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=[JobRead.model_validate(job, from_attributes=True) for job in job_models],
+        items=job_reads,
     )
 
 
@@ -262,5 +301,4 @@ async def get_my_worker_job_detail(
     """
     Retrieve details about a specific job assigned to the authenticated worker.
     """
-    job_model = await WorkerService(db).get_job_detail(current_user.id, job_id)
-    return JobRead.model_validate(job_model, from_attributes=True)
+    return await WorkerService(db).get_job_detail(current_user.id, job_id)

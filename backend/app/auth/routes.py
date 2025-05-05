@@ -204,6 +204,7 @@ async def logout(
     return logout_user_token(token_to_blacklist)
 
 
+
 # ---------------------------------------------------
 # Email Verification (Initial)
 # ---------------------------------------------------

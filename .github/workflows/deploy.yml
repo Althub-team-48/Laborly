@@ -55,6 +55,8 @@ jobs:
           SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
           EMAILS_ENABLED=${{ secrets.EMAILS_ENABLED }}
           MAIL_TEMPLATES_DIR=${{ secrets.MAIL_TEMPLATES_DIR }}
+          CACHE_PREFIX=${{ secrets.CACHE_PREFIX }}
+          DEFAULT_CACHE_TTL=${{ secrets.DEFAULT_CACHE_TTL }}
           EOF
 
       - name: Stop existing containers
@@ -107,6 +109,3 @@ jobs:
       - name: Restart NGINX to apply HTTPS
         run: docker-compose restart nginx
         
-
-
-    

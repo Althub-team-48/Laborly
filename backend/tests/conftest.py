@@ -5,7 +5,6 @@ Test fixtures for API integration and unit tests.
 Includes async clients, fake users, schema mock data, and dependency overrides.
 """
 
-# --- Imports ---
 from collections.abc import Generator, AsyncGenerator
 from datetime import datetime, timezone, timedelta
 from httpx import AsyncClient, ASGITransport
@@ -292,23 +291,6 @@ def fake_worker_profile_read(fake_worker_user: User) -> WorkerProfileRead:
 
 
 @pytest.fixture
-def fake_public_worker_read(fake_worker_user: User) -> PublicWorkerRead:
-    """Fixture for a fake PublicWorkerRead."""
-    return PublicWorkerRead(
-        user_id=fake_worker_user.id,
-        first_name=fake_worker_user.first_name,
-        last_name=fake_worker_user.last_name,
-        location=fake_worker_user.location or "Abuja",
-        professional_skills="Plumbing, Testing",
-        work_experience="5 years testing fixtures.",
-        years_experience=5,
-        bio="Dedicated test worker.",
-        is_available=True,
-        is_kyc_verified=True,
-    )
-
-
-@pytest.fixture
 def fake_kyc_read(fake_worker_user: User) -> KYCRead:
     """Fixture for a fake KYCRead."""
     return KYCRead(
@@ -324,7 +306,27 @@ def fake_kyc_read(fake_worker_user: User) -> KYCRead:
 
 
 @pytest.fixture
-def fake_service_read(fake_worker_user: User) -> ServiceRead:
+def fake_public_worker_read(fake_worker_user: User) -> PublicWorkerRead:
+    """Fixture for a fake PublicWorkerRead to be embedded in ServiceRead."""
+    # This is a simplified version; adapt if your WorkerProfile model is complex
+    return PublicWorkerRead(
+        user_id=fake_worker_user.id,
+        first_name=fake_worker_user.first_name,
+        last_name=fake_worker_user.last_name,
+        location=fake_worker_user.location or "Test Location",
+        professional_skills="Testing, Debugging",
+        work_experience="Various testing projects",
+        years_experience=3,
+        bio="A diligent tester.",
+        is_available=True,
+        is_kyc_verified=True,
+    )
+
+
+@pytest.fixture
+def fake_service_read(
+    fake_worker_user: User, fake_public_worker_read_for_service: PublicWorkerRead
+) -> ServiceRead:
     """Fixture for a fake ServiceRead."""
     return ServiceRead(
         id=uuid4(),
@@ -334,6 +336,7 @@ def fake_service_read(fake_worker_user: User) -> ServiceRead:
         title="Testing Service",
         description="Provides high-quality testing.",
         location="Remote",
+        worker=fake_public_worker_read_for_service,
     )
 
 

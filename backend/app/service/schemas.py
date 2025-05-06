@@ -1,4 +1,3 @@
-# filename: backend/app/service/schemas.py
 """
 backend/app/service/schemas.py
 
@@ -15,7 +14,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# NOTE: MessageResponse will be imported from app.core.schemas in routes.py
+from app.worker.schemas import PublicWorkerRead
+
 
 # ---------------------------------------------------
 # Base Schema for Service Fields
@@ -51,7 +51,6 @@ class ServiceCreate(ServiceBase):
 class ServiceUpdate(BaseModel):
     """Schema used to update an existing service listing."""
 
-    # Allow fields to be optional during update
     title: str | None = Field(None, max_length=100, description="Title or name of the service")
     description: str | None = Field(default=None, description="Detailed description of the service")
     location: str | None = Field(
@@ -69,12 +68,10 @@ class ServiceRead(ServiceBase):
 
     id: UUID = Field(..., description="Unique identifier for the service")
     worker_id: UUID = Field(..., description="UUID of the worker offering the service")
-    # Include worker details for context? Optional, depending on frontend needs.
-    # For now, keeping it simple as per original schema.
     created_at: datetime = Field(..., description="Timestamp when the service was created")
     updated_at: datetime = Field(..., description="Timestamp when the service was last updated")
+    worker: PublicWorkerRead | None = Field(
+        None, description="Details of the worker offering the service"
+    )
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# Removed MessageResponse - will be imported from app.core.schemas

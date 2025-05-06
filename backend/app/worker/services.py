@@ -250,6 +250,7 @@ class WorkerService:
                 "years_experience",
                 "bio",
                 "is_available",
+                "is_kyc_verified",
             )
         }
         response = schemas.PublicWorkerRead.model_validate(public_data)

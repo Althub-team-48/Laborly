@@ -59,7 +59,16 @@ async def rate_limit_exceeded_handler(request: Request, exc: Exception) -> Respo
 app.add_exception_handler(429, rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+if not settings.SECRET_KEY or not isinstance(settings.SECRET_KEY, str):
+    raise ValueError("SECRET_KEY is not set or is not a string in settings.")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    session_cookie="session_id",
+    samesite="none",
+    secure=True,
+    httponly=True,
+)
 
 
 # -----------------------------

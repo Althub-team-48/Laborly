@@ -17,8 +17,8 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any, Annotated
 
-from fastapi import Depends, HTTPException, Query, WebSocket, status, Cookie
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Query, WebSocket, status, Security
+from fastapi.security import OAuth2PasswordBearer, APIKeyCookie
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,10 +39,13 @@ logger = logging.getLogger(__name__)
 # OAuth2 Configuration
 # ---------------------------------------------------
 # Keep the scheme for potential non-cookie auth, but disable auto_error
-# If auto_error=True, it would raise 401 if header is missing, preventing cookie check
 oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(
     tokenUrl="/auth/login/oauth", auto_error=False
 )
+
+# Cookie-based authentication scheme
+# This is used for reading the access token from cookies
+access_token_cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
 
 
 # ---------------------------------------------------
@@ -69,7 +72,7 @@ async def get_current_user(
     # Try Authorization header first (optional)
     token_header: Annotated[str | None, Depends(oauth2_scheme)] = None,
     # Fallback to reading from cookie named "access_token"
-    token_cookie: Annotated[str | None, Cookie(alias="access_token")] = None,
+    token_cookie: Annotated[str | None, Security(access_token_cookie_scheme)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
@@ -93,6 +96,9 @@ async def get_current_user(
     if token is None:
         logger.debug("[AUTH] No token found in Authorization header or access_token cookie.")
         raise credentials_exception
+
+    # DEBUG LINE:
+    logger.debug(f"[AUTH DEBUG] Attempting to decode token (type: {type(token)}): '{token}'")
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

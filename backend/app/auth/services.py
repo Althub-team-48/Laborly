@@ -750,8 +750,16 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         # Send welcome email for new Google users
         try:
             await send_welcome_email(user.email, user.first_name)
+            logger.info(f"Welcome mail sent to new Google user {user.email}")
         except Exception as e:
             logger.error(f"Failed to send welcome email to new Google user {user.email}: {e}")
+
+        # Send Password reset mail for new Google users
+        try:
+            await send_password_reset_email(user.email, password, first_name=user.first_name)
+            logger.info(f"Password reset email sent to new Google user {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send password reset email to {user.email}: {e}")
 
     elif not user.is_verified:
         user.is_verified = True
@@ -787,7 +795,7 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         secure=not settings.DEBUG,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Cookie lifetime in seconds
         path="/",
-        domain="laborly.xyz",
+        domain=None,
     )
 
     logger.debug(

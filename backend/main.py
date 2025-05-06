@@ -38,7 +38,12 @@ from app.core.limiter import limiter
 # -----------------------------
 # FastAPI App Initialization
 # -----------------------------
-app = FastAPI(title="Laborly API")
+app = FastAPI(
+    title="Laborly API",
+    description="API for managing jobs, clients, and workforce.",
+    version="1.0.0",
+    swagger_ui_parameters={"requestCredentials": "include"},
+)
 
 # -----------------------------
 # Middleware Configuration

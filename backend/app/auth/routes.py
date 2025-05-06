@@ -112,7 +112,7 @@ async def login_json(
         secure=not settings.DEBUG,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
-        domain="laborly.xyz",
+        domain=None,
     )
     return LoginResponse(user=AuthUserResponse.model_validate(login_result.user))
 
@@ -150,7 +150,7 @@ async def login_oauth(
         secure=not settings.DEBUG,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
-        domain="laborly.xyz",
+        domain=None,
     )
     return LoginResponse(user=AuthUserResponse.model_validate(login_result.user))
 

@@ -16,8 +16,8 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-# Caching Imports
 from app.core.blacklist import redis_client
 from app.worker.services import (
     _cache_key,
@@ -25,8 +25,11 @@ from app.worker.services import (
     CACHE_PREFIX,
     DEFAULT_CACHE_TTL,
 )
+from app.database.models import User
 from app.job.models import Job
 from app.review import models, schemas
+from app.job.schemas import JobServiceInfo
+
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +63,6 @@ async def _invalidate_pattern(cache: Any, pattern: str) -> None:
         logger.error(f"[CACHE ASYNC REVIEW ERROR] Failed pattern deletion for {pattern}: {e}")
 
 
-# ---------------------------------------------------
-# Review Service
-# ---------------------------------------------------
 class ReviewService:
     """Service layer for managing job reviews with caching."""
 
@@ -73,6 +73,61 @@ class ReviewService:
         if not self.cache:
             logger.warning("[CACHE ASYNC REVIEW] Redis client not configured, caching disabled.")
 
+    def _construct_review_client_info(self, client_user: User) -> schemas.ReviewClientInfo:
+        return schemas.ReviewClientInfo.model_validate(client_user)
+
+    def _construct_review_worker_info(self, worker_user: User) -> schemas.ReviewWorkerInfo:
+        return schemas.ReviewWorkerInfo.model_validate(worker_user)
+
+    def _construct_review_job_info(self, job_model: Job) -> schemas.ReviewJobInfo:
+        service_info: JobServiceInfo | None = None
+        if job_model.service:
+            service_info = JobServiceInfo.model_validate(job_model.service)
+        return schemas.ReviewJobInfo(id=job_model.id, status=job_model.status, service=service_info)
+
+    def _construct_review_read_response(self, review_model: models.Review) -> schemas.ReviewRead:
+        """Helper to build the ReviewRead response with embedded details."""
+        if not review_model.client or not review_model.worker or not review_model.job:
+            raise ValueError(
+                "Review model is missing required related entities (client, worker, or job)."
+            )
+
+        client_info = self._construct_review_client_info(review_model.client)
+        worker_info = self._construct_review_worker_info(review_model.worker)
+        job_info = self._construct_review_job_info(review_model.job)
+
+        return schemas.ReviewRead(
+            id=review_model.id,
+            client=client_info,
+            worker=worker_info,
+            job=job_info,
+            rating=review_model.rating,
+            text=review_model.review_text,
+            is_flagged=review_model.is_flagged,
+            created_at=review_model.created_at,
+        )
+
+    def _construct_public_review_read_response(
+        self, review_model: models.Review
+    ) -> schemas.PublicReviewRead:
+        """Helper to build the PublicReviewRead response with embedded details."""
+        if not review_model.client or not review_model.worker or not review_model.job:
+            raise ValueError("Review model is missing required related entities for public view.")
+
+        client_info = self._construct_review_client_info(review_model.client)
+        worker_info = self._construct_review_worker_info(review_model.worker)
+        job_info = self._construct_review_job_info(review_model.job)
+
+        return schemas.PublicReviewRead(
+            id=review_model.id,
+            client=client_info,
+            worker=worker_info,
+            job=job_info,
+            rating=review_model.rating,
+            text=review_model.review_text,
+            created_at=review_model.created_at,
+        )
+
     async def _invalidate_review_caches(self, worker_id: UUID, client_id: UUID) -> None:
         """Invalidate relevant review list and summary caches."""
         if not self.cache:
@@ -81,6 +136,7 @@ class ReviewService:
         patterns_to_invalidate = [
             f"{CACHE_PREFIX}{REVIEW_LIST_WORKER_NS}:{worker_id}:*",
             f"{CACHE_PREFIX}{REVIEW_LIST_CLIENT_NS}:{client_id}:*",
+            f"{CACHE_PREFIX}{ADMIN_FLAGGED_REVIEWS_NS}:*",
         ]
         keys_to_delete = [_cache_key(REVIEW_SUMMARY_WORKER_NS, worker_id)]
 
@@ -111,8 +167,16 @@ class ReviewService:
         """
         logger.info(f"[SUBMIT] Client {reviewer_id} submitting review for job {job_id}")
 
-        result = await self.db.execute(select(Job).filter_by(id=job_id, client_id=reviewer_id))
-        job = result.scalars().first()
+        job_result = await self.db.execute(
+            select(Job)
+            .options(
+                selectinload(Job.client),
+                selectinload(Job.worker),
+                selectinload(Job.service),
+            )
+            .filter_by(id=job_id, client_id=reviewer_id)
+        )
+        job = job_result.unique().scalar_one_or_none()
 
         if not job:
             logger.warning(
@@ -123,7 +187,7 @@ class ReviewService:
                 detail="Job not found or you are not authorized to review it.",
             )
 
-        if not job.worker_id:
+        if not job.worker_id or not job.worker:
             logger.error(f"[SUBMIT] Job {job_id} has no worker assigned, cannot submit review.")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -148,21 +212,21 @@ class ReviewService:
             review_text=data.text,
         )
         self.db.add(review)
-        # ---------------------------------------
-        # --- Invalidate caches BEFORE commit ---
-        # ---------------------------------------
         await self._invalidate_review_caches(worker_id=job.worker_id, client_id=reviewer_id)
 
         try:
             await self.db.commit()
-            await self.db.refresh(review)
+            await self.db.refresh(review, attribute_names=["client", "worker", "job"])
+            if review.job and review.job.service:
+                await self.db.refresh(review.job.service)
+
         except Exception as e:
             await self.db.rollback()
             logger.error(f"[SUBMIT] Failed to commit review: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Failed to submit review.")
 
         logger.info(f"[SUBMIT] Review created successfully: review_id={review.id}")
-        return schemas.ReviewRead.model_validate(review)
+        return self._construct_review_read_response(review)
 
     # ---------------------------------------------------
     # Review Retrieval
@@ -190,7 +254,7 @@ class ReviewService:
 
         logger.info(f"[CACHE ASYNC MISS] Retrieving reviews for worker_id={worker_id} from DB")
 
-        count_stmt = select(func.count()).filter(
+        count_stmt = select(func.count(models.Review.id)).filter(
             models.Review.worker_id == worker_id, models.Review.is_flagged.is_(False)
         )
         total_count_result = await self.db.execute(count_stmt)
@@ -198,6 +262,11 @@ class ReviewService:
 
         stmt = (
             select(models.Review)
+            .options(
+                selectinload(models.Review.client),
+                selectinload(models.Review.worker),
+                selectinload(models.Review.job).selectinload(Job.service),
+            )
             .filter(models.Review.worker_id == worker_id, models.Review.is_flagged.is_(False))
             .order_by(models.Review.created_at.desc())
             .offset(skip)
@@ -205,16 +274,14 @@ class ReviewService:
         )
 
         result = await self.db.execute(stmt)
-        reviews = list(result.scalars().all())
-        pydantic_reviews = [schemas.PublicReviewRead.model_validate(r) for r in reviews]
+        reviews_db = list(result.unique().scalars().all())
+        pydantic_reviews = [self._construct_public_review_read_response(r) for r in reviews_db]
 
         if self.cache:
             try:
+                serializable_items = [r.model_dump(mode='json') for r in pydantic_reviews]
                 payload_to_cache = json.dumps(
-                    {
-                        'items': [r.model_dump(mode='json') for r in pydantic_reviews],
-                        'total_count': total_count,
-                    }
+                    {'items': serializable_items, 'total_count': total_count}
                 )
                 await self.cache.set(cache_key, payload_to_cache, ex=DEFAULT_CACHE_TTL)
                 logger.info(
@@ -248,28 +315,33 @@ class ReviewService:
 
         logger.info(f"[CACHE ASYNC MISS] Retrieving reviews by client_id={client_id} from DB")
 
-        count_stmt = select(func.count()).filter(models.Review.client_id == client_id)
+        count_stmt = select(func.count(models.Review.id)).filter(
+            models.Review.client_id == client_id
+        )
         total_count_result = await self.db.execute(count_stmt)
         total_count = total_count_result.scalar_one()
 
         stmt = (
             select(models.Review)
+            .options(
+                selectinload(models.Review.client),
+                selectinload(models.Review.worker),
+                selectinload(models.Review.job).selectinload(Job.service),
+            )
             .filter_by(client_id=client_id)
             .order_by(models.Review.created_at.desc())
             .offset(skip)
             .limit(limit)
         )
         result = await self.db.execute(stmt)
-        reviews = list(result.scalars().all())
-        pydantic_reviews = [schemas.ReviewRead.model_validate(r) for r in reviews]
+        reviews_db = list(result.unique().scalars().all())
+        pydantic_reviews = [self._construct_review_read_response(r) for r in reviews_db]
 
         if self.cache:
             try:
+                serializable_items = [r.model_dump(mode='json') for r in pydantic_reviews]
                 payload_to_cache = json.dumps(
-                    {
-                        'items': [r.model_dump(mode='json') for r in pydantic_reviews],
-                        'total_count': total_count,
-                    }
+                    {'items': serializable_items, 'total_count': total_count}
                 )
                 await self.cache.set(cache_key, payload_to_cache, ex=DEFAULT_CACHE_TTL)
                 logger.info(
@@ -303,12 +375,16 @@ class ReviewService:
         )
 
         stmt = select(
-            func.coalesce(func.avg(models.Review.rating), 0.0),
-            func.count(models.Review.id),
+            func.coalesce(func.avg(models.Review.rating), 0.0).label(
+                "average_rating"
+            ),  # Added labels
+            func.count(models.Review.id).label("total_reviews"),
         ).filter(models.Review.worker_id == worker_id, models.Review.is_flagged.is_(False))
 
         result = await self.db.execute(stmt)
-        avg_rating, total_reviews = result.first() or (0.0, 0)
+        summary_data = result.first()
+        avg_rating = summary_data.average_rating if summary_data else 0.0
+        total_reviews = summary_data.total_reviews if summary_data else 0
 
         avg_rating_float = float(avg_rating)
         total_reviews_int = int(total_reviews)

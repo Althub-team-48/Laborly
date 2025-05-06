@@ -28,7 +28,10 @@ from app.worker.services import (
 )
 
 from app.messaging import models, schemas
-from app.service.models import Service
+from app.service.models import Service as ServiceModel
+from app.job.models import Job
+from app.messaging.schemas import ThreadJobInfo, ThreadJobServiceInfo
+
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +41,7 @@ THREAD_PARTICIPANTS_NS = "message:thread_participants"
 SHORT_CACHE_TTL = 15
 
 
-# ==================================================
-# --- Utility: Pattern-based Cache Invalidation ---
-# ==================================================
 async def _invalidate_pattern(cache: Any, pattern: str) -> None:
-    """Delete Redis keys matching the given pattern."""
     if not cache:
         return
     logger.debug(f"[CACHE ASYNC MSG] Scanning pattern: {pattern}")
@@ -59,18 +58,13 @@ async def _invalidate_pattern(cache: Any, pattern: str) -> None:
         logger.error(f"[CACHE ASYNC MSG ERROR] Failed pattern deletion for {pattern}: {e}")
 
 
-# ===============================
-# --- Messaging Service Logic---
-# ===============================
 async def _get_thread_participant_ids(db: AsyncSession, thread_id: UUID) -> list[UUID]:
-    """Helper to fetch participant IDs for a given thread."""
     stmt = select(models.ThreadParticipant.user_id).filter_by(thread_id=thread_id)
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
 async def _invalidate_message_caches(cache: Any, db: AsyncSession, thread_id: UUID) -> None:
-    """Invalidate thread detail and participant list caches."""
     if not cache:
         return
     keys_to_delete = [_cache_key(THREAD_DETAIL_NS, thread_id)]
@@ -79,6 +73,8 @@ async def _invalidate_message_caches(cache: Any, db: AsyncSession, thread_id: UU
         participant_ids = await _get_thread_participant_ids(db, thread_id)
         for user_id in participant_ids:
             patterns_to_invalidate.append(f"{CACHE_PREFIX}{THREAD_LIST_USER_NS}:{user_id}:*")
+        patterns_to_invalidate.append(f"{CACHE_PREFIX}{THREAD_DETAIL_NS}:{thread_id}:*")
+
         logger.info(f"[CACHE ASYNC MSG] Invalidating caches for thread {thread_id}")
         logger.debug(f"[CACHE ASYNC MSG] Keys to delete: {keys_to_delete}")
         logger.debug(f"[CACHE ASYNC MSG] Patterns to invalidate: {patterns_to_invalidate}")
@@ -91,24 +87,45 @@ async def _invalidate_message_caches(cache: Any, db: AsyncSession, thread_id: UU
         logger.error(f"[CACHE ASYNC MSG ERROR] Failed invalidating thread {thread_id}: {e}")
 
 
+def _construct_thread_job_info(job_model: Job | None) -> ThreadJobInfo | None:
+    if not job_model:
+        return None
+    service_info: ThreadJobServiceInfo | None = None
+    if job_model.service:
+        service_info = ThreadJobServiceInfo.model_validate(job_model.service)
+    return ThreadJobInfo(id=job_model.id, status=job_model.status, service=service_info)
+
+
+def _construct_thread_read_response(
+    thread_model: models.MessageThread, messages_override: list[models.Message] | None = None
+) -> schemas.ThreadRead:
+    participants_read = [
+        schemas.ThreadParticipantRead.model_validate(p) for p in thread_model.participants
+    ]
+    messages_to_use = messages_override if messages_override is not None else thread_model.messages
+    messages_read = [schemas.MessageRead.model_validate(m) for m in messages_to_use]
+    job_info = _construct_thread_job_info(thread_model.job)
+    return schemas.ThreadRead(
+        id=thread_model.id,
+        created_at=thread_model.created_at,
+        job=job_info,
+        is_closed=thread_model.is_closed,
+        participants=participants_read,
+        messages=messages_read,
+    )
+
+
 async def create_thread(
     db: AsyncSession,
     sender_id: UUID,
     receiver_id: UUID,
 ) -> models.MessageThread:
-    """
-    Create a new message thread and register both sender and receiver as participants.
-    (Internal helper, invalidation handled by send_message)
-    """
     thread = models.MessageThread()
     db.add(thread)
     await db.flush()
-
     sender_participant = models.ThreadParticipant(thread_id=thread.id, user_id=sender_id)
     receiver_participant = models.ThreadParticipant(thread_id=thread.id, user_id=receiver_id)
     db.add_all([sender_participant, receiver_participant])
-    await db.flush()
-
     logger.info(f"[THREAD] Created thread object {thread.id} between {sender_id} and {receiver_id}")
     return thread
 
@@ -119,44 +136,37 @@ async def send_message(
     message_data: schemas.MessageCreate,
     sender_role: str,
 ) -> schemas.MessageRead:
-    """
-    Send a message within an existing thread or initiate a new thread if necessary.
-    Handles cache invalidation.
-    """
     thread_id: UUID
     receiver_id: UUID | None = None
-
     cache = redis_client
 
+    thread_model_for_reply: models.MessageThread | None = None
+
     if not message_data.thread_id:
-        # --- Initiating a new thread ---
         if not message_data.service_id and sender_role != "ADMIN":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Service ID is required to initiate a new conversation.",
             )
-
         if message_data.service_id:
-            service_result = await db.execute(select(Service).filter_by(id=message_data.service_id))
-            service = service_result.unique().scalar_one_or_none()
+            service_result = await db.execute(
+                select(ServiceModel).filter_by(id=message_data.service_id)
+            )
+            service: ServiceModel | None = service_result.unique().scalar_one_or_none()
             if not service:
                 raise HTTPException(status_code=400, detail="Invalid service ID.")
             receiver_id = service.worker_id
-
         if not receiver_id:
             raise HTTPException(
                 status_code=400, detail="Could not determine receiver for new thread."
             )
-
         if sender_id == receiver_id:
             raise HTTPException(status_code=400, detail="Cannot start conversation with yourself.")
 
-        thread_model = await create_thread(db, sender_id, receiver_id)
-        thread_id = thread_model.id
+        thread_model_instance = await create_thread(db, sender_id, receiver_id)
+        thread_id = thread_model_instance.id
         logger.info(f"[THREAD] New thread {thread_id} initiated by {sender_id}")
-
     else:
-        # --- Replying to an existing thread ---
         thread_id = message_data.thread_id
         stmt = (
             select(models.MessageThread)
@@ -167,11 +177,12 @@ async def send_message(
             )
         )
         result = await db.execute(stmt)
-        thread = result.unique().scalar_one_or_none()
+        thread_model_for_reply = result.unique().scalar_one_or_none()
 
-        if not thread:
+        if not thread_model_for_reply:
             raise HTTPException(status_code=404, detail="Thread not found or access denied.")
-        if thread.is_closed:
+
+        if thread_model_for_reply.is_closed:
             raise HTTPException(status_code=403, detail="This thread is closed.")
 
     message = models.Message(
@@ -180,8 +191,6 @@ async def send_message(
         content=message_data.content,
     )
     db.add(message)
-
-    # --- Invalidate caches BEFORE commit ---
     await _invalidate_message_caches(cache, db, thread_id)
 
     try:
@@ -201,10 +210,6 @@ async def send_message(
 async def get_user_threads(
     db: AsyncSession, user_id: UUID, skip: int = 0, limit: int = 100
 ) -> tuple[list[schemas.ThreadRead], int]:
-    """
-    Retrieve all threads involving the user, ordered by latest message timestamp,
-    with pagination and cache support.
-    """
     cache = redis_client
     cache_key = _paginated_cache_key(THREAD_LIST_USER_NS, user_id, skip, limit)
 
@@ -224,16 +229,15 @@ async def get_user_threads(
     logger.info(
         f"[CACHE ASYNC MISS] Fetching threads for user_id={user_id} from DB (skip={skip}, limit={limit})"
     )
-
     count_stmt = (
-        select(func.count())
-        .select_from(models.MessageThread)
-        .join(models.ThreadParticipant)
+        select(func.count(models.MessageThread.id))
+        .join(
+            models.ThreadParticipant, models.MessageThread.id == models.ThreadParticipant.thread_id
+        )
         .filter(models.ThreadParticipant.user_id == user_id)
     )
     total_count_result = await db.execute(count_stmt)
     total_count = total_count_result.scalar_one()
-
     latest_message_subq = (
         select(
             models.Message.thread_id,
@@ -242,7 +246,6 @@ async def get_user_threads(
         .group_by(models.Message.thread_id)
         .subquery()
     )
-
     stmt = (
         select(models.MessageThread)
         .join(
@@ -254,7 +257,10 @@ async def get_user_threads(
             selectinload(models.MessageThread.participants).selectinload(
                 models.ThreadParticipant.user
             ),
-            selectinload(models.MessageThread.messages).selectinload(models.Message.sender),
+            selectinload(models.MessageThread.messages).options(
+                selectinload(models.Message.sender)
+            ),
+            selectinload(models.MessageThread.job).options(selectinload(Job.service)),
         )
         .order_by(
             latest_message_subq.c.latest_timestamp.desc().nulls_last(),
@@ -263,27 +269,20 @@ async def get_user_threads(
         .offset(skip)
         .limit(limit)
     )
-
     result = await db.execute(stmt)
-    threads = list(result.unique().scalars().all())
-
-    pydantic_threads = [schemas.ThreadRead.model_validate(t) for t in threads]
+    threads_db = list(result.unique().scalars().all())
+    pydantic_threads = [_construct_thread_read_response(t) for t in threads_db]
 
     if cache:
         try:
-            payload_to_cache = json.dumps(
-                {
-                    'items': [t.model_dump(mode='json') for t in pydantic_threads],
-                    'total_count': total_count,
-                }
-            )
+            serializable_items = [t.model_dump(mode='json') for t in pydantic_threads]
+            payload_to_cache = json.dumps({'items': serializable_items, 'total_count': total_count})
             await cache.set(cache_key, payload_to_cache, ex=SHORT_CACHE_TTL)
             logger.info(
                 f"[CACHE ASYNC SET] Thread list for user {user_id} (skip={skip}, limit={limit})"
             )
         except Exception as e:
             logger.error(f"[CACHE ASYNC WRITE ERROR] Thread list {user_id}: {e}")
-
     logger.info(
         f"[THREAD] Found {len(pydantic_threads)} threads for user_id={user_id} (Total: {total_count})."
     )
@@ -291,9 +290,6 @@ async def get_user_threads(
 
 
 async def get_thread_detail(db: AsyncSession, thread_id: UUID, user_id: UUID) -> schemas.ThreadRead:
-    """
-    Retrieve a single thread with participants and messages if user is authorized, with cache support.
-    """
     cache = redis_client
     cache_key = _cache_key(THREAD_DETAIL_NS, thread_id)
 
@@ -308,15 +304,14 @@ async def get_thread_detail(db: AsyncSession, thread_id: UUID, user_id: UUID) ->
                     logger.warning(
                         f"[CACHE ASYNC AUTH] User {user_id} unauthorized for cached thread {thread_id}"
                     )
-                    raise HTTPException(status_code=403, detail="Access denied to thread.")
-                return thread_read_cached
+                else:
+                    return thread_read_cached
         except Exception as e:
             logger.error(f"[CACHE ASYNC READ ERROR] Thread detail {thread_id}: {e}")
 
     logger.info(
         f"[CACHE ASYNC MISS] Fetching thread detail: thread_id={thread_id}, user_id={user_id} from DB"
     )
-
     stmt = (
         select(models.MessageThread)
         .join(
@@ -327,18 +322,22 @@ async def get_thread_detail(db: AsyncSession, thread_id: UUID, user_id: UUID) ->
             selectinload(models.MessageThread.participants).selectinload(
                 models.ThreadParticipant.user
             ),
-            selectinload(models.MessageThread.messages).selectinload(models.Message.sender),
+            selectinload(models.MessageThread.messages).options(
+                selectinload(models.Message.sender)
+            ),
+            selectinload(models.MessageThread.job).options(
+                selectinload(Job.service).selectinload(ServiceModel.worker)
+            ),
         )
         .limit(1)
     )
-
     result = await db.execute(stmt)
-    thread = result.unique().scalar_one_or_none()
+    thread_model = result.unique().scalar_one_or_none()
 
-    if not thread:
+    if not thread_model:
         raise HTTPException(status_code=404, detail="Thread not found or access denied.")
 
-    thread_read = schemas.ThreadRead.model_validate(thread)
+    thread_read = _construct_thread_read_response(thread_model)
 
     if cache:
         try:
@@ -346,6 +345,5 @@ async def get_thread_detail(db: AsyncSession, thread_id: UUID, user_id: UUID) ->
             logger.info(f"[CACHE ASYNC SET] Thread detail for thread {thread_id}")
         except Exception as e:
             logger.error(f"[CACHE ASYNC WRITE ERROR] Thread detail {thread_id}: {e}")
-
     logger.info(f"[THREAD] Thread detail retrieved for thread_id={thread_id}")
     return thread_read

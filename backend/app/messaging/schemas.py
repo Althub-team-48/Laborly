@@ -14,6 +14,32 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
+from app.job.models import JobStatus
+from app.service.schemas import ServiceBase
+
+
+# ---------------------------------------------------
+# Partial Schemas for Embedding
+# ---------------------------------------------------
+class ThreadJobServiceInfo(ServiceBase):
+    """Partial service information for embedding within ThreadJobInfo."""
+
+    id: UUID = Field(..., description="Service's unique identifier")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ThreadJobInfo(BaseModel):
+    """Partial job information for embedding in ThreadRead."""
+
+    id: UUID = Field(..., description="Job's unique identifier")
+    status: JobStatus = Field(..., description="Current status of the job")
+    service: ThreadJobServiceInfo | None = Field(
+        None, description="Partial details of the service related to the job"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 # ---------------------------------------------------
 # Participant Information Schema
@@ -106,7 +132,9 @@ class ThreadRead(BaseModel):
 
     id: UUID = Field(..., description="Unique identifier for the message thread")
     created_at: datetime = Field(..., description="Timestamp when the thread was created")
-    job_id: UUID | None = Field(None, description="Associated job ID if thread is job-related")
+    job: ThreadJobInfo | None = Field(
+        None, description="Partial job details if thread is job-related"
+    )
     is_closed: bool = Field(..., description="Whether the thread is closed and inactive")
     participants: list[ThreadParticipantRead] = Field(
         ..., description="List of users involved in the thread"

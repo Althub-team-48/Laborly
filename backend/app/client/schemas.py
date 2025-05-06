@@ -9,7 +9,44 @@ job history records, and generic message responses.
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
+from app.service.schemas import ServiceBase
+from app.job.models import JobStatus
+
+
+# ---------------------------------------------------
+# Partial Schemas for Embedding
+# ---------------------------------------------------
+class FavoriteWorkerInfo(BaseModel):
+    """Partial worker information for embedding in FavoriteRead."""
+
+    id: UUID = Field(..., description="Worker's unique identifier")
+    first_name: str = Field(..., description="Worker's first name")
+    last_name: str = Field(..., description="Worker's last name")
+    professional_skills: str | None = Field(None, description="Worker's professional skills")
+    location: str | None = Field(None, description="Worker's location")
+    is_available: bool = Field(False, description="Worker's current availability status")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ClientJobWorkerInfo(BaseModel):
+    """Partial worker information for embedding in ClientJobRead."""
+
+    id: UUID = Field(..., description="Worker's unique identifier")
+    first_name: str = Field(..., description="Worker's first name")
+    last_name: str = Field(..., description="Worker's last name")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ClientJobServiceInfo(ServiceBase):
+    """Partial service information for embedding in ClientJobRead."""
+
+    id: UUID = Field(..., description="Service's unique identifier")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------
@@ -45,10 +82,11 @@ class ClientProfileRead(ClientProfileBase):
     id: UUID = Field(..., description="Unique identifier for the client profile")
     user_id: UUID = Field(..., description="UUID of the user this profile belongs to")
     email: str = Field(..., description="Email address of the client")
-    phone_number: str | None = Field(..., description="Phone number of the client")
+    phone_number: str | None = Field(None, description="Phone number of the client")
     first_name: str = Field(..., description="First name of the client")
     last_name: str = Field(..., description="Last name of the client")
     location: str | None = Field(default=None, description="Location of the client")
+    profile_picture: HttpUrl | None = Field(None, description="URL to the client's profile picture")
     created_at: datetime = Field(..., description="Profile creation timestamp")
     updated_at: datetime = Field(..., description="Profile last update timestamp")
 
@@ -65,6 +103,7 @@ class PublicClientRead(BaseModel):
     first_name: str = Field(..., description="First name of the client")
     last_name: str = Field(..., description="Last name of the client")
     location: str | None = Field(default=None, description="Location of the client")
+    profile_picture: HttpUrl | None = Field(None, description="URL to the client's profile picture")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,7 +114,7 @@ class PublicClientRead(BaseModel):
 class FavoriteBase(BaseModel):
     """Base schema for favorite worker information."""
 
-    worker_id: UUID = Field(..., description="UUID of the worker being favorited")
+    pass
 
 
 class FavoriteRead(FavoriteBase):
@@ -83,6 +122,7 @@ class FavoriteRead(FavoriteBase):
 
     id: UUID = Field(..., description="Unique identifier for the favorite entry")
     client_id: UUID = Field(..., description="UUID of the client who favorited the worker")
+    worker: FavoriteWorkerInfo = Field(..., description="Details of the favorited worker")
     created_at: datetime = Field(..., description="Timestamp when the favorite was created")
 
     model_config = ConfigDict(from_attributes=True)
@@ -95,14 +135,21 @@ class ClientJobRead(BaseModel):
     """Schema returned when reading a job from the client's job history."""
 
     id: UUID = Field(..., description="Unique identifier of the job")
-    service_id: UUID | None = Field(default=None, description="Service related to the job")
-    worker_id: UUID | None = Field(None, description="Worker assigned to the job")
-    status: str = Field(..., description="Current status of the job")
+    service: ClientJobServiceInfo | None = Field(
+        None, description="Partial details of the service related to the job"
+    )
+    worker: ClientJobWorkerInfo | None = Field(
+        None, description="Partial details of the worker assigned to the job"
+    )
+
+    status: JobStatus = Field(..., description="Current status of the job")
     started_at: datetime | None = Field(default=None, description="Job start timestamp")
     completed_at: datetime | None = Field(default=None, description="Job completion timestamp")
     cancelled_at: datetime | None = Field(
         default=None, description="Timestamp when the job was cancelled"
     )
     cancel_reason: str | None = Field(default=None, description="Reason for job cancellation")
+    created_at: datetime = Field(..., description="Timestamp when the job was created")
+    updated_at: datetime = Field(..., description="Timestamp when the job was last updated")
 
     model_config = ConfigDict(from_attributes=True)

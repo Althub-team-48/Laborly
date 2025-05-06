@@ -125,7 +125,7 @@ class ServiceListingService:
         """Create a new service for a worker."""
         await self._invalidate_service_caches(UUID(int=0), worker_id)
         logger.info(f"[SERVICE] Creating new service for worker {worker_id}")
-        service_db_obj = models.Service(worker_id=worker_id, **data.model_dump())
+        service_db_obj = models.Service(worker_id=worker_id, **data.model_dump(mode="json"))
         self.db.add(service_db_obj)
         try:
             await self.db.commit()

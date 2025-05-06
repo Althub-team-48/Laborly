@@ -15,6 +15,39 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.job.models import JobStatus
 
+from app.service.schemas import ServiceBase
+
+
+# ---------------------------------------------------
+# Partial Schemas for Embedding
+# ---------------------------------------------------
+class JobClientInfo(BaseModel):
+    """Partial client information for embedding in JobRead."""
+
+    id: UUID = Field(..., description="Client's unique identifier")
+    first_name: str = Field(..., description="Client's first name")
+    last_name: str = Field(..., description="Client's last name")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobWorkerInfo(BaseModel):
+    """Partial worker information for embedding in JobRead."""
+
+    id: UUID = Field(..., description="Worker's unique identifier")
+    first_name: str = Field(..., description="Worker's first name")
+    last_name: str = Field(..., description="Worker's last name")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobServiceInfo(ServiceBase):
+    """Partial service information for embedding in JobRead."""
+
+    id: UUID = Field(..., description="Service's unique identifier")
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 # ---------------------------------------------------
 # Shared Fields Schema
@@ -80,11 +113,12 @@ class JobRead(BaseModel):
     """Schema returned when reading job details (authenticated users)."""
 
     id: UUID = Field(..., description="Job unique identifier")
-    client_id: UUID = Field(..., description="UUID of the client who created the job")
-    worker_id: UUID = Field(..., description="UUID of the worker assigned to the job")
-    service_id: UUID | None = Field(
-        default=None, description="UUID of the related service (optional)"
+
+    client: JobClientInfo = Field(..., description="Details of the client who created the job")
+    worker: JobWorkerInfo | None = Field(
+        None, description="Details of the worker assigned to the job"
     )
+    service: JobServiceInfo | None = Field(None, description="Details of the related service")
 
     status: JobStatus = Field(..., description="Current status of the job")
     cancel_reason: str | None = Field(default=None, description="Reason for cancellation (if any)")

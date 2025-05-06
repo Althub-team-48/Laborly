@@ -24,7 +24,11 @@ from app.database.models import User
 from app.job import models, schemas
 from app.job.models import JobStatus
 from app.messaging.models import MessageThread
-from app.service.models import Service
+from app.service.models import Service as ServiceModel
+
+# Import new partial schemas
+from app.job.schemas import JobClientInfo, JobWorkerInfo, JobServiceInfo
+
 from app.worker.services import (
     DEFAULT_CACHE_TTL,
     _cache_key,
@@ -64,9 +68,6 @@ async def _invalidate_pattern(cache: Any, pattern: str) -> None:
         logger.error(f"[CACHE ASYNC JOB ERROR] Failed pattern deletion for {pattern}: {e}")
 
 
-# ---------------------------------------------------
-# JobService Class
-# ---------------------------------------------------
 class JobService:
     """Service class for job-related business logic with caching."""
 
@@ -78,11 +79,60 @@ class JobService:
 
     async def _get_user_or_404(self, user_id: UUID) -> User:
         """Helper to retrieve a user or raise 404 if not found."""
-        user = await self.db.get(User, user_id)
+        user = await self.db.get(
+            User,
+            user_id,
+            options=[selectinload(User.client_profile), selectinload(User.worker_profile)],
+        )
         if not user:
             logger.warning(f"User not found: user_id={user_id}")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         return user
+
+    async def _get_job_with_relations_or_404(self, job_id: UUID) -> models.Job:
+        """Helper to retrieve a job with its relations or raise 404."""
+        stmt = (
+            select(models.Job)
+            .options(
+                selectinload(models.Job.client),
+                selectinload(models.Job.worker),
+                selectinload(models.Job.service).selectinload(ServiceModel.worker),
+                selectinload(models.Job.thread),
+            )
+            .filter(models.Job.id == job_id)
+        )
+        result = await self.db.execute(stmt)
+        job = result.unique().scalar_one_or_none()
+        if not job:
+            logger.warning(f"Job not found: job_id={job_id}")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        return job
+
+    def _construct_job_read(self, job_model: models.Job) -> schemas.JobRead:
+        """Helper to construct JobRead schema from Job model instance."""
+        client_info = JobClientInfo.model_validate(job_model.client)
+
+        worker_info: JobWorkerInfo | None = None
+        if job_model.worker:
+            worker_info = JobWorkerInfo.model_validate(job_model.worker)
+
+        service_info: JobServiceInfo | None = None
+        if job_model.service:
+            service_info = JobServiceInfo.model_validate(job_model.service)
+
+        return schemas.JobRead(
+            id=job_model.id,
+            client=client_info,
+            worker=worker_info,
+            service=service_info,
+            status=job_model.status,
+            cancel_reason=job_model.cancel_reason,
+            started_at=job_model.started_at,
+            completed_at=job_model.completed_at,
+            cancelled_at=job_model.cancelled_at,
+            created_at=job_model.created_at,
+            updated_at=job_model.updated_at,
+        )
 
     async def _invalidate_job_caches(
         self, job_id: UUID | None, client_id: UUID, worker_id: UUID | None
@@ -132,12 +182,17 @@ class JobService:
                 status_code=status.HTTP_403_FORBIDDEN, detail="Only clients can create jobs."
             )
 
-        service_result = await self.db.execute(select(Service).filter_by(id=payload.service_id))
-        service: Service | None = service_result.unique().scalar_one_or_none()
-        if not service:
-            raise HTTPException(status_code=400, detail="Service not found.")
+        service_result = await self.db.execute(
+            select(ServiceModel)
+            .options(selectinload(ServiceModel.worker))
+            .filter_by(id=payload.service_id)
+        )
+        service: ServiceModel | None = service_result.unique().scalar_one_or_none()
+        if not service or not service.worker:
+            raise HTTPException(status_code=400, detail="Service or service worker not found.")
 
         worker_id = service.worker_id
+
         thread_result = await self.db.execute(select(MessageThread).filter_by(id=payload.thread_id))
         thread: MessageThread | None = thread_result.unique().scalar_one_or_none()
         if not thread:
@@ -149,9 +204,8 @@ class JobService:
                 raise HTTPException(
                     status_code=400, detail="A job is already linked to this thread."
                 )
-            else:
-                logger.warning(f"Thread {thread.id} has stale job_id {thread.job_id}. Overwriting.")
-                thread.job_id = None
+            logger.warning(f"Thread {thread.id} has stale job_id {thread.job_id}. Overwriting.")
+            thread.job_id = None
 
         job = models.Job(
             client_id=client_id,
@@ -161,7 +215,6 @@ class JobService:
         )
         self.db.add(job)
         await self.db.flush()
-        await self.db.refresh(job)
 
         thread.job_id = job.id
         self.db.add(thread)
@@ -175,9 +228,12 @@ class JobService:
             await self.db.rollback()
             raise HTTPException(status_code=500, detail="Failed to create job or link thread.")
 
-        await self.db.refresh(job)
+        await self.db.refresh(job, attribute_names=["client", "worker", "service"])
+        if job.service:
+            await self.db.refresh(job.service, attribute_names=["worker"])
+
         logger.info(f"Job created successfully: job_id={job.id}, linked to thread_id={thread.id}")
-        return schemas.JobRead.model_validate(job)
+        return self._construct_job_read(job)
 
     # ---------------------------------------------------
     # Job Lifecycle Actions
@@ -185,15 +241,12 @@ class JobService:
     async def accept_job(self, worker_id: UUID, job_id: UUID) -> schemas.JobRead:
         """Worker accepts a job in 'NEGOTIATING' status."""
         logger.info(f"Worker {worker_id} accepting job {job_id}")
-        worker = await self._get_user_or_404(worker_id)
-        if worker.role != UserRole.WORKER:
+        worker_user = await self._get_user_or_404(worker_id)
+        if worker_user.role != UserRole.WORKER:
             raise HTTPException(status_code=403, detail="Only workers can accept jobs.")
 
-        job_result = await self.db.execute(select(models.Job).filter_by(id=job_id))
-        job: models.Job | None = job_result.unique().scalar_one_or_none()
+        job = await self._get_job_with_relations_or_404(job_id)
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found.")
         if job.worker_id != worker_id:
             raise HTTPException(status_code=403, detail="Unauthorized to accept this job.")
 
@@ -204,25 +257,23 @@ class JobService:
         job.started_at = datetime.now(timezone.utc)
         await self._invalidate_job_caches(job.id, job.client_id, worker_id)
         await self.db.commit()
-        await self.db.refresh(job)
+        await self.db.refresh(job, attribute_names=["client", "worker", "service"])
+        if job.service:
+            await self.db.refresh(job.service, attribute_names=["worker"])
         logger.info(f"Job accepted: job_id={job.id}")
-        return schemas.JobRead.model_validate(job)
+        return self._construct_job_read(job)
 
     async def reject_job(
         self, worker_id: UUID, job_id: UUID, payload: schemas.JobReject
     ) -> schemas.JobRead:
         """Worker rejects a job and optionally closes the thread."""
         logger.info(f"Worker {worker_id} rejecting job {job_id}")
-        worker = await self._get_user_or_404(worker_id)
-        if worker.role != UserRole.WORKER:
+        worker_user = await self._get_user_or_404(worker_id)
+        if worker_user.role != UserRole.WORKER:
             raise HTTPException(status_code=403, detail="Only workers can reject jobs.")
 
-        stmt = select(models.Job).options(selectinload(models.Job.thread)).filter_by(id=job_id)
-        job_result = await self.db.execute(stmt)
-        job: models.Job | None = job_result.unique().scalar_one_or_none()
+        job = await self._get_job_with_relations_or_404(job_id)
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found.")
         if job.worker_id != worker_id:
             raise HTTPException(status_code=403, detail="Unauthorized to reject this job.")
 
@@ -241,24 +292,21 @@ class JobService:
 
         await self._invalidate_job_caches(job.id, job.client_id, worker_id)
         await self.db.commit()
-        await self.db.refresh(job)
-        if job.thread:
-            await self.db.refresh(job.thread)
+        await self.db.refresh(job, attribute_names=["client", "worker", "service", "thread"])
+        if job.service:
+            await self.db.refresh(job.service, attribute_names=["worker"])
         logger.info(f"Job rejected: job_id={job.id}")
-        return schemas.JobRead.model_validate(job)
+        return self._construct_job_read(job)
 
     async def complete_job(self, worker_id: UUID, job_id: UUID) -> schemas.JobRead:
         """Worker marks job as completed."""
         logger.info(f"Worker {worker_id} completing job {job_id}")
-        worker = await self._get_user_or_404(worker_id)
-        if worker.role != UserRole.WORKER:
+        worker_user = await self._get_user_or_404(worker_id)
+        if worker_user.role != UserRole.WORKER:
             raise HTTPException(status_code=403, detail="Only workers can complete jobs.")
 
-        job_result = await self.db.execute(select(models.Job).filter_by(id=job_id))
-        job: models.Job | None = job_result.unique().scalar_one_or_none()
+        job = await self._get_job_with_relations_or_404(job_id)
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found.")
         if job.worker_id != worker_id:
             raise HTTPException(status_code=403, detail="Unauthorized to complete this job.")
 
@@ -269,22 +317,21 @@ class JobService:
         job.completed_at = datetime.now(timezone.utc)
         await self._invalidate_job_caches(job.id, job.client_id, worker_id)
         await self.db.commit()
-        await self.db.refresh(job)
+        await self.db.refresh(job, attribute_names=["client", "worker", "service"])
+        if job.service:
+            await self.db.refresh(job.service, attribute_names=["worker"])
         logger.info(f"Job completed: job_id={job.id}")
-        return schemas.JobRead.model_validate(job)
+        return self._construct_job_read(job)
 
     async def cancel_job(self, user_id: UUID, job_id: UUID, cancel_reason: str) -> schemas.JobRead:
         """Client cancels a job."""
         logger.info(f"Client {user_id} cancelling job {job_id}")
-        user = await self._get_user_or_404(user_id)
-        if user.role != UserRole.CLIENT:
+        client_user = await self._get_user_or_404(user_id)
+        if client_user.role != UserRole.CLIENT:
             raise HTTPException(status_code=403, detail="Only clients can cancel jobs.")
 
-        job_result = await self.db.execute(select(models.Job).filter_by(id=job_id))
-        job: models.Job | None = job_result.unique().scalar_one_or_none()
+        job = await self._get_job_with_relations_or_404(job_id)
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found.")
         if job.client_id != user_id:
             raise HTTPException(status_code=403, detail="Unauthorized to cancel this job.")
 
@@ -296,9 +343,11 @@ class JobService:
         job.cancel_reason = cancel_reason
         await self._invalidate_job_caches(job.id, job.client_id, job.worker_id)
         await self.db.commit()
-        await self.db.refresh(job)
+        await self.db.refresh(job, attribute_names=["client", "worker", "service"])
+        if job.service:
+            await self.db.refresh(job.service, attribute_names=["worker"])
         logger.info(f"Job cancelled: job_id={job.id}")
-        return schemas.JobRead.model_validate(job)
+        return self._construct_job_read(job)
 
     # ---------------------------------------------------
     # Job Retrieval
@@ -325,25 +374,35 @@ class JobService:
             f"[CACHE ASYNC MISS] Fetching job list for user_id={user_id} from DB (skip={skip}, limit={limit})"
         )
 
-        stmt = select(models.Job).filter(
+        base_stmt = select(models.Job).filter(
             (models.Job.client_id == user_id) | (models.Job.worker_id == user_id)
         )
-        count_result = await self.db.execute(select(func.count()).select_from(stmt.subquery()))
+
+        count_stmt = select(func.count()).select_from(base_stmt.subquery())
+        count_result = await self.db.execute(count_stmt)
         count = count_result.scalar_one()
 
-        rows_result = await self.db.execute(
-            stmt.order_by(models.Job.created_at.desc()).offset(skip).limit(limit)
+        data_stmt = (
+            base_stmt.options(
+                selectinload(models.Job.client),
+                selectinload(models.Job.worker),
+                selectinload(models.Job.service).selectinload(ServiceModel.worker),
+            )
+            .order_by(models.Job.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         )
-        rows = rows_result.scalars().all()
-        items = [schemas.JobRead.model_validate(j) for j in rows]
+        rows_result = await self.db.execute(data_stmt)
+        job_models = rows_result.unique().scalars().all()
+
+        items = [self._construct_job_read(j) for j in job_models]
 
         if self.cache:
             try:
+                serializable_items = [i.model_dump(mode='json') for i in items]
                 await self.cache.set(
                     cache_key,
-                    json.dumps(
-                        {'items': [i.model_dump(mode='json') for i in items], 'total_count': count}
-                    ),
+                    json.dumps({'items': serializable_items, 'total_count': count}),
                     ex=DEFAULT_CACHE_TTL,
                 )
                 logger.info(f"[CACHE ASYNC SET] Job list for user {user_id}")
@@ -352,7 +411,7 @@ class JobService:
         return items, count
 
     async def get_job_detail(self, user_id: UUID, job_id: UUID) -> schemas.JobRead:
-        """Return job detail only if user is authorized (client or worker)."""
+        """Return job detail only if user is authorized (client or worker), with embedded details."""
         cache_key = _cache_key(JOB_DETAIL_NS, job_id)
         if self.cache:
             try:
@@ -360,7 +419,10 @@ class JobService:
                 if cached_data:
                     logger.info(f"[CACHE ASYNC HIT] Job detail for job {job_id}")
                     job_read_cached = schemas.JobRead.model_validate_json(cached_data)
-                    if user_id not in {job_read_cached.client_id, job_read_cached.worker_id}:
+                    if not (
+                        (job_read_cached.client and job_read_cached.client.id == user_id)
+                        or (job_read_cached.worker and job_read_cached.worker.id == user_id)
+                    ):
                         logger.warning(
                             f"[CACHE ASYNC AUTH] User {user_id} unauthorized for cached job {job_id}"
                         )
@@ -371,15 +433,12 @@ class JobService:
 
         logger.info(f"[CACHE ASYNC MISS] Fetching job detail for job {job_id} from DB")
 
-        job_result = await self.db.execute(select(models.Job).filter_by(id=job_id))
-        job: models.Job | None = job_result.unique().scalar_one_or_none()
+        job_model = await self._get_job_with_relations_or_404(job_id)
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found.")
-        if user_id not in {job.client_id, job.worker_id}:
+        if not ((job_model.client_id == user_id) or (job_model.worker_id == user_id)):
             raise HTTPException(status_code=403, detail="Unauthorized to view this job.")
 
-        job_read = schemas.JobRead.model_validate(job)
+        job_read = self._construct_job_read(job_model)
 
         if self.cache:
             try:

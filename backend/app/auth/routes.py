@@ -108,11 +108,10 @@ async def login_json(
         key="access_token",
         value=access_token_value,
         httponly=True,
-        samesite="lax",
-        secure=not settings.DEBUG,
+        samesite="none",
+        secure=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
-        domain=None,
     )
     return LoginResponse(user=AuthUserResponse.model_validate(login_result.user))
 
@@ -146,11 +145,10 @@ async def login_oauth(
         key="access_token",
         value=access_token_value,
         httponly=True,
-        samesite="lax",
-        secure=not settings.DEBUG,
+        samesite="none",
+        secure=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
-        domain=None,
     )
     return LoginResponse(user=AuthUserResponse.model_validate(login_result.user))
 

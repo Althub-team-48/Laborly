@@ -791,11 +791,10 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         key="access_token",
         value=app_token,
         httponly=True,
-        samesite="lax",
-        secure=not settings.DEBUG,
+        samesite="none",
+        secure=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Cookie lifetime in seconds
         path="/",
-        domain=None,
     )
 
     logger.debug(

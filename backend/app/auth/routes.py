@@ -10,16 +10,16 @@ Handles authentication routes including:
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Response
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.schemas import (
-    AuthSuccessResponse,
     ForgotPasswordRequest,
     LoginRequest,
+    LoginResponse,
     MessageResponse,
     ResetPasswordRequest,
     SignupRequest,
@@ -45,7 +45,9 @@ from app.core.dependencies import oauth2_scheme, get_current_user
 from app.database.enums import UserRole
 from app.database.session import get_db
 from app.core.limiter import limiter
+from app.core.config import settings
 from app.database.models import User
+from .schemas import AuthUserResponse
 
 # ---------------------------------------------------
 # Router Configuration
@@ -81,22 +83,38 @@ async def signup(
 # ---------------------------------------------------
 @router.post(
     "/login/json",
-    response_model=AuthSuccessResponse,
+    response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
-    summary="Login with JSON",
-    description="Authenticates user using email and password via JSON request body. Requires email verification.",
+    summary="Login with JSON (Cookie Auth)",
+    description="Authenticates user via JSON. Returns user info in body; sets session token in HttpOnly cookie.",
 )
 @limiter.limit("10/minute")
 async def login_json(
     request: Request,
     payload: LoginRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
-) -> AuthSuccessResponse:
+) -> LoginResponse:
     """
-    Authenticates a user using email and password from a JSON request with brute-force protection.
+    Authenticates a user using JSON payload (email and password).
+    Sets the access token in an HttpOnly cookie for session management.
     """
     client_ip = request.client.host if request.client else "unknown"
-    return await login_user_json(payload, db, client_ip)
+    login_result = await login_user_json(payload, db, client_ip)
+
+    access_token_value: str = login_result.access_token
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token_value,
+        httponly=True,
+        samesite="lax",
+        secure=not settings.DEBUG,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+        domain="laborly.xyz",
+    )
+    return LoginResponse(user=AuthUserResponse.model_validate(login_result.user))
 
 
 # ---------------------------------------------------
@@ -104,22 +122,37 @@ async def login_json(
 # ---------------------------------------------------
 @router.post(
     "/login/oauth",
-    response_model=AuthSuccessResponse,
+    response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
-    summary="Login with OAuth2 Form",
-    description="Authenticates user using OAuth2-compatible form data (username = email). Requires email verification.",
+    summary="Login with OAuth2 Form (Cookie Auth)",
+    description="Authenticates user via form data. Returns user info in body; sets session token in HttpOnly cookie.",
 )
 @limiter.limit("10/minute")
 async def login_oauth(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
-) -> AuthSuccessResponse:
+) -> LoginResponse:
     """
-    Authenticates a user using OAuth2 form data with brute-force protection.
-    """
+    Authenticates a user using OAuth2 form data (username and password).
+    Sets the access token in an HttpOnly cookie for session management."""
     client_ip = request.client.host if request.client else "unknown"
-    return await login_user_oauth(form_data, db, client_ip)
+    login_result = await login_user_oauth(form_data, db, client_ip)
+
+    access_token_value: str = login_result.access_token
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token_value,
+        httponly=True,
+        samesite="lax",
+        secure=not settings.DEBUG,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+        domain="laborly.xyz",
+    )
+    return LoginResponse(user=AuthUserResponse.model_validate(login_result.user))
 
 
 # ---------------------------------------------------
@@ -201,8 +234,7 @@ async def logout(
     if not token_to_blacklist:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    return logout_user_token(token_to_blacklist)
-
+    return await logout_user_token(token_to_blacklist)
 
 
 # ---------------------------------------------------

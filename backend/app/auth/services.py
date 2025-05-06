@@ -32,9 +32,8 @@ from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config as StarletteConfig
 
 from app.auth.schemas import (
-    AuthUserResponse,
-    AuthSuccessResponse,
     ForgotPasswordRequest,
+    InternalLoginResult,
     LoginRequest,
     MessageResponse,
     ResetPasswordRequest,
@@ -69,10 +68,8 @@ from app.database.enums import UserRole
 from app.database.models import User
 from app.core.blacklist import blacklist_token, redis_client
 
-
 logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 # ------------------------------------------------
 # Brute-Force Protection Settings (Redis Keys and Thresholds)
@@ -349,31 +346,20 @@ async def _authenticate_user(
 
 async def login_user_json(
     payload: LoginRequest, db: AsyncSession, client_ip: str
-) -> AuthSuccessResponse:  # Add client_ip parameter
-    """Authenticates a user via JSON email/password."""
-    user = await _authenticate_user(
-        payload.email, payload.password, db, client_ip
-    )  # Pass client_ip
+) -> InternalLoginResult:
+    """Authenticates user, returns InternalLoginResult object."""
+    user = await _authenticate_user(payload.email, payload.password, db, client_ip)
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
     logger.info(f"User logged in successfully: {user.email} from IP: {client_ip}")
-    return AuthSuccessResponse(
-        access_token=access_token, user=AuthUserResponse.model_validate(user)
-    )
+    return InternalLoginResult(user=user, access_token=access_token)
 
 
-async def login_user_oauth(
-    form_data: Any, db: AsyncSession, client_ip: str
-) -> AuthSuccessResponse:  # Add client_ip parameter
-    """Authenticates a user via OAuth2 form data (username=email)."""
-    # OAuth2PasswordRequestForm uses 'username' field for the identifier
-    user = await _authenticate_user(
-        form_data.username, form_data.password, db, client_ip
-    )  # Pass client_ip
+async def login_user_oauth(form_data: Any, db: AsyncSession, client_ip: str) -> InternalLoginResult:
+    """Authenticates user via OAuth form, returns InternalLoginResult object."""
+    user = await _authenticate_user(form_data.username, form_data.password, db, client_ip)
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
     logger.info(f"User logged in successfully (OAuth form): {user.email} from IP: {client_ip}")
-    return AuthSuccessResponse(
-        access_token=access_token, user=AuthUserResponse.model_validate(user)
-    )
+    return InternalLoginResult(user=user, access_token=access_token)
 
 
 # ------------------------------------------------
@@ -616,6 +602,10 @@ if settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET:
         client_id=settings.GOOGLE_CLIENT_ID,
         client_secret=settings.GOOGLE_CLIENT_SECRET,
         client_kwargs={"scope": "openid email profile"},
+        authorize_url='https://accounts.google.com/o/oauth2/v2/auth',
+        access_token_url='https://oauth2.googleapis.com/token',
+        userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',
+        jwks_uri='https://www.googleapis.com/oauth2/v3/certs',
     )
 else:
     logger.warning("Google OAuth2 credentials not configured. Google login disabled.")
@@ -635,7 +625,7 @@ async def handle_google_login(request: Request, role: UserRole | None) -> Redire
     # This MUST match the URI registered in Google Cloud Console and used in the callback route
     redirect_uri = str(request.url_for("google_callback"))
     nonce = secrets.token_hex(16)
-    request.session["oauth_nonce"] = nonce  # Store nonce in server-side session
+    request.session["oauth_nonce"] = nonce
 
     logger.debug(f"Stored nonce {nonce} in session for Google OAuth")
 
@@ -662,7 +652,7 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
         )
 
     returned_state_jwt = request.query_params.get("state")
-    session_nonce = request.session.pop("oauth_nonce", None)  # Use pop to remove after use
+    session_nonce = request.session.pop("oauth_nonce", None)
 
     if not returned_state_jwt or not session_nonce:
         logger.error("Missing state or nonce during Google callback.")
@@ -670,7 +660,7 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
             status_code=status.HTTP_400_BAD_REQUEST, detail="State or nonce missing from callback."
         )
 
-    requested_role = UserRole.CLIENT  # Default role
+    requested_role = UserRole.CLIENT
     try:
         state_payload = decode_oauth_state_token(returned_state_jwt)
         if state_payload.nonce != session_nonce:
@@ -681,7 +671,7 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid state parameter (nonce mismatch).",
             )
-        requested_role = state_payload.role or UserRole.CLIENT  # Get role from validated state
+        requested_role = state_payload.role or UserRole.CLIENT
         logger.info(
             f"Google callback state validated. Nonce matched. Requested role: {requested_role}"
         )
@@ -697,17 +687,26 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
 
     # --- Perform Code Exchange with Google ---
     try:
-        # Use authorize_access_token within the callback context
-        # Authlib uses the request object to get the 'code' query param
-        # and automatically validates the state against the session internally
         token_dict = await oauth.google.authorize_access_token(request)
 
         if not token_dict or 'access_token' not in token_dict:
             raise ValueError("Invalid access token dictionary received from Google.")
 
+        # --- DEBUGGING ---
+        # Check what endpoints authlib has stored after configuration/metadata fetch
+        logger.debug(
+            f"Authlib Google Client Metadata: {getattr(oauth.google, 'server_metadata', 'Not loaded')}"
+        )
+        userinfo_url_from_metadata = getattr(oauth.google, 'server_metadata', {}).get(
+            'userinfo_endpoint'
+        )
+        logger.debug(f"Userinfo Endpoint from Metadata: {userinfo_url_from_metadata}")
+        # --- END DEBUGGING ---
+
         # Pass the entire token dictionary, Authlib handles using the 'access_token'
-        resp = await oauth.google.get('userinfo', token=token_dict)
-        resp.raise_for_status()  # Raise exception for non-2xx status codes
+        userinfo_url = 'https://openidconnect.googleapis.com/v1/userinfo'
+        resp = await oauth.google.get(userinfo_url, token=token_dict)
+        resp.raise_for_status()
         user_info = resp.json()
         logger.debug(f"Received user info from Google: {user_info}")
 
@@ -730,33 +729,31 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
 
     if not user:
         logger.info(f"Creating new user via Google OAuth: {user_email} with role {requested_role}")
-        password = generate_strong_password()  # Generate a random password as Google handles auth
+        password = generate_strong_password()
         hashed_password = get_password_hash(password)
         user_obj = UserCreate.from_google(
             user_info, hashed_password=hashed_password, assigned_role=requested_role
         )
 
-        # Ensure only columns present in User model are used
         user_data = {
             k: v
             for k, v in user_obj.model_dump().items()
             if k in {c.key for c in inspect(User).mapper.column_attrs}
         }
-        user = User(**user_data, is_verified=True)  # Mark Google users as verified
+        user = User(**user_data, is_verified=True)
 
         db.add(user)
         await db.commit()
         await db.refresh(user)
         logger.info(f"New user {user.id} created via Google OAuth.")
 
-        # Optional: Send welcome email for new Google users
+        # Send welcome email for new Google users
         try:
             await send_welcome_email(user.email, user.first_name)
         except Exception as e:
             logger.error(f"Failed to send welcome email to new Google user {user.email}: {e}")
 
     elif not user.is_verified:
-        # If user exists but wasn't verified, mark as verified now
         user.is_verified = True
         await db.commit()
         await db.refresh(user)
@@ -767,21 +764,12 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
     logger.info(f"User authenticated via Google: {user.email}, Role: {user.role}")
 
     # --- Set Cookie and Redirect ---
-    # Define your BASE frontend URL (consider using a dedicated setting for this)
-    # Assuming settings.BASE_URL points to your frontend base URL for this example
-    # e.g., settings.BASE_URL = "https://www.laborly.xyz"
     base_frontend_url = settings.BASE_URL.rstrip('/')
-
-    # Get the user role as a lowercase string
-    user_role_str = user.role.value.lower()  # e.g., "client", "worker", "admin"
-
-    # Construct the role-specific dashboard URL
-    # You might want to add handling for the ADMIN role if they can log in this way
+    user_role_str = user.role.value.lower()
     if user_role_str in ["client", "worker"]:
         frontend_success_url = f"{base_frontend_url}/{user_role_str}/dashboard"
     else:
-        # Default fallback URL if role is unexpected (e.g., admin or error)
-        frontend_success_url = f"{base_frontend_url}/"  # Redirect to homepage?
+        frontend_success_url = f"{base_frontend_url}/"
         logger.warning(
             f"Redirecting user {user.id} with unexpected role {user_role_str} to default URL."
         )
@@ -792,17 +780,17 @@ async def handle_google_callback(request: Request, db: AsyncSession) -> Redirect
 
     # Set the application JWT in a secure HttpOnly cookie
     response.set_cookie(
-        key="access_token",  # Consistent cookie name
+        key="access_token",
         value=app_token,
-        httponly=True,  # Prevents client-side script access
-        samesite="lax",  # Good default for CSRF protection
-        secure=not settings.DEBUG,  # Send only over HTTPS in production
+        httponly=True,
+        samesite="lax",
+        secure=not settings.DEBUG,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Cookie lifetime in seconds
-        path="/",  # Make cookie available for all API paths
-        domain="laborly.xyz",  # Uncomment and set if frontend/backend are different subdomains
+        path="/",
+        domain="laborly.xyz",
     )
 
     logger.debug(
         f"Set HttpOnly cookie and redirecting Google OAuth user to: {frontend_success_url}"
     )
-    return response  # Return the RedirectResponse with the cookie set
+    return response

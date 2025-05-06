@@ -24,6 +24,7 @@ from pydantic import (
 
 from app.core.validators import password_validator
 from app.database.enums import UserRole
+from app.database.models import User
 
 # --------------------------------------------------
 # Custom Types
@@ -253,3 +254,21 @@ class GoogleCodeExchangeRequest(BaseModel):
         ..., description="The authorization code received from Google via frontend redirect"
     )
     state: str | None = Field(None, description="State parameter for verification")
+
+
+class LoginResponse(BaseModel):
+    """
+    Response schema after successful login, containing user details.
+    The access token is set separately in an HttpOnly cookie.
+    """
+
+    user: AuthUserResponse = Field(..., description="Details of the authenticated user")
+
+
+class InternalLoginResult(BaseModel):
+    """Internal model to pass login results from service to route."""
+
+    user: User
+    access_token: str
+
+    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)

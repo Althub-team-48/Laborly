@@ -42,50 +42,33 @@ from app.worker.models import WorkerProfile
 # Number of records to seed
 # -------------------------------------------------------
 NUM_ADMINS = 5
-NUM_CLIENTS = 100
-NUM_WORKERS = 300
+NUM_CLIENTS = 5
+NUM_WORKERS = 30
 
 # -------------------------------------------------------
 # Nigerian States List
 # -------------------------------------------------------
-NIGERIAN_STATES = [
-    "Abia",
-    "Adamawa",
-    "Akwa Ibom",
-    "Anambra",
-    "Bauchi",
-    "Bayelsa",
-    "Benue",
-    "Borno",
-    "Cross River",
-    "Delta",
-    "Ebonyi",
-    "Edo",
-    "Ekiti",
-    "Enugu",
-    "Gombe",
-    "Imo",
-    "Jigawa",
-    "Kaduna",
-    "Kano",
-    "Katsina",
-    "Kebbi",
-    "Kogi",
-    "Kwara",
-    "Lagos",
-    "Nasarawa",
-    "Niger",
-    "Ogun",
-    "Ondo",
-    "Osun",
-    "Oyo",
-    "Plateau",
-    "Rivers",
-    "Sokoto",
-    "Taraba",
-    "Yobe",
-    "Zamfara",
-    "FCT",
+LAGOS_LGAS = [
+    "Agege",
+    "Ajeromi-Ifelodun",
+    "Alimosho",
+    "Amuwo-Odofin",
+    "Apapa",
+    "Badagry",
+    "Epe",
+    "Eti-Osa",
+    "Ibeju-Lekki",
+    "Ifako-Ijaiye",
+    "Ikeja",
+    "Ikorodu",
+    "Kosofe",
+    "Lagos Island",
+    "Lagos Mainland",
+    "Mushin",
+    "Ojo",
+    "Oshodi-Isolo",
+    "Shomolu",
+    "Surulere",
 ]
 
 
@@ -136,7 +119,7 @@ class Seeder:
             last = self.faker.last_name()
             phone = self.faker.msisdn()[:11]
             email = f"admin{uuid4().hex[:8]}@example.com"
-            location = random.choice(NIGERIAN_STATES)
+            location = random.choice(LAGOS_LGAS)
 
             user = User(
                 id=uuid4(),
@@ -169,7 +152,7 @@ class Seeder:
             last = self.faker.last_name()
             phone = self.faker.msisdn()[:11]
             email = f"client{uuid4().hex[:8]}@example.com"
-            location = random.choice(NIGERIAN_STATES)
+            location = random.choice(LAGOS_LGAS)
             address = f"{self.faker.street_address()}, {location}"
 
             user = User(
@@ -211,7 +194,7 @@ class Seeder:
             last = self.faker.last_name()
             phone = self.faker.msisdn()[:11]
             email = f"worker{uuid4().hex[:8]}@example.com"
-            location = random.choice(NIGERIAN_STATES)
+            location = random.choice(LAGOS_LGAS)
 
             user = User(
                 id=uuid4(),
@@ -280,7 +263,7 @@ class Seeder:
                 service_titles, k=min(num_services, len(service_titles))
             )
             for title in assigned_titles:
-                service_location = random.choice([worker.location, random.choice(NIGERIAN_STATES)])
+                service_location = random.choice([worker.location, random.choice(LAGOS_LGAS)])
                 service = Service(
                     worker_id=worker.id,
                     title=title,

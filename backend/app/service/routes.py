@@ -43,7 +43,7 @@ AuthenticatedWorkerDep = Annotated[User, Depends(get_current_user_with_role(User
     response_model=PaginatedResponse[ServiceRead],
     status_code=status.HTTP_200_OK,
     summary="Search Services",
-    description="Search public service listings by title and/or location.",
+    description="Search public service listings by title, location, or worker name.",
 )
 @limiter.limit("30/minute")
 async def search_services(
@@ -55,12 +55,13 @@ async def search_services(
     location: str | None = Query(
         default=None, description="Filter by service location (case-insensitive)"
     ),
+    name: str | None = Query(default=None, description="Filter by worker name (case-insensitive)"),
     pagination: PaginationParams = Depends(),
 ) -> PaginatedResponse[ServiceRead]:
     """Search publicly available services by title and/or location with pagination."""
     # Service returns tuple[list[ServiceRead], int]
     services_list, total_count = await ServiceListingService(db).search_services(
-        title=title, location=location, skip=pagination.skip, limit=pagination.limit
+        title=title, location=location, name=name, skip=pagination.skip, limit=pagination.limit
     )
     return PaginatedResponse(
         total_count=total_count,

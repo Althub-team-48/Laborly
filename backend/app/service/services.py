@@ -14,10 +14,11 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.blacklist import redis_client
+from app.database.models import User
 from app.service import models, schemas
 from app.worker.services import _cache_key, _paginated_cache_key, DEFAULT_CACHE_TTL, CACHE_PREFIX
 
@@ -185,15 +186,26 @@ class ServiceListingService:
         return response
 
     async def search_services(
-        self, title: str | None = None, location: str | None = None, skip: int = 0, limit: int = 100
+        self,
+        title: str | None = None,
+        location: str | None = None,
+        name: str | None = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> tuple[list[schemas.ServiceRead], int]:
-        """Search for services by title and/or location."""
+        """Search for services by title, location, and/or worker name."""
+
+        # Normalize search terms
         title_norm = title.lower().strip() if title else ""
         loc_norm = location.lower().strip() if location else ""
-        params = f"title={title_norm}:location={loc_norm}"
+        name_norm = name.lower().strip() if name else ""
+
+        # Build cache key
+        params = f"title={title_norm}:location={loc_norm}:name={name_norm}"
         hash_key = hashlib.sha1(params.encode()).hexdigest()[:10]
         key = _paginated_cache_key(f"service:search:{hash_key}", "results", skip, limit)
 
+        # Try cache first
         if self.cache:
             data = await self.cache.get(key)
             if data:
@@ -201,30 +213,45 @@ class ServiceListingService:
                 items = [schemas.ServiceRead.model_validate(i) for i in payload["items"]]
                 return items, payload["total_count"]
 
+        # Build the base query
         query = select(models.Service)
-        if title:
-            query = query.filter(models.Service.title.ilike(f"%{title}%"))
-        if location:
-            query = query.filter(models.Service.location.ilike(f"%{location}%"))
 
-        subq = query.with_only_columns(func.count()).subquery()
-        count = (await self.db.execute(select(func.count()).select_from(subq))).scalar_one()
-        rows = (
-            (
-                await self.db.execute(
-                    query.order_by(models.Service.created_at.desc()).offset(skip).limit(limit)
-                )
+        # Always apply title/location filters
+        filters: list[ColumnElement[bool]] = []
+        if title_norm:
+            filters.append(models.Service.title.ilike(f"%{title_norm}%"))
+        if loc_norm:
+            filters.append(models.Service.location.ilike(f"%{loc_norm}%"))
+        if filters:
+            query = query.filter(*filters)
+
+        # If searching by worker name, join User and filter
+        if name_norm:
+            query = query.join(User, models.Service.worker_id == User.id)
+            name_cond = or_(
+                User.first_name.ilike(f"%{name_norm}%"),
+                User.last_name.ilike(f"%{name_norm}%"),
             )
-            .unique()
-            .scalars()
-            .all()
-        )
+            query = query.filter(name_cond)
+
+        # Count total matching rows
+        count_subq = query.with_only_columns(models.Service.id).subquery()
+        count_q = select(func.count()).select_from(count_subq)
+        count_result = await self.db.execute(count_q)
+        total_count = count_result.scalar_one()
+
+        # Apply ordering + pagination
+        paginated = query.order_by(models.Service.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(paginated)
+        rows = result.unique().scalars().all()
         items = [schemas.ServiceRead.model_validate(r) for r in rows]
 
+        # Cache the fresh results
         if self.cache:
-            await self.cache.set(
-                key,
-                json.dumps({"items": [i.model_dump() for i in items], "total_count": count}),
-                ex=DEFAULT_CACHE_TTL,
-            )
-        return items, count
+            to_cache = {
+                "items": [i.model_dump(mode="json") for i in items],
+                "total_count": total_count,
+            }
+            await self.cache.set(key, json.dumps(to_cache), ex=DEFAULT_CACHE_TTL)
+
+        return items, total_count

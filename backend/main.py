@@ -65,7 +65,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
     session_cookie="session_id",
-    samesite="none",
+    same_site="none",
     secure=True,
     httponly=True,
 )

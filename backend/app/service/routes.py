@@ -41,32 +41,31 @@ AuthenticatedWorkerDep = Annotated[User, Depends(get_current_user_with_role(User
 @router.get(
     "/search",
     response_model=PaginatedResponse[ServiceRead],
-    status_code=status.HTTP_200_OK,
     summary="Search Services",
-    description="Search public service listings by title, location, or worker name.",
+    description="Search public services by title *or* worker name, optionally filter by location.",
 )
 @limiter.limit("30/minute")
 async def search_services(
     request: Request,
     db: DBDep,
-    title: str | None = Query(
-        default=None, description="Filter by service title (case-insensitive)"
+    query: str | None = Query(
+        default=None, description="Matches service title **or** worker name (case-insensitive)"
     ),
     location: str | None = Query(
         default=None, description="Filter by service location (case-insensitive)"
     ),
-    name: str | None = Query(default=None, description="Filter by worker name (case-insensitive)"),
     pagination: PaginationParams = Depends(),
 ) -> PaginatedResponse[ServiceRead]:
-    """Search publicly available services by title and/or location with pagination."""
-    # Service returns tuple[list[ServiceRead], int]
-    services_list, total_count = await ServiceListingService(db).search_services(
-        title=title, location=location, name=name, skip=pagination.skip, limit=pagination.limit
+    items, total = await ServiceListingService(db).search_services(
+        query=query,
+        location=location,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return PaginatedResponse(
-        total_count=total_count,
-        has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=services_list,
+        total_count=total,
+        has_next_page=(pagination.skip + pagination.limit) < total,
+        items=items,
     )
 
 
@@ -84,7 +83,6 @@ async def get_public_service_detail(
     db: DBDep,
 ) -> ServiceRead:
     """Retrieve public details for a specific service listing by ID."""
-    # Service returns ServiceRead
     return await ServiceListingService(db).get_public_service_detail(service_id)
 
 

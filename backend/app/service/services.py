@@ -279,80 +279,83 @@ class ServiceListingService:
 
     async def search_services(
         self,
-        title: str | None = None,
+        query: str | None = None,
         location: str | None = None,
-        name: str | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[schemas.ServiceRead], int]:
-        title_norm = title.lower().strip() if title else ""
+        q_norm = query.lower().strip() if query else ""
         loc_norm = location.lower().strip() if location else ""
-        name_norm = name.lower().strip() if name else ""
 
-        params = f"title={title_norm}:location={loc_norm}:name={name_norm}"
+        params = f"q={q_norm}:loc={loc_norm}"
         hash_key = hashlib.sha1(params.encode()).hexdigest()[:10]
         key = _paginated_cache_key(f"service:search:{hash_key}", "results", skip, limit)
 
         if self.cache:
-            data = await self.cache.get(key)
-            if data:
+            cached = await self.cache.get(key)
+            if cached:
                 try:
-                    payload = json.loads(data)
+                    payload = json.loads(cached)
                     items = [schemas.ServiceRead.model_validate(i) for i in payload["items"]]
                     return items, payload["total_count"]
                 except Exception as e:
-                    logger.error(
-                        f"Cache data for search {key} failed validation: {e}. Fetching from DB."
-                    )
+                    logger.error(f"Cache data for {key} failed validation: {e}")
 
-        query = select(models.Service).options(
+        query_stmt = select(models.Service).options(
             selectinload(models.Service.worker).selectinload(User.worker_profile)
         )
 
         filters: list[ColumnElement[bool]] = []
-        if title_norm:
-            filters.append(models.Service.title.ilike(f"%{title_norm}%"))
+
         if loc_norm:
             filters.append(models.Service.location.ilike(f"%{loc_norm}%"))
 
-        if name_norm:
-            query = query.join(User, models.Service.worker_id == User.id)
-            name_parts = name_norm.split()
+        if q_norm:
+            query_stmt = query_stmt.join(User, models.Service.worker_id == User.id)
+
+            title_filter = models.Service.title.ilike(f"%{q_norm}%")
+            name_parts = q_norm.split()
+
             if len(name_parts) > 1:
-                filters.append(
-                    or_(
-                        User.first_name.ilike(f"%{name_parts[0]}%"),
-                        User.last_name.ilike(f"%{name_parts[-1]}%"),
-                        func.concat(User.first_name, " ", User.last_name).ilike(f"%{name_norm}%"),
-                    )
+                first, last = name_parts[0], name_parts[-1]
+                name_filter = or_(
+                    User.first_name.ilike(f"%{first}%"),
+                    User.last_name.ilike(f"%{last}%"),
+                    func.concat(User.first_name, " ", User.last_name).ilike(f"%{q_norm}%"),
                 )
             else:
-                filters.append(
-                    or_(
-                        User.first_name.ilike(f"%{name_norm}%"),
-                        User.last_name.ilike(f"%{name_norm}%"),
-                    )
+                name_filter = or_(
+                    User.first_name.ilike(f"%{q_norm}%"),
+                    User.last_name.ilike(f"%{q_norm}%"),
                 )
 
+            filters.append(or_(title_filter, name_filter))
+
         if filters:
-            query = query.filter(*filters)
+            query_stmt = query_stmt.filter(*filters)
 
         count_query = select(func.count()).select_from(
-            query.with_only_columns(models.Service.id).subquery()
+            query_stmt.with_only_columns(models.Service.id).subquery()
         )
         total_count = (await self.db.execute(count_query)).scalar_one()
 
-        paginated_query = query.order_by(models.Service.created_at.desc()).offset(skip).limit(limit)
-        result = await self.db.execute(paginated_query)
-        service_db_objs = result.unique().scalars().all()
-
-        items = [await self._construct_service_read_response(s) for s in service_db_objs]
+        results = await self.db.execute(
+            query_stmt.order_by(models.Service.created_at.desc()).offset(skip).limit(limit)
+        )
+        services = [
+            await self._construct_service_read_response(s) for s in results.unique().scalars()
+        ]
 
         if self.cache:
-            to_cache = {
-                "items": [i.model_dump(mode="json") for i in items],
-                "total_count": total_count,
-            }
-            await self.cache.set(key, json.dumps(to_cache), ex=DEFAULT_CACHE_TTL)
+            await self.cache.set(
+                key,
+                json.dumps(
+                    {
+                        "items": [s.model_dump(mode="json") for s in services],
+                        "total_count": total_count,
+                    }
+                ),
+                ex=DEFAULT_CACHE_TTL,
+            )
 
-        return items, total_count
+        return services, total_count

@@ -128,12 +128,18 @@ class ClientService:
         await _invalidate_pattern(self.cache, pattern)
 
     async def _get_user(self, user_id: UUID, role: UserRole) -> User:
-        """Fetch a user and validate role. Eager load profiles for potential use."""
-        user = await self.db.get(
-            User,
-            user_id,
-            options=[selectinload(User.client_profile), selectinload(User.worker_profile)],
+        """Fetch a user and validate role."""
+        stmt = (
+            select(User)
+            .options(
+                selectinload(User.client_profile),
+                selectinload(User.worker_profile),
+            )
+            .where(User.id == user_id)
         )
+        result = await self.db.execute(stmt)
+        user: User | None = result.scalar_one_or_none()
+
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         if user.role != role:
@@ -148,12 +154,12 @@ class ClientService:
     ) -> tuple[User, models.ClientProfile]:
         """Fetch both User and associated ClientProfile, create profile if missing."""
         user = await self._get_user(user_id, role)
-        profile: models.ClientProfile | None
-        if user.client_profile:
-            profile = user.client_profile
-        else:
-            result = await self.db.execute(select(models.ClientProfile).filter_by(user_id=user_id))
-            profile = result.scalars().unique().one_or_none()
+
+        # Ensure relationship is fully loaded (avoids accidental lazy‑load)
+        if 'client_profile' not in user.__dict__:
+            await self.db.refresh(user, attribute_names=['client_profile'])
+
+        profile: models.ClientProfile | None = user.client_profile
 
         if not profile:
             profile = models.ClientProfile(user_id=user_id)

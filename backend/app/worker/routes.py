@@ -280,7 +280,7 @@ async def list_my_worker_jobs(
     return PaginatedResponse(
         total_count=total_count,
         has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=job_reads,
+        items=list(job_reads),
     )
 
 

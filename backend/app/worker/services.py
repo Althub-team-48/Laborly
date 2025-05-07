@@ -11,11 +11,13 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
+from collections.abc import Sequence
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.blacklist import redis_client
 from app.core.config import settings
@@ -324,7 +326,9 @@ class WorkerService:
         if not kyc:
             kyc = KYC(
                 user_id=user_id,
-                **kyc_data.model_dump(exclude_unset=True, exclude={"user_id", "submitted_at","status"}),
+                **kyc_data.model_dump(
+                    exclude_unset=True, exclude={"user_id", "submitted_at", "status"}
+                ),
                 submitted_at=now,
                 status=KYCStatus.PENDING,
             )
@@ -361,37 +365,49 @@ class WorkerService:
     # ---------------------------------------------
     async def get_jobs(
         self, user_id: UUID, skip: int = 0, limit: int = 100
-    ) -> tuple[list[JobRead], int]:
-        """Retrieve paginated list of jobs assigned to the worker."""
+    ) -> tuple[Sequence[JobRead], int]:
+        """Paginated jobs with cache & eager‑loaded relationships."""
         cache_key = _paginated_cache_key("worker_jobs", user_id, skip, limit)
+
+        # ---------- try cache ----------
         if self.cache:
             try:
-                data = await self.cache.get(cache_key)
-                if data:
-                    payload = json.loads(data)
-                    items = [JobRead.model_validate(i) for i in payload["items"]]
-                    return items, payload["total_count"]
+                cached = await self.cache.get(cache_key)
+                if cached:
+                    payload = json.loads(cached)
+                    reads = [JobRead.model_validate(i) for i in payload["items"]]
+                    return reads, payload["total_count"]
             except Exception:
                 logger.exception("[CACHE] Read error")
 
         await self._get_user_or_404(user_id)
+
         total = (
-            await self.db.execute(select(func.count(Job.id)).filter_by(worker_id=user_id))
+            await self.db.execute(
+                select(func.count()).select_from(Job).filter_by(worker_id=user_id)
+            )
         ).scalar_one()
-        rows = await self.db.execute(
+
+        stmt = (
             select(Job)
+            .options(selectinload(Job.client), selectinload(Job.service))
             .filter_by(worker_id=user_id)
             .order_by(Job.created_at.desc())
             .offset(skip)
             .limit(limit)
         )
-        jobs = rows.scalars().unique().all()
+        jobs = (await self.db.scalars(stmt)).all()
         reads = [JobRead.model_validate(j) for j in jobs]
 
+        # ---------- save cache ----------
         if self.cache:
             try:
                 payload = json.dumps(
-                    {"items": [r.model_dump() for r in reads], "total_count": total}
+                    {
+                        "items": [r.model_dump(mode="json") for r in reads],
+                        "total_count": total,
+                    },
+                    default=str,
                 )
                 await self.cache.set(cache_key, payload, ex=DEFAULT_CACHE_TTL)
             except Exception:

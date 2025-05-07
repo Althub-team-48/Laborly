@@ -7,14 +7,13 @@ completion, cancellation, and retrieval. Implements cache invalidation
 and cross-service cache coordination (e.g., with client and worker job lists).
 """
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,10 +29,8 @@ from app.service.models import Service as ServiceModel
 from app.job.schemas import JobClientInfo, JobWorkerInfo, JobServiceInfo
 
 from app.worker.services import (
-    DEFAULT_CACHE_TTL,
     _cache_key,
     CACHE_PREFIX,
-    _paginated_cache_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -352,98 +349,98 @@ class JobService:
     # ---------------------------------------------------
     # Job Retrieval
     # ---------------------------------------------------
-    async def get_all_jobs_for_user(
-        self, user_id: UUID, skip: int = 0, limit: int = 100
-    ) -> tuple[list[schemas.JobRead], int]:
-        """Return jobs (as client or worker) with pagination and caching."""
-        cache_key = _paginated_cache_key(JOB_LIST_USER_NS, user_id, skip, limit)
-        if self.cache:
-            try:
-                cached_data = await self.cache.get(cache_key)
-                if cached_data:
-                    logger.info(
-                        f"[CACHE ASYNC HIT] Job list for user {user_id} (skip={skip}, limit={limit})"
-                    )
-                    payload = json.loads(cached_data)
-                    items = [schemas.JobRead.model_validate(i) for i in payload["items"]]
-                    return items, payload["total_count"]
-            except Exception as e:
-                logger.error(f"[CACHE ASYNC READ ERROR] Job list {user_id}: {e}")
+    # async def get_all_jobs_for_user(
+    #     self, user_id: UUID, skip: int = 0, limit: int = 100
+    # ) -> tuple[list[schemas.JobRead], int]:
+    #     """Return jobs (as client or worker) with pagination and caching."""
+    #     cache_key = _paginated_cache_key(JOB_LIST_USER_NS, user_id, skip, limit)
+    #     if self.cache:
+    #         try:
+    #             cached_data = await self.cache.get(cache_key)
+    #             if cached_data:
+    #                 logger.info(
+    #                     f"[CACHE ASYNC HIT] Job list for user {user_id} (skip={skip}, limit={limit})"
+    #                 )
+    #                 payload = json.loads(cached_data)
+    #                 items = [schemas.JobRead.model_validate(i) for i in payload["items"]]
+    #                 return items, payload["total_count"]
+    #         except Exception as e:
+    #             logger.error(f"[CACHE ASYNC READ ERROR] Job list {user_id}: {e}")
 
-        logger.info(
-            f"[CACHE ASYNC MISS] Fetching job list for user_id={user_id} from DB (skip={skip}, limit={limit})"
-        )
+    #     logger.info(
+    #         f"[CACHE ASYNC MISS] Fetching job list for user_id={user_id} from DB (skip={skip}, limit={limit})"
+    #     )
 
-        base_stmt = select(models.Job).filter(
-            (models.Job.client_id == user_id) | (models.Job.worker_id == user_id)
-        )
+    #     base_stmt = select(models.Job).filter(
+    #         (models.Job.client_id == user_id) | (models.Job.worker_id == user_id)
+    #     )
 
-        count_stmt = select(func.count()).select_from(base_stmt.subquery())
-        count_result = await self.db.execute(count_stmt)
-        count = count_result.scalar_one()
+    #     count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    #     count_result = await self.db.execute(count_stmt)
+    #     count = count_result.scalar_one()
 
-        data_stmt = (
-            base_stmt.options(
-                selectinload(models.Job.client),
-                selectinload(models.Job.worker),
-                selectinload(models.Job.service).selectinload(ServiceModel.worker),
-            )
-            .order_by(models.Job.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        rows_result = await self.db.execute(data_stmt)
-        job_models = rows_result.unique().scalars().all()
+    #     data_stmt = (
+    #         base_stmt.options(
+    #             selectinload(models.Job.client),
+    #             selectinload(models.Job.worker),
+    #             selectinload(models.Job.service).selectinload(ServiceModel.worker),
+    #         )
+    #         .order_by(models.Job.created_at.desc())
+    #         .offset(skip)
+    #         .limit(limit)
+    #     )
+    #     rows_result = await self.db.execute(data_stmt)
+    #     job_models = rows_result.unique().scalars().all()
 
-        items = [self._construct_job_read(j) for j in job_models]
+    #     items = [self._construct_job_read(j) for j in job_models]
 
-        if self.cache:
-            try:
-                serializable_items = [i.model_dump(mode='json') for i in items]
-                await self.cache.set(
-                    cache_key,
-                    json.dumps({'items': serializable_items, 'total_count': count}),
-                    ex=DEFAULT_CACHE_TTL,
-                )
-                logger.info(f"[CACHE ASYNC SET] Job list for user {user_id}")
-            except Exception as e:
-                logger.error(f"[CACHE ASYNC WRITE ERROR] Job list {user_id}: {e}")
-        return items, count
+    #     if self.cache:
+    #         try:
+    #             serializable_items = [i.model_dump(mode='json') for i in items]
+    #             await self.cache.set(
+    #                 cache_key,
+    #                 json.dumps({'items': serializable_items, 'total_count': count}),
+    #                 ex=DEFAULT_CACHE_TTL,
+    #             )
+    #             logger.info(f"[CACHE ASYNC SET] Job list for user {user_id}")
+    #         except Exception as e:
+    #             logger.error(f"[CACHE ASYNC WRITE ERROR] Job list {user_id}: {e}")
+    #     return items, count
 
-    async def get_job_detail(self, user_id: UUID, job_id: UUID) -> schemas.JobRead:
-        """Return job detail only if user is authorized (client or worker), with embedded details."""
-        cache_key = _cache_key(JOB_DETAIL_NS, job_id)
-        if self.cache:
-            try:
-                cached_data = await self.cache.get(cache_key)
-                if cached_data:
-                    logger.info(f"[CACHE ASYNC HIT] Job detail for job {job_id}")
-                    job_read_cached = schemas.JobRead.model_validate_json(cached_data)
-                    if not (
-                        (job_read_cached.client and job_read_cached.client.id == user_id)
-                        or (job_read_cached.worker and job_read_cached.worker.id == user_id)
-                    ):
-                        logger.warning(
-                            f"[CACHE ASYNC AUTH] User {user_id} unauthorized for cached job {job_id}"
-                        )
-                        raise HTTPException(status_code=403, detail="Unauthorized access to job.")
-                    return job_read_cached
-            except Exception as e:
-                logger.error(f"[CACHE ASYNC READ ERROR] Job detail {job_id}: {e}")
+    # async def get_job_detail(self, user_id: UUID, job_id: UUID) -> schemas.JobRead:
+    #     """Return job detail only if user is authorized (client or worker), with embedded details."""
+    #     cache_key = _cache_key(JOB_DETAIL_NS, job_id)
+    #     if self.cache:
+    #         try:
+    #             cached_data = await self.cache.get(cache_key)
+    #             if cached_data:
+    #                 logger.info(f"[CACHE ASYNC HIT] Job detail for job {job_id}")
+    #                 job_read_cached = schemas.JobRead.model_validate_json(cached_data)
+    #                 if not (
+    #                     (job_read_cached.client and job_read_cached.client.id == user_id)
+    #                     or (job_read_cached.worker and job_read_cached.worker.id == user_id)
+    #                 ):
+    #                     logger.warning(
+    #                         f"[CACHE ASYNC AUTH] User {user_id} unauthorized for cached job {job_id}"
+    #                     )
+    #                     raise HTTPException(status_code=403, detail="Unauthorized access to job.")
+    #                 return job_read_cached
+    #         except Exception as e:
+    #             logger.error(f"[CACHE ASYNC READ ERROR] Job detail {job_id}: {e}")
 
-        logger.info(f"[CACHE ASYNC MISS] Fetching job detail for job {job_id} from DB")
+    #     logger.info(f"[CACHE ASYNC MISS] Fetching job detail for job {job_id} from DB")
 
-        job_model = await self._get_job_with_relations_or_404(job_id)
+    #     job_model = await self._get_job_with_relations_or_404(job_id)
 
-        if not ((job_model.client_id == user_id) or (job_model.worker_id == user_id)):
-            raise HTTPException(status_code=403, detail="Unauthorized to view this job.")
+    #     if not ((job_model.client_id == user_id) or (job_model.worker_id == user_id)):
+    #         raise HTTPException(status_code=403, detail="Unauthorized to view this job.")
 
-        job_read = self._construct_job_read(job_model)
+    #     job_read = self._construct_job_read(job_model)
 
-        if self.cache:
-            try:
-                await self.cache.set(cache_key, job_read.model_dump_json(), ex=DEFAULT_CACHE_TTL)
-                logger.info(f"[CACHE ASYNC SET] Job detail for job {job_id}")
-            except Exception as e:
-                logger.error(f"[CACHE ASYNC WRITE ERROR] Job detail {job_id}: {e}")
-        return job_read
+    #     if self.cache:
+    #         try:
+    #             await self.cache.set(cache_key, job_read.model_dump_json(), ex=DEFAULT_CACHE_TTL)
+    #             logger.info(f"[CACHE ASYNC SET] Job detail for job {job_id}")
+    #         except Exception as e:
+    #             logger.error(f"[CACHE ASYNC WRITE ERROR] Job detail {job_id}: {e}")
+    #     return job_read

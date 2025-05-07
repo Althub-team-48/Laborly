@@ -19,9 +19,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import PaginationParams, get_current_user_with_role, require_roles
+from app.core.dependencies import get_current_user_with_role, require_roles
 from app.core.limiter import limiter
-from app.core.schemas import PaginatedResponse
 from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
@@ -153,45 +152,45 @@ async def reject_job(
 # ---------------------------------------------------
 # Shared Endpoints (Client or Worker)
 # ---------------------------------------------------
-@router.get(
-    "",
-    response_model=PaginatedResponse[schemas.JobRead],
-    status_code=status.HTTP_200_OK,
-    summary="List My Jobs",
-    description="List all jobs for the authenticated user (client or worker).",
-)
-@limiter.limit("5/minute")
-async def get_jobs_for_user(
-    request: Request,
-    db: DBDep,
-    current_user: AuthenticatedClientOrWorkerDep,
-    pagination: PaginationParams = Depends(),
-) -> PaginatedResponse[schemas.JobRead]:
-    """List all jobs where the authenticated user is involved (client or worker) with pagination."""
-    jobs, total_count = await JobService(db).get_all_jobs_for_user(
-        current_user.id, skip=pagination.skip, limit=pagination.limit
-    )
-    return PaginatedResponse(
-        total_count=total_count,
-        has_next_page=(pagination.skip + pagination.limit) < total_count,
-        items=[schemas.JobRead.model_validate(job) for job in jobs],
-    )
+# @router.get(
+#     "",
+#     response_model=PaginatedResponse[schemas.JobRead],
+#     status_code=status.HTTP_200_OK,
+#     summary="List My Jobs",
+#     description="List all jobs for the authenticated user (client or worker).",
+# )
+# @limiter.limit("5/minute")
+# async def get_jobs_for_user(
+#     request: Request,
+#     db: DBDep,
+#     current_user: AuthenticatedClientOrWorkerDep,
+#     pagination: PaginationParams = Depends(),
+# ) -> PaginatedResponse[schemas.JobRead]:
+#     """List all jobs where the authenticated user is involved (client or worker) with pagination."""
+#     jobs, total_count = await JobService(db).get_all_jobs_for_user(
+#         current_user.id, skip=pagination.skip, limit=pagination.limit
+#     )
+#     return PaginatedResponse(
+#         total_count=total_count,
+#         has_next_page=(pagination.skip + pagination.limit) < total_count,
+#         items=[schemas.JobRead.model_validate(job) for job in jobs],
+#     )
 
 
-@router.get(
-    "/{job_id}",
-    response_model=schemas.JobRead,
-    status_code=status.HTTP_200_OK,
-    summary="Get Job Detail",
-    description="Fetch full detail of a job associated with the authenticated user (client or worker).",
-)
-@limiter.limit("5/minute")
-async def get_job_detail(
-    request: Request,
-    job_id: UUID,
-    db: DBDep,
-    current_user: AuthenticatedClientOrWorkerDep,
-) -> schemas.JobRead:
-    """Fetch full detail of a specific job for the authenticated user."""
-    job = await JobService(db).get_job_detail(user_id=current_user.id, job_id=job_id)
-    return schemas.JobRead.model_validate(job)
+# @router.get(
+#     "/{job_id}",
+#     response_model=schemas.JobRead,
+#     status_code=status.HTTP_200_OK,
+#     summary="Get Job Detail",
+#     description="Fetch full detail of a job associated with the authenticated user (client or worker).",
+# )
+# @limiter.limit("5/minute")
+# async def get_job_detail(
+#     request: Request,
+#     job_id: UUID,
+#     db: DBDep,
+#     current_user: AuthenticatedClientOrWorkerDep,
+# ) -> schemas.JobRead:
+#     """Fetch full detail of a specific job for the authenticated user."""
+#     job = await JobService(db).get_job_detail(user_id=current_user.id, job_id=job_id)
+#     return schemas.JobRead.model_validate(job)

@@ -8,6 +8,11 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
+      - name: Fix permissions in work directory
+        run: |
+          sudo chown -R $(whoami) /home/ubuntu/actions-runner/_work
+          sudo chmod -R u+w /home/ubuntu/actions-runner/_work
+
       - name: Checkout code
         uses: actions/checkout@v3
 
@@ -108,5 +113,3 @@ jobs:
 
       - name: Restart NGINX to apply HTTPS
         run: docker-compose restart nginx
-        
-        

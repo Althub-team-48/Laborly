@@ -154,7 +154,7 @@ async def send_welcome_email(to_email: EmailStr, first_name: str) -> None:
     subject = f"Welcome to {settings.MAIL_FROM_NAME or settings.APP_NAME}"
     context = {
         "first_name": first_name,
-        "login_url": f"{base_url_str}/auth/login",
+        "login_url": f"{base_url_str}/auth/sign-in",
     }
     html_content = _render_template("welcome.html", context)
     await _send_email(to_email, subject, html_content)
@@ -231,7 +231,7 @@ async def send_password_reset_confirmation(to_email: EmailStr, first_name: str) 
     base_url_str = str(settings.BASE_URL).rstrip("/")
     subject = f"Your Password Has Been Reset - {settings.MAIL_FROM_NAME or settings.APP_NAME}"
     context = {
-        "login_url": f"{base_url_str}/auth/login",
+        "login_url": f"{base_url_str}/auth/sign-in",
         "first_name": first_name,
     }
     html_content = _render_template("password_reset_confirmation.html", context)

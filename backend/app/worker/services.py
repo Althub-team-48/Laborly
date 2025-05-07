@@ -324,7 +324,7 @@ class WorkerService:
         if not kyc:
             kyc = KYC(
                 user_id=user_id,
-                **kyc_data.model_dump(exclude_unset=True),
+                **kyc_data.model_dump(exclude_unset=True, exclude={"user_id", "submitted_at","status"}),
                 submitted_at=now,
                 status=KYCStatus.PENDING,
             )

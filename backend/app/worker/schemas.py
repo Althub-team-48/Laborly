@@ -108,14 +108,23 @@ class PublicWorkerRead(BaseModel):
 # -----------------------------------------------------
 # Schema for Reading KYC Information
 # -----------------------------------------------------
-class KYCRead(BaseModel):
+class KYCBase(BaseModel):
+    document_type: str = Field(..., description="Type of identification document submitted")
+    document_path: str = Field(..., description="Path to the uploaded identification document")
+    selfie_path: str = Field(..., description="Path to the uploaded selfie")
+
+
+class KYCCreate(KYCBase):
+    """Schema for creating a new KYC record."""
+
+    pass
+
+
+class KYCRead(KYCBase):
     """Schema for retrieving KYC submission details."""
 
     id: UUID = Field(..., description="Unique identifier for the KYC record")
     user_id: UUID = Field(..., description="Reference to the associated user")
-    document_type: str = Field(..., description="Type of identification document submitted")
-    document_path: str = Field(..., description="Path to the uploaded identification document")
-    selfie_path: str = Field(..., description="Path to the uploaded selfie")
     status: KYCStatus = Field(..., description="KYC verification status")
     submitted_at: datetime = Field(..., description="Timestamp when the KYC was submitted")
     reviewed_at: datetime | None = Field(

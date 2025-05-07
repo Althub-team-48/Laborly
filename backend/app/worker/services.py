@@ -315,39 +315,50 @@ class WorkerService:
 
         return response
 
-    async def submit_kyc(self, user_id: UUID, kyc_data: schemas.KYCRead) -> schemas.KYCRead:
+    async def submit_kyc(self, user_id: UUID, kyc_data: schemas.KYCCreate) -> schemas.KYCRead:
         """Submit or update a worker's KYC information."""
         await self._invalidate_worker_caches(user_id)
         await self._get_user_or_404(user_id)
+
+        # Check for existing KYC record
         result = await self.db.execute(select(KYC).filter_by(user_id=user_id))
-        kyc = result.scalars().unique().one_or_none()
+        existing_kyc = result.scalars().unique().one_or_none()
+
         now = datetime.now(timezone.utc)
 
-        if not kyc:
-            kyc = KYC(
+        if not existing_kyc:
+            new_kyc_orm = KYC(
                 user_id=user_id,
-                **kyc_data.model_dump(
-                    exclude_unset=True, exclude={"user_id", "submitted_at", "status"}
-                ),
+                document_type=kyc_data.document_type,
+                document_path=kyc_data.document_path,
+                selfie_path=kyc_data.selfie_path,
                 submitted_at=now,
                 status=KYCStatus.PENDING,
             )
-            self.db.add(kyc)
+            self.db.add(new_kyc_orm)
+            kyc_to_refresh = new_kyc_orm
         else:
-            for field in ("document_type", "document_path", "selfie_path"):
-                setattr(kyc, field, getattr(kyc_data, field))
-            kyc.submitted_at = now
-            kyc.status = KYCStatus.PENDING
-            kyc.reviewed_at = None
+            existing_kyc.document_type = kyc_data.document_type
+            existing_kyc.document_path = kyc_data.document_path
+            existing_kyc.selfie_path = kyc_data.selfie_path
+            existing_kyc.submitted_at = now
+            existing_kyc.status = KYCStatus.PENDING
+            existing_kyc.reviewed_at = None
+            kyc_to_refresh = existing_kyc
 
         try:
             await self.db.commit()
-            await self.db.refresh(kyc)
-        except Exception:
+            await self.db.refresh(kyc_to_refresh)
+        except Exception as e:
             await self.db.rollback()
-            raise HTTPException(status_code=500, detail="Failed to submit KYC.")
+            logger.error(f"Failed to commit KYC for user {user_id}: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to submit KYC."
+            )
 
-        response = schemas.KYCRead.model_validate(kyc)
+        response = schemas.KYCRead.model_validate(kyc_to_refresh)
+
+        # Update cache after successful submission/update
         if self.cache:
             try:
                 await self.cache.set(
@@ -356,7 +367,7 @@ class WorkerService:
                     ex=DEFAULT_CACHE_TTL,
                 )
             except Exception:
-                logger.exception("[CACHE] Write error")
+                logger.exception("[CACHE] Write error after KYC submission")
 
         return response
 

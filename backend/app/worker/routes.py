@@ -6,7 +6,6 @@ Defines all public and authenticated endpoints for worker profile management,
 KYC processing, profile picture handling, and job history retrieval.
 """
 
-from datetime import datetime, timezone
 import logging
 from typing import Annotated
 from uuid import UUID
@@ -19,7 +18,7 @@ from app.core.dependencies import get_current_user_with_role, PaginationParams
 from app.core.schemas import PaginatedResponse, MessageResponse
 from app.core.limiter import limiter
 from app.core.upload import upload_file_to_s3
-from app.database.enums import KYCStatus, UserRole
+from app.database.enums import UserRole
 from app.database.models import User
 from app.database.session import get_db
 from app.job.schemas import JobRead
@@ -240,15 +239,10 @@ async def submit_my_kyc(
             detail="An unexpected error occurred during file upload.",
         )
 
-    kyc_submission_data = schemas.KYCRead(
-        id=UUID('00000000-0000-0000-0000-000000000000'),
-        user_id=current_user.id,
+    kyc_submission_data = schemas.KYCCreate(
         document_type=document_type,
         document_path=document_path,
         selfie_path=selfie_path,
-        status=KYCStatus.PENDING,
-        submitted_at=datetime.now(timezone.utc),
-        reviewed_at=None,
     )
 
     return await WorkerService(db).submit_kyc(user_id=current_user.id, kyc_data=kyc_submission_data)

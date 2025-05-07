@@ -330,6 +330,7 @@ class ClientService:
     # Public Client Profile
     # ---------------------------------------------------
     async def get_public_client_profile(self, user_id: UUID) -> schemas.PublicClientRead:
+        """Return a slim, public-safe view of a client's profile."""
         cache_key = _cache_key(PUBLIC_CLIENT_PROFILE_NS, user_id)
         if self.cache:
             try:
@@ -341,11 +342,20 @@ class ClientService:
                 logger.error(f"[CACHE ASYNC READ ERROR] Public client profile {user_id}: {e}")
 
         logger.info(f"[CACHE ASYNC MISS] Fetching public client profile from DB for {user_id}")
-        user = await self.db.get(User, user_id)
-        if not user or user.role != UserRole.CLIENT:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
+        stmt = select(User).where(User.id == user_id)
+        result = await self.db.execute(stmt)
+        user: User | None = result.scalar_one_or_none()
 
-        response = schemas.PublicClientRead.model_validate(user)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        data = {
+            "user_id": user.id,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "location": user.location,
+        }
+        response = schemas.PublicClientRead.model_validate(data)
 
         if self.cache:
             try:

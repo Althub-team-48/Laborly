@@ -9,7 +9,7 @@ job history records, and generic message responses.
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.service.schemas import ServiceBase
 from app.job.models import JobStatus
@@ -86,7 +86,6 @@ class ClientProfileRead(ClientProfileBase):
     first_name: str = Field(..., description="First name of the client")
     last_name: str = Field(..., description="Last name of the client")
     location: str | None = Field(default=None, description="Location of the client")
-    profile_picture: HttpUrl | None = Field(None, description="URL to the client's profile picture")
     created_at: datetime = Field(..., description="Profile creation timestamp")
     updated_at: datetime = Field(..., description="Profile last update timestamp")
 
@@ -103,7 +102,6 @@ class PublicClientRead(BaseModel):
     first_name: str = Field(..., description="First name of the client")
     last_name: str = Field(..., description="Last name of the client")
     location: str | None = Field(default=None, description="Location of the client")
-    profile_picture: HttpUrl | None = Field(None, description="URL to the client's profile picture")
 
     model_config = ConfigDict(from_attributes=True)
 

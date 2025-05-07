@@ -387,3 +387,33 @@ async def delete_flagged_review(
     logger.info(f"[REVIEW] Admin {current_user.id} deleting review {review_id}.")
     await AdminService(db).delete_review(review_id)
     return MessageResponse(detail="Review deleted.")
+
+
+@router.get(
+    "/profile/picture-url",
+    response_model=PresignedUrlResponse | None,
+    status_code=status.HTTP_200_OK,
+    summary="Get Pre-signed URL for any user",
+    description="Retrieve a temporary, secure URL to view the authenticated user's profile picture.",
+)
+@limiter.limit("30/minute")
+async def get_user_profile_picture_url(
+    request: Request,
+    user_id: UUID,
+    db: DBDep,
+) -> PresignedUrlResponse | None:
+    """Generate a presigned URL for the given user's profile picture."""
+    logger.info(f"Requesting presigned URL for user {user_id}.")
+    presigned_url_str = await UserService(db).get_public_profile_picture_presigned_url(
+        user_id=user_id
+    )
+
+    if not presigned_url_str:
+        return None
+
+    try:
+        validated_url = TypeAdapter(HttpUrl).validate_python(presigned_url_str)
+        return PresignedUrlResponse(url=validated_url)
+    except ValidationError as e:
+        logger.error(f"Generated presigned URL failed validation for user {user_id}: {e}")
+        return None

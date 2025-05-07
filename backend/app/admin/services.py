@@ -541,3 +541,18 @@ class UserService:
             except Exception as e:
                 logger.error(f"[CACHE ASYNC WRITE ERROR] Failed writing {key}: {e}")
         return view
+
+    # ---------------------------------------------------
+    # Profile Picture Management
+    # ---------------------------------------------------
+    async def get_public_profile_picture_presigned_url(self, user_id: UUID) -> str | None:
+        """Return a 1‑hour presigned URL for any user's profile picture (no auth)."""
+        stmt = select(User.profile_picture).where(User.id == user_id)
+        picture_res = await self.db.execute(stmt)
+        profile_picture: str | None = picture_res.scalar_one_or_none()
+        if not profile_picture:
+            return None
+        key = get_s3_key_from_url(profile_picture)
+        if not key:
+            return None
+        return generate_presigned_url(key, expiration=3600)
